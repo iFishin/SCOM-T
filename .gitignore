@@ -1,0 +1,63 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.turbo/
+.parcel-cache/
+.vite/
+.next/
+.expo/
+coverage/
+.nyc_output/
+.cache/
+
+# Environment
+.env
+.env.*.local
+.env.local
+
+# Tauri / Rust build artifacts
+# ignore any Rust `target` directories (workspace or crate-level)
+**/target/
+**/target/**
+**/build/**
+
+# Windows / macOS
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Generated binary/artifacts
+*.exe
+*.dll
+*.dylib
+*.so
+*.lib
+*.pdb
+*.app
+
+# Logs, temp
+*.log
+*.tmp
+*.temp
+
+# Keep workspace-specific misc files out
+.claude/

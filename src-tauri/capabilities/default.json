@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for SCOM-T main window",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "serialplugin:allow-available-ports",
+    "serialplugin:allow-available-ports-direct",
+    "serialplugin:allow-open",
+    "serialplugin:allow-close",
+    "serialplugin:allow-force-close",
+    "serialplugin:allow-read",
+    "serialplugin:allow-read-binary",
+    "serialplugin:allow-write",
+    "serialplugin:allow-write-binary",
+    "serialplugin:allow-cancel-read",
+    "serialplugin:allow-start-listening",
+    "serialplugin:allow-stop-listening",
+    "dialog:allow-open",
+    "fs:allow-read-file",
+    "fs:scope"
+  ]
+}
