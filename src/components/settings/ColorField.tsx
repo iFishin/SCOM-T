@@ -1,5 +1,3 @@
-import React from "react";
-
 export function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="grid grid-cols-[92px_36px_1fr] items-center gap-2 text-xs text-[var(--text-primary)]">

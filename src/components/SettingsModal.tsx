@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
+import { Button } from "./ui/Button";
 import type { HotkeyConfig, ThemeSettings } from "../hooks/useSettings.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
@@ -49,20 +50,20 @@ export function SettingsModal({
             <div className="text-sm font-semibold">{t("settings_title", lang)}</div>
             <div className="text-xs text-[var(--text-muted)]">{lang === "zh" ? "热键、主题与应用信息" : "Hotkeys, Theme & App Info"}</div>
           </div>
-          <button
+          <Button
             type="button"
             onClick={onClose}
             className="ml-auto rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             title="关闭"
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
 
         <div className="flex min-h-0 flex-1">
           <div className="w-32 shrink-0 border-r border-[var(--border)] p-2">
             {tabs.map((tab, index) => (
-              <button
+              <Button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(index)}
@@ -73,7 +74,7 @@ export function SettingsModal({
                 }`}
               >
                 {tab}
-              </button>
+              </Button>
             ))}
           </div>
 

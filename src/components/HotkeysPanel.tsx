@@ -1,4 +1,5 @@
 import { t } from "../i18n.ts";
+import { Button } from "./ui/Button.tsx";
 import type { Lang } from "../i18n.ts";
 import type { HotkeyConfig } from "../hooks/useSettings.ts";
 
@@ -16,11 +17,11 @@ export function HotkeysPanel({ hotkeys, onHotkeySend, lang }: Props) {
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {hotkeys.map((hotkey) => (
-          <button
+          <Button
             key={hotkey.id}
             type="button"
             onClick={() => onHotkeySend(hotkey)}
-            className="group relative overflow-hidden rounded bg-[var(--accent)] px-2 py-2 text-left text-xs font-medium text-white transition-colors hover:bg-[var(--accent)]"
+            className="group relative overflow-hidden px-2 py-2 text-left text-xs font-medium"
             title={hotkey.label}
           >
             <div className="truncate">{hotkey.label}</div>
@@ -29,7 +30,7 @@ export function HotkeysPanel({ hotkeys, onHotkeySend, lang }: Props) {
                 {hotkey.shortcut}
               </div>
             )}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

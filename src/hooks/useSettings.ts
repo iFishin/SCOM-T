@@ -35,6 +35,7 @@ export type AppSettings = {
   theme: ThemeSettings;
   promptRowCount: number;
   lang: Lang;
+  compactMode?: boolean;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -93,6 +94,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: DEFAULT_LIGHT_THEME,
   promptRowCount: 100,
   lang: "zh",
+  compactMode: false,
 };
 
 function readSettings(): AppSettings {
@@ -134,6 +136,8 @@ function readSettings(): AppSettings {
           ? parsed.promptRowCount
           : 100,
       lang: parsed.lang === "en" || parsed.lang === "zh" ? parsed.lang : "zh",
+      compactMode:
+        typeof parsed.compactMode === "boolean" ? parsed.compactMode : false,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -166,8 +170,23 @@ export function useSettings() {
     setSettings((current) => ({ ...current, lang }));
   }
 
+  function updateCompactMode(compact: boolean) {
+    setSettings((current) => ({ ...current, compactMode: compact }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
-    updateTheme(mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME);
+    const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+    updateTheme({
+      ...settings.theme,
+      mode: base.mode,
+      bgPrimary: base.bgPrimary,
+      bgSurface: base.bgSurface,
+      bgInput: base.bgInput,
+      textPrimary: base.textPrimary,
+      textMuted: base.textMuted,
+      accent: base.accent,
+      border: base.border,
+    });
   }
 
   return {
@@ -177,5 +196,6 @@ export function useSettings() {
     resetTheme,
     updatePromptRowCount,
     updateLang,
+    updateCompactMode,
   };
 }

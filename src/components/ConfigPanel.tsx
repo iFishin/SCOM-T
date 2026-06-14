@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, PlugZap, Plug } from "lucide-react";
+import { Button } from "./ui/Button";
 import type { PortSummary, SerialConfig, SelectOption } from "../hooks/useSerialPort.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
@@ -62,7 +63,7 @@ export function ConfigPanel({
                   <option key={p.path} value={p.path}>{p.label}</option>
                 ))}
               </select>
-              <button
+              <Button
                 type="button"
                 onClick={() => void onRefresh()}
                 disabled={isBusy}
@@ -70,7 +71,7 @@ export function ConfigPanel({
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-40"
               >
                 <RefreshCw size={14} />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -94,7 +95,7 @@ export function ConfigPanel({
 
             <div className="w-40 flex flex-col items-end justify-start gap-2">
             {!isConnected ? (
-              <button
+              <Button
                 type="button"
                 onClick={() => void onOpen()}
                 disabled={isBusy || !config.path}
@@ -102,9 +103,9 @@ export function ConfigPanel({
               >
                 <PlugZap size={14} />
                 {t("open_port", lang)}
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
                 type="button"
                 onClick={() => void onClose()}
                 disabled={isBusy}
@@ -112,7 +113,7 @@ export function ConfigPanel({
               >
                 <Plug size={14} />
                 {t("close_port", lang)}
-              </button>
+              </Button>
             )}
 
             <span
@@ -134,7 +135,7 @@ export function ConfigPanel({
       </div>
 
       {/* Collapsible advanced */}
-      <button
+      <Button
         type="button"
         onClick={() => setAdvOpen((v) => !v)}
         className="flex w-full items-center gap-1 border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
@@ -147,7 +148,7 @@ export function ConfigPanel({
           {config.dataBits}N{config.stopBits}
           {config.parity !== "none" ? ` ${config.parity[0].toUpperCase()}` : ""}
         </span>
-      </button>
+      </Button>
 
       {advOpen && (
         <div className="space-y-3 p-3 pt-0">

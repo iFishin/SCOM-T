@@ -5,10 +5,18 @@ import { AboutPanel } from "./components/settings/AboutPanel.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { SendPanel } from "./components/SendPanel.tsx";
 import { ReceiveLog } from "./components/ReceiveLog.tsx";
-import { StatusBar } from "./components/StatusBar.tsx";
+import { StatusBar } from "./components/ui/StatusBar.tsx";
+import { Button } from "./components/ui/Button.tsx";
+import { Checkbox } from "./components/ui/Checkbox.tsx";
+import { Input } from "./components/ui/Input.tsx";
+import { Select } from "./components/ui/Select.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
-import { ToastContainer, useToast } from "./components/Toast.tsx";
+import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
+import { useLogFile } from "./hooks/useLogFile.ts";
+import { usePromptConfig } from "./hooks/usePromptConfig.ts";
+import { serializeToYaml, parseYamlToRows } from "./utils/yamlConfig.ts";
+import { YamlEditor } from "./components/YamlEditor.tsx";
 import { t } from "./i18n.ts";
 import {
   BAUD_RATES,
@@ -28,6 +36,8 @@ type PromptRow = {
   isHex: boolean;
   ender: "" | "\r\n" | "\r" | "\n";
   interval: string;
+  device?: string;
+  expectedResponses?: string[];
 };
 function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
   const [leftWidth, setLeftWidth] = useState(initialPx);
@@ -131,7 +141,7 @@ function App() {
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const { toasts, pushToast, removeToast } = useToast();
-  const { settings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang } = useSettings();
+  const { settings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode } = useSettings();
   const lang = settings.lang ?? "zh";
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
     typeof window !== "undefined" ? Math.floor(window.innerWidth / 2) : 480,
@@ -143,6 +153,29 @@ function App() {
     error, fileSendProgress,
     refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
   } = useSerialPort({ config, receiveMode });
+
+  const logFile = useLogFile();
+  const appendLogsRef = useRef(logFile.appendNewLogs);
+  useEffect(() => { appendLogsRef.current = logFile.appendNewLogs; });
+  useEffect(() => {
+    if (logFile.realTime) {
+      appendLogsRef.current(logs);
+    }
+  }, [logs, logFile.realTime]);
+
+  const promptConfig = usePromptConfig();
+  const [configAction, setConfigAction] = useState<null | "save" | "load">(null);
+  const [configName, setConfigName] = useState("");
+  const [savedConfigs, setSavedConfigs] = useState<string[]>([]);
+
+  const [activePromptTab, setActivePromptTab] = useState<"grid" | "config">("grid");
+  const [yamlText, setYamlText] = useState("");
+  const [yamlError, setYamlError] = useState<string | null>(null);
+  const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current); };
+  }, []);
 
   const prevError = useRef<string | null>(null);
   useEffect(() => {
@@ -191,6 +224,82 @@ function App() {
     }
   }
 
+  function handlePromptTabChange(tab: "grid" | "config") {
+    if (yamlDebounceRef.current) {
+      clearTimeout(yamlDebounceRef.current);
+      yamlDebounceRef.current = null;
+    }
+    if (tab === "config") {
+      setYamlText(serializeToYaml(promptRows));
+      setYamlError(null);
+    }
+    setActivePromptTab(tab);
+  }
+
+  function handleYamlChange(newValue: string) {
+    setYamlText(newValue);
+    if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current);
+    yamlDebounceRef.current = setTimeout(() => {
+      const result = parseYamlToRows(newValue);
+      if (result.valid) {
+        setYamlError(null);
+        setPromptRows(result.rows);
+        updatePromptRowCount(result.rows.length);
+      } else {
+        setYamlError(result.error);
+      }
+    }, 500);
+  }
+
+  async function handleSaveConfig(name: string) {
+    try {
+      await promptConfig.saveConfig(name, promptRows);
+      pushToast(t("config_saved_ok", lang), "success");
+      setConfigAction(null);
+      setConfigName("");
+    } catch (e) {
+      pushToast(`${t("config_save_err", lang)}: ${e}`, "error");
+    }
+  }
+
+  async function handleLoadConfig(name: string) {
+    try {
+      const rows = await promptConfig.loadConfig(name);
+      setPromptRows(rows);
+      updatePromptRowCount(rows.length);
+      setYamlText(serializeToYaml(rows));
+      setYamlError(null);
+      pushToast(t("config_loaded_ok", lang), "success");
+      setConfigAction(null);
+    } catch (e) {
+      pushToast(`${t("config_load_err", lang)}: ${e}`, "error");
+    }
+  }
+
+  async function handleDeleteConfig(name: string) {
+    try {
+      await promptConfig.deleteConfig(name);
+      setSavedConfigs((prev) => prev.filter((c) => c !== name));
+      pushToast(t("config_deleted_ok", lang), "success");
+    } catch (e) {
+      pushToast(`${t("config_delete_err", lang)}: ${e}`, "error");
+    }
+  }
+
+  async function handleOpenConfigDir() {
+    try {
+      await promptConfig.openConfigDir();
+    } catch (e) {
+      pushToast(`${t("config_open_err", lang)}: ${e}`, "error");
+    }
+  }
+
+  async function handleShowLoadList() {
+    const list = await promptConfig.listConfigs();
+    setSavedConfigs(list);
+    setConfigAction("load");
+  }
+
   useEffect(() => {
     const root = document.documentElement;
     const theme = settings.theme;
@@ -206,7 +315,9 @@ function App() {
     root.style.setProperty("--font-size", `${theme.fontSize}px`);
     root.style.setProperty("--font-weight", String(theme.fontWeight));
     root.style.setProperty("--mono-font-family", theme.monoFontFamily);
-  }, [settings.theme]);
+    // density compact mode
+    root.classList.toggle("density-compact", !!settings.compactMode);
+  }, [settings.theme, settings.compactMode]);
 
   const currentPortLabel = useMemo(() => {
     if (!isConnected || !connectedPort) return "Closed";
@@ -261,33 +372,34 @@ function App() {
 
         {/* Menu bar */}
         <nav className="flex items-center gap-0.5">
-          <button
+          <Button
             type="button"
             onClick={() => setSettingsOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
             <Settings size={14} />
             {t("settings_title", lang)}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${settings.compactMode ? 'bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]'}`}
+            onClick={() => updateCompactMode?.(!settings.compactMode)}
           >
-            <span>{t("view", lang)}</span>
-          </button>
-          <button
+            <span>{lang === 'zh' ? '紧凑' : 'Compact'}</span>
+          </Button>
+          <Button
             type="button"
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
             <span>{t("help", lang)}</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => setAboutOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
             <span>{t("about", lang)}</span>
-          </button>
+          </Button>
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
@@ -306,9 +418,9 @@ function App() {
                 <div className="text-sm font-semibold">{t("about", lang)}</div>
                 <div className="text-xs text-[var(--text-muted)]">{t("about_short", lang)}</div>
               </div>
-              <button type="button" onClick={() => setAboutOpen(false)} className="ml-auto rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+              <Button type="button" onClick={() => setAboutOpen(false)} className="ml-auto rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
                 Close
-              </button>
+              </Button>
             </div>
             <div className="p-4">
               <AboutPanel lang={lang} />
@@ -386,10 +498,16 @@ function App() {
               logs={logs}
               receiveMode={receiveMode}
               lang={lang}
+              savePath={logFile.savePath}
+              realTimeLog={logFile.realTime}
               onReceiveModeChange={setReceiveMode}
               onClearAll={() => clearLogs("all")}
               onClearReceived={() => clearLogs("received")}
               onClearSent={() => clearLogs("sent")}
+              onSelectLogFile={logFile.selectLogFile}
+              onToggleRealTime={() => logFile.setRealTime((v) => !v)}
+              onFlushLogs={() => logFile.flushAll(logs)}
+              onCloseLogFile={logFile.closeLogFile}
             />
           </div>
         </div>
@@ -407,118 +525,255 @@ function App() {
           {/* Prompt controls */}
           <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2 text-xs">
             <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-              <span>{t("prompt_group", lang)}</span>
-              <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
-                {t("prompt_rows", lang)}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handlePromptTabChange("grid")}
+                  className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                    activePromptTab === "grid"
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                  }`}
+                >
+                  {t("tab_grid", lang)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePromptTabChange("config")}
+                  className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                    activePromptTab === "config"
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                  }`}
+                >
+                  {t("tab_config", lang)}
+                </button>
+                {activePromptTab === "config" && (
+                  <>
+                    <span className="mx-1 text-[var(--border)]">|</span>
+                    <button
+                      type="button"
+                      onClick={() => { setConfigName(""); setConfigAction("save"); }}
+                      className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                    >
+                      {t("save_config", lang)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleShowLoadList}
+                      className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                    >
+                      {t("load_config", lang)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenConfigDir}
+                      className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                    >
+                      {t("open_config_dir", lang)}
+                    </button>
+                  </>
+                )}
+              </div>
+              {activePromptTab === "grid" && (
+                <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
+                  {t("prompt_rows", lang)}
+                  <Input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={settings.promptRowCount}
+                    onChange={(e) => updatePromptRowCount(Number(e.currentTarget.value))}
+                    className="w-14 text-center"
+                  />
+                </label>
+              )}
+            </div>
+            {activePromptTab === "grid" && (
+              <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
                 <input
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={settings.promptRowCount}
-                  onChange={(e) => updatePromptRowCount(Number(e.currentTarget.value))}
-                  className="w-14 rounded border border-[var(--border)] bg-[var(--bg-input)] px-1 py-0.5 text-center text-xs outline-none focus:border-[var(--accent)]"
+                  readOnly
+                  value={lang === "zh" ? "指令：点击左侧行按钮发送…" : "COMMAND: click a row button to send…"}
+                  className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none"
                 />
-              </label>
-            </div>
-            <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
-              <input
-                readOnly
-                value={lang === "zh" ? "指令：点击左侧行按钮发送…" : "COMMAND: click a row button to send…"}
-                className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none"
-              />
-              <button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
-                {lang === "zh" ? "预设" : "Prompt"}
-              </button>
-              <button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
-                Idx
-              </button>
-              <button className="rounded bg-[var(--accent)] px-3 py-1.5 text-white">
-                {lang === "zh" ? "开始" : "Start"}
-              </button>
-              <input
-                readOnly
-                value={lang === "zh" ? "总次数" : "Total Times"}
-                className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none"
-              />
-              <button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
-                {lang === "zh" ? "停止" : "Stop"}
-              </button>
-            </div>
+                <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+                  {lang === "zh" ? "预设" : "Prompt"}
+                </Button>
+                <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+                  Idx
+                </Button>
+                <Button className="rounded bg-[var(--accent)] px-3 py-1.5 text-white">
+                  {lang === "zh" ? "开始" : "Start"}
+                </Button>
+                <input
+                  readOnly
+                  value={lang === "zh" ? "总次数" : "Total Times"}
+                  className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none"
+                />
+                <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+                  {lang === "zh" ? "停止" : "Stop"}
+                </Button>
+              </div>
+            )}
           </div>
 
-          {/* Scrollable command rows */}
-          <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-            <div className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-              <div />
-              <div />
-              <div>{t("send", lang)}</div>
-              <div>{t("command_placeholder", lang)}</div>
-              <div>HEX</div>
-              <div>{t("ender_none", lang)}</div>
-              <div>{t("interval_placeholder", lang)}</div>
-            </div>
-            <div className="h-[calc(100%-30px)] overflow-y-auto">
-              {promptRows.map((row) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] px-2 py-1 last:border-0 hover:bg-[var(--bg-input)]"
-                >
-                  <div className="flex justify-center">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] text-[10px] text-[var(--text-muted)]">
-                      {row.id}
-                    </span>
-                  </div>
-                  <div className="flex justify-center">
-                    <input
-                      type="checkbox"
-                      checked={row.selected}
-                      onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })}
-                      className="h-3.5 w-3.5 accent-[var(--accent)]"
+          {/* Scrollable command rows / YAML editor */}
+          {activePromptTab === "grid" ? (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
+              <div className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+                <div />
+                <div />
+                <div>{t("send", lang)}</div>
+                <div>{t("command_placeholder", lang)}</div>
+                <div>HEX</div>
+                <div>{t("ender_none", lang)}</div>
+                <div>{t("interval_placeholder", lang)}</div>
+              </div>
+              <div className="h-[calc(100%-30px)] overflow-y-auto">
+                {promptRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] px-2 py-1 last:border-0 hover:bg-[var(--bg-hover)]"
+                  >
+                    <div className="flex justify-center">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] text-[10px] text-[var(--text-muted)]">
+                        {row.id}
+                      </span>
+                    </div>
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={row.selected}
+                        onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleSendPromptRow(row)}
+                    >
+                      {t("prompt_sender", lang)}
+                    </Button>
+                    <Input
+                      value={row.command}
+                      onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })}
+                      onKeyDown={(e) => handleCommandKeyDown(e, row)}
+                      ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }}
+                      placeholder={t("command_placeholder", lang)}
+                      className="bg-transparent"
+                    />
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={row.isHex}
+                        onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })}
+                      />
+                    </div>
+                    <Select
+                      value={row.ender}
+                      onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })}
+                    >
+                      <option value="\r\n">{t("ender_crlf", lang)}</option>
+                      <option value="">{t("ender_none", lang)}</option>
+                      <option value="\n">{t("ender_lf", lang)}</option>
+                      <option value="\r">{t("ender_cr", lang)}</option>
+                    </Select>
+                    <Input
+                      value={row.interval}
+                      onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })}
+                      placeholder={t("interval_placeholder", lang)}
+                      className="text-center"
                     />
                   </div>
-                  <button
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Save action inline */}
+              {configAction === "save" && (
+                <div className="shrink-0 flex items-center gap-2 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-input)]">
+                  <input
+                    value={configName}
+                    onChange={(e) => setConfigName(e.currentTarget.value)}
+                    placeholder={t("config_name_hint", lang)}
+                    className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && configName.trim()) handleSaveConfig(configName.trim());
+                      if (e.key === "Escape") setConfigAction(null);
+                    }}
+                    autoFocus
+                  />
+                  <Button
                     type="button"
-                    onClick={() => handleSendPromptRow(row)}
-                    className="rounded bg-[var(--accent)] px-2 py-1 text-xs text-white transition-colors hover:opacity-80"
+                    variant="primary"
+                    size="sm"
+                    disabled={!configName.trim()}
+                    onClick={() => handleSaveConfig(configName.trim())}
+                    className="px-2 py-1 text-[11px]"
                   >
-                    {t("prompt_sender", lang)}
-                  </button>
-                  <input
-                    value={row.command}
-                    onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })}
-                    onKeyDown={(e) => handleCommandKeyDown(e, row)}
-                    ref={(el) => { commandRefs.current[row.id] = el; }}
-                    placeholder={t("command_placeholder", lang)}
-                    className="rounded border border-[var(--border)] bg-transparent px-2 py-1 text-xs outline-none focus:border-[var(--accent)]"
-                  />
-                  <div className="flex justify-center">
-                    <input
-                      type="checkbox"
-                      checked={row.isHex}
-                      onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })}
-                      className="h-3.5 w-3.5 accent-[var(--accent)]"
-                    />
-                  </div>
-                  <select
-                    value={row.ender}
-                    onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })}
-                    className="w-full rounded border border-[var(--border)] bg-transparent px-1 py-1 text-[11px] outline-none focus:border-[var(--accent)]"
+                    {t("save_config", lang)}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfigAction(null)}
+                    className="px-2 py-1 text-[11px]"
                   >
-                    <option value="\r\n">{t("ender_crlf", lang)}</option>
-                    <option value="">{t("ender_none", lang)}</option>
-                    <option value="\n">{t("ender_lf", lang)}</option>
-                    <option value="\r">{t("ender_cr", lang)}</option>
-                  </select>
-                  <input
-                    value={row.interval}
-                    onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })}
-                    placeholder={t("interval_placeholder", lang)}
-                    className="rounded border border-[var(--border)] bg-transparent px-2 py-1 text-center text-xs outline-none focus:border-[var(--accent)]"
-                  />
+                    {lang === "zh" ? "取消" : "Cancel"}
+                  </Button>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
+
+              {/* Load action inline */}
+              {configAction === "load" && (
+                <div className="shrink-0 border-b border-[var(--border)] bg-[var(--bg-input)]">
+                  {savedConfigs.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-[var(--text-muted)]">
+                      {t("no_configs", lang)}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[var(--border)] max-h-32 overflow-y-auto">
+                      {savedConfigs.map((name) => (
+                        <div key={name} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)]">
+                          <button
+                            type="button"
+                            className="flex-1 text-left text-[var(--text-primary)]"
+                            onClick={() => handleLoadConfig(name)}
+                          >
+                            {name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteConfig(name)}
+                            className="rounded px-1 py-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors text-[10px]"
+                          >
+                            {lang === "zh" ? "删除" : "Del"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="px-3 py-1.5 border-t border-[var(--border)]">
+                    <button
+                      type="button"
+                      onClick={() => setConfigAction(null)}
+                      className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      {lang === "zh" ? "取消" : "Cancel"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <YamlEditor
+                value={yamlText}
+                onChange={handleYamlChange}
+                error={yamlError}
+                lang={lang}
+              />
+            </>
+          )}
         </div>
       </main>
 
@@ -528,6 +783,8 @@ function App() {
           isConnected={isConnected}
           statusText={statusText}
           currentPortLabel={currentPortLabel}
+          onOpenConfigDir={handleOpenConfigDir}
+          configDirTooltip={lang === "zh" ? "打开配置目录" : "Open config folder"}
         />
       </div>
 

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { Button } from "../ui/Button";
 import type { AppendNewline, HotkeyConfig } from "../../hooks/useSettings.ts";
 import { eventToShortcut } from "../../utils/shortcutUtils.ts";
 import { t } from "../../i18n.ts";
@@ -44,14 +45,14 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
           <div className="text-sm font-semibold">指令热键</div>
           <div className="text-xs text-[var(--text-muted)]">快捷键支持 Ctrl/Alt + 任意键，输入框中也会全局触发。</div>
         </div>
-        <button
+        <Button
           type="button"
           onClick={() => onHotkeysChange([...hotkeys, newHotkey()])}
           className="flex items-center gap-1 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white"
         >
           <Plus size={13} />
           新增
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[var(--border)]">
@@ -125,7 +126,7 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
                   <option key={option.label} value={option.value}>{option.label}</option>
                 ))}
               </select>
-              <button
+            <Button
               type="button"
               onKeyDown={(event) => {
                 if (capturingId !== hotkey.id) return;
@@ -141,8 +142,8 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
               className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
             >
               {capturingId === hotkey.id ? t("hotkey_press", lang) : hotkey.shortcut || t("hotkey_click_set", lang)}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => {
                 if (window.confirm(`${t("hotkey_delete_confirm", lang)} ${hotkey.label}？`)) {
@@ -153,7 +154,7 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
               title="删除"
             >
               <Trash2 size={13} />
-            </button>
+            </Button>
           </div>
         ))}
       </div>

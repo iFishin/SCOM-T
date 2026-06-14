@@ -1,12 +1,14 @@
-import { Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff, FolderOpen } from "lucide-react";
 
 type StatusBarProps = {
   isConnected: boolean;
   statusText: string;
   currentPortLabel: string;
+  onOpenConfigDir?: () => void;
+  configDirTooltip?: string;
 };
 
-export function StatusBar({ isConnected, statusText, currentPortLabel }: StatusBarProps) {
+export function StatusBar({ isConnected, statusText, currentPortLabel, onOpenConfigDir, configDirTooltip }: StatusBarProps) {
   return (
     <footer className="flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 text-xs">
       <span className={`flex items-center gap-1.5 ${isConnected ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}>
@@ -16,7 +18,19 @@ export function StatusBar({ isConnected, statusText, currentPortLabel }: StatusB
         }
         {statusText}
       </span>
+      {onOpenConfigDir && (
+        <button
+          type="button"
+          onClick={onOpenConfigDir}
+          className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          title={configDirTooltip ?? "Open config folder"}
+        >
+          <FolderOpen size={12} />
+        </button>
+      )}
       <span className="ml-auto text-[var(--text-muted)]">{currentPortLabel}</span>
     </footer>
   );
 }
+
+export default StatusBar;

@@ -111,3 +111,5 @@ export function useToast() {
 
   return { toasts, pushToast, removeToast };
 }
+
+export default ToastContainer;

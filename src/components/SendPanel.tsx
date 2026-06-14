@@ -1,8 +1,13 @@
 import React from "react";
 // Hotkeys/Files refactor applied: layout extracted to separate components
 import { Send, Maximize2, Minimize2 } from "lucide-react";
+import { Button } from "./ui/Button";
+import { Checkbox } from "./ui/Checkbox";
+import { Input } from "./ui/Input";
+import { Panel } from "./ui/Panel";
+import { Select } from "./ui/Select";
 import { parseHexString, bytesToHex, bytesToAscii } from "../utils/hexConverter.ts";
-import type { ToastType } from "./Toast.tsx";
+import type { ToastType } from "./ui/Toast.tsx";
 import type { ReceiveMode, SendMode } from "../hooks/useSerialPort.ts";
 import type { HotkeyConfig } from "../hooks/useSettings.ts";
 import { useHotkeys } from "../hooks/useHotkeys.ts";
@@ -36,8 +41,6 @@ type SendPanelProps = {
   onPushToast: (text: string, type?: ToastType) => void;
 };
 
-const sel =
-  "rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]";
 
 export function SendPanel({
   value,
@@ -129,12 +132,13 @@ export function SendPanel({
   return (
     <div className="flex shrink-0 flex-col gap-2">
       {/* Send command */}
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2">
-        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-          {t("send", lang)}
-        </div>
-        <div className="flex gap-1.5">
-          <div className="flex-1">
+      <Panel className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
+        <div className="p-2">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+            {t("send", lang)}
+          </div>
+          <div className="flex gap-1.5">
+            <div className="flex-1">
             {expanded ? (
               <textarea
                 ref={(el) => { inputRef.current = el; }}
@@ -146,8 +150,8 @@ export function SendPanel({
                 className={`w-full resize-y rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
               />
             ) : (
-              <input
-                ref={(el) => { inputRef.current = el; }}
+              <Input
+                ref={(el: HTMLInputElement) => { inputRef.current = el; }}
                 value={value}
                 onChange={(e) => onChange(e.currentTarget.value)}
                 onKeyDown={handleTextareaKeyDown}
@@ -155,9 +159,9 @@ export function SendPanel({
                 className={`w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
               />
             )}
-            <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex items-center gap-2">
               <div className="flex gap-1 items-center">
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     try {
@@ -167,11 +171,11 @@ export function SendPanel({
                       onPushToast?.(err?.message || String(err), "warn");
                     }
                   }}
-                  className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                  className="px-2 py-1 text-xs"
                 >
                   {lang === "zh" ? "ASCII→HEX" : "ASCII→HEX"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     try {
@@ -181,10 +185,10 @@ export function SendPanel({
                       onPushToast?.(err?.message || String(err), "warn");
                     }
                   }}
-                  className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                  className="px-2 py-1 text-xs"
                 >
                   {lang === "zh" ? "HEX→ASCII" : "HEX→ASCII"}
-                </button>
+                </Button>
               </div>
               <div className="text-[11px] text-[var(--text-muted)]">
                 {(() => {
@@ -197,53 +201,50 @@ export function SendPanel({
                 })()}
               </div>
               <div className="ml-auto">
-                <button
+                <Button
                   type="button"
                   onClick={toggleExpanded}
-                  className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                  className="px-2 py-1 text-xs"
                   title={expanded ? (lang === "zh" ? "收起输入" : "Collapse input") : (lang === "zh" ? "展开输入" : "Expand input")}
                 >
                   {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
           <div className="flex w-36 flex-col gap-2">
             <div className="flex gap-1">
-              <label className={`flex cursor-pointer items-center gap-1 ${sel}`}>
-                <input
-                  type="checkbox"
-                  className="accent-[var(--accent)]"
-                  checked={sendMode === "hex"}
-                  onChange={(e) => onSendModeChange(e.currentTarget.checked ? "hex" : "ascii")}
-                />
-                <span>HEX</span>
-              </label>
-              <select
+              <Checkbox
+                checked={sendMode === "hex"}
+                onChange={(e) => onSendModeChange(e.currentTarget.checked ? "hex" : "ascii")}
+                label="HEX"
+              />
+              <Select
                 value={appendNewline}
                 onChange={(e) => onAppendNewlineChange(e.currentTarget.value as AppendNewline)}
-                className={sel}
                 title={t("ender_crlf", lang)}
               >
                 {enderOptions.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="mt-auto">
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleSend}
                 disabled={isBusy}
-                className="w-full flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
+                className="w-full flex items-center justify-center gap-1"
               >
                 <Send size={12} />
                 {t("send", lang)}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </Panel>
 
       <FileSend
         filePath={filePath}
@@ -259,7 +260,7 @@ export function SendPanel({
       <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} />
 
       <div className="hidden">
-        <button type="button" onClick={() => onReceiveModeChange(receiveMode === "hex" ? "ascii" : "hex")} />
+        <Button type="button" onClick={() => onReceiveModeChange(receiveMode === "hex" ? "ascii" : "hex")} />
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
-import React from "react";
-import { RotateCcw, Save } from "lucide-react";
-import { t } from "../../i18n.ts";
-import type { Lang } from "../../i18n.ts";
+import { RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useEffect } from "react";
 import type { ThemeSettings } from "../../hooks/useSettings.ts";
 import { ColorField } from "./ColorField.tsx";
+import { Button } from "../ui/Button.tsx";
+import ComponentPreview from "../ui/ComponentPreview.tsx";
 
 const ACCENTS = [
   { name: "Emerald", color: "#10b981" },
@@ -13,12 +13,16 @@ const ACCENTS = [
   { name: "Rose", color: "#f43f5e" },
 ];
 
-export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { theme: ThemeSettings; lang: Lang; onThemeChange: (t: ThemeSettings) => void; onThemeReset: (mode?: ThemeSettings["mode"]) => void }) {
-  const [fontSizeDraft, setFontSizeDraft] = React.useState(String(theme.fontSize));
+export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { theme: ThemeSettings; lang?: string; onThemeChange: (t: ThemeSettings) => void; onThemeReset: (mode?: ThemeSettings["mode"]) => void }) {
+  const [fontSizeDraft, setFontSizeDraft] = useState(String(theme.fontSize));
+  const [previewType, setPreviewType] = useState<"simple" | "components">("simple");
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setFontSizeDraft(String(theme.fontSize));
   }, [theme.fontSize]);
+
+  void lang;
 
   return (
     <div className="space-y-4">
@@ -27,14 +31,16 @@ export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { them
           <div className="text-sm font-semibold">主题颜色</div>
           <div className="text-xs text-[var(--text-muted)]">背景、文字、边框和强调色会实时应用。</div>
         </div>
-        <button
-          type="button"
-          onClick={() => onThemeReset(theme.mode)}
-          className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-input)]"
-        >
-          <RotateCcw size={13} />
-          重置
-        </button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={() => onThemeReset(theme.mode)}
+            className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-input)]"
+          >
+            <RotateCcw size={13} />
+            重置
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -51,7 +57,7 @@ export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { them
         <div className="mb-2 text-xs text-[var(--text-muted)]">强调色预设</div>
         <div className="flex flex-wrap gap-2">
           {ACCENTS.map((accent) => (
-            <button
+            <Button
               key={accent.color}
               type="button"
               onClick={() => onThemeChange({ ...theme, accent: accent.color })}
@@ -59,18 +65,49 @@ export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { them
             >
               <span className="h-4 w-4 rounded-full" style={{ backgroundColor: accent.color }} />
               {accent.name}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
-        <div className="mb-2 text-xs font-semibold">预览</div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white">主要按钮</button>
-          <button type="button" className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)]">次要按钮</button>
-          <span className="text-xs text-[var(--text-muted)]">这是主题预览文本</span>
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)]">
+        <div className="flex items-center justify-between p-3">
+          <div className="mb-0 text-xs font-semibold">预览</div>
+          <div className="flex items-center gap-2">
+            <select
+              value={previewType}
+              onChange={(e) => setPreviewType(e.currentTarget.value as "simple" | "components")}
+              className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs outline-none"
+            >
+              <option value="simple">简单预览</option>
+              <option value="components">组件示例</option>
+            </select>
+            <Button
+              type="button"
+              onClick={() => setPreviewCollapsed((c) => !c)}
+              className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-surface)]"
+              aria-expanded={!previewCollapsed}
+            >
+              {previewCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+            </Button>
+          </div>
         </div>
+
+        {!previewCollapsed ? (
+          <div className="p-4">
+            {previewType === "simple" ? (
+              <div className="flex items-center gap-2">
+                <Button type="button" className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white">主要按钮</Button>
+                <Button type="button" className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)]">次要按钮</Button>
+                <span className="text-xs text-[var(--text-muted)]">这是主题预览文本</span>
+              </div>
+            ) : (
+              <ComponentPreview />
+            )}
+          </div>
+        ) : (
+          <div className="px-4 pb-3 text-xs text-[var(--text-muted)]">预览已收起</div>
+        )}
       </div>
 
       {/* Font settings */}
@@ -138,7 +175,7 @@ export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { them
             { label: "JetBrains Mono", value: "JetBrains Mono, Consolas, monospace" },
             { label: "Noto Sans SC", value: "Noto Sans SC, PingFang SC, sans-serif" },
           ].map((preset) => (
-            <button
+            <Button
               key={preset.label}
               type="button"
               onClick={() => onThemeChange({ ...theme, fontFamily: preset.value })}
@@ -146,7 +183,7 @@ export function ThemeEditor({ theme, lang, onThemeChange, onThemeReset }: { them
               style={{ fontFamily: preset.value }}
             >
               {preset.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

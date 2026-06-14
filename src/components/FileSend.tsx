@@ -1,5 +1,6 @@
 import { FolderOpen, File, Send } from "lucide-react";
-import type { ToastType } from "./Toast.tsx";
+import type { ToastType } from "./ui/Toast.tsx";
+import { Button } from "./ui/Button";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 
@@ -42,7 +43,7 @@ export function FileSend({
         <div className="flex flex-1 items-center gap-1 overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5">
           <span className="truncate text-xs text-[var(--text-muted)]">{filePath || t("no_file", lang)}</span>
         </div>
-        <button
+        <Button
           type="button"
           onClick={onFileSelect}
           disabled={isBusy}
@@ -50,15 +51,15 @@ export function FileSend({
           className="flex items-center gap-1 rounded border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-40"
         >
           <FolderOpen size={13} />
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={handleFileSend}
           disabled={isBusy}
           className="flex items-center gap-1 rounded bg-[var(--accent)] px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
         >
           <Send size={12} />
-        </button>
+        </Button>
       </div>
       {isSendingFile && (
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--bg-input)]">
