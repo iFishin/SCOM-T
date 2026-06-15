@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import { AboutPanel } from "./components/settings/AboutPanel.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { FileSend } from "./components/FileSend.tsx";
@@ -562,7 +563,7 @@ function App() {
             dragConfig={{ enabled: gridEditing, cancel: 'input,select,textarea,button,a,.react-resizable-handle,.no-drag' }}
             resizeConfig={{ enabled: gridEditing, handles: ['e', 's', 'se', 'w', 'n'] }}
             autoSize
-            onLayoutChange={(newLayout: Layout) =>
+            onLayoutChange={gridEditing ? (newLayout: Layout) =>
               updateGridLayout(
                 newLayout.map((item) => ({
                   i: item.i,
@@ -574,7 +575,7 @@ function App() {
                   minH: (settings.gridLayout ?? []).find((l) => l.i === item.i)?.minH ?? 2,
                 }))
               )
-            }
+            : undefined}
           >
             <div key="config" className="overflow-hidden rounded-lg">
               <ConfigPanel

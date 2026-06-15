@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GridLayout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import type { Layout } from "react-grid-layout";
 import { Button } from "../ui/Button";
 import { t } from "../../i18n.ts";
@@ -24,6 +25,19 @@ type Props = {
   onReset: () => void;
 };
 
+/** Strip extra react-grid-layout fields, keep only what we persist. */
+function toGridItemLayout(src: Layout): GridItemLayout[] {
+  return src.map((item) => ({
+    i: item.i,
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+    minW: item.minW,
+    minH: item.minH,
+  }));
+}
+
 export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -40,39 +54,67 @@ export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
     return () => ro.disconnect();
   }, []);
 
+  // Debounce layout persistence — only save after drag/resize stops
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  function queueSave(newLayout: GridItemLayout[]) {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[LayoutEditor] Saving layout:", newLayout);
+      }
+      onLayoutChange(newLayout);
+    }, 200);
+  }
+
   return (
     <div className="space-y-3">
       <div className="text-xs text-[var(--text-muted)]">
         {t("layout_drag_hint", lang)}
       </div>
-      <div ref={containerRef} className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-0 overflow-hidden">
+      <div ref={containerRef} className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-0">
         {width > 0 && (
           <GridLayout
-          width={width}
-          layout={layout as unknown as Layout}
+            width={width}
+            layout={layout as unknown as Layout}
             gridConfig={{
               cols: 12,
-              rowHeight: 20,
-              margin: [6, 6],
+              rowHeight: 30,
+              margin: [8, 8],
               containerPadding: [0, 0] as const,
               maxRows: Infinity,
             }}
-            dragConfig={{ enabled: true, bounded: false }}
-            resizeConfig={{ enabled: true, handles: ['e', 's', 'se', 'w', 'n'] }}
+            dragConfig={{
+              enabled: true,
+              bounded: false,
+              cancel: '.react-resizable-handle,input,select,textarea,button,a,.no-drag',
+            }}
+            resizeConfig={{
+              enabled: true,
+              handles: ['se'],
+            }}
             autoSize
-            onLayoutChange={(newLayout: Layout) =>
-              onLayoutChange(
-                newLayout.map((item) => ({
-                  i: item.i,
-                  x: item.x,
-                  y: item.y,
-                  w: item.w,
-                  h: item.h,
-                  minW: layout.find((l) => l.i === item.i)?.minW ?? 2,
-                  minH: layout.find((l) => l.i === item.i)?.minH ?? 2,
-                }))
-              )
-            }
+            onLayoutChange={(newLayout: Layout) => {
+              if (process.env.NODE_ENV === "development") {
+                console.log("[LayoutEditor] onLayoutChange", newLayout);
+              }
+              queueSave(toGridItemLayout(newLayout));
+            }}
+            onDragStart={() => {
+              if (process.env.NODE_ENV === "development") {
+                console.log("[LayoutEditor] onDragStart");
+              }
+            }}
+            onDrag={() => {
+              if (process.env.NODE_ENV === "development") {
+                console.log("[LayoutEditor] onDrag");
+              }
+            }}
+            onDragStop={(newLayout: Layout) => {
+              if (process.env.NODE_ENV === "development") {
+                console.log("[LayoutEditor] onDragStop", newLayout);
+              }
+            }}
           >
             {GRID_ITEM_KEYS.map((key) => {
               const label = GRID_ITEM_LABELS[key][lang];
@@ -80,10 +122,10 @@ export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
               return (
                 <div
                   key={key}
-                  className={`flex cursor-grab flex-col overflow-hidden rounded-lg border border-[var(--border)] border-l-4 bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${color}`}
+                  className="flex flex-col overflow-hidden rounded-lg border border-[var(--border)] border-l-4 bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="flex items-center gap-1 border-b border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
-                    <span className="text-[10px]">⠿</span>
+                    <span className="text-[10px] select-none">⠿</span>
                     {label}
                   </div>
                   <div className="flex flex-1 items-center justify-center p-1 text-[10px] text-[var(--text-muted)] opacity-50">
