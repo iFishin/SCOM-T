@@ -89,6 +89,7 @@ const ZH: Dict = {
   prompt_group: "提示按钮组",
   tab_grid: "网格",
   tab_config: "配置",
+  tab_batch: "文本",
   prompt_rows: "行数",
   prompt_sender: "发送",
   command_placeholder: "指令…",
@@ -140,6 +141,36 @@ const ZH: Dict = {
   layout_reset: "重置布局",
   layout_reset_confirm: "重置为默认布局？",
   layout_drag_hint: "在下方网格中拖拽卡片调整布局",
+
+  // Remote / TCP
+  connection_serial: "串口",
+  connection_tcp_client: "TCP 客户端",
+  connection_tcp_server: "TCP 服务器",
+  tcp_host: "主机",
+  tcp_port: "端口",
+  tcp_protocol: "协议",
+  tcp_connect: "连接",
+  tcp_connecting: "连接中...",
+  tcp_disconnect: "断开",
+  tcp_connected_status: "已连接",
+  tcp_disconnected_status: "未连接",
+  tcp_server_start: "启动服务器",
+  tcp_server_starting: "启动中...",
+  tcp_server_stop: "停止服务器",
+  tcp_server_running: "运行中",
+  tcp_server_stopped_status: "已停止",
+  tcp_server_listen_port: "监听端口",
+  tcp_server_clients: "客户端",
+  tcp_server_no_clients: "暂无已连接的客户端",
+  tcp_server_hint: "请先选择串口并打开，再启动服务器",
+
+  // Close behavior
+  close_behavior: "关闭行为",
+  close_behavior_desc: "点击窗口关闭按钮时的行为",
+
+  // Multi-instance
+  multi_instance: "实例策略",
+  multi_instance_desc: "是否允许同时运行多个 SCOM-T",
 };
 
 const EN: Dict = {
@@ -229,6 +260,7 @@ const EN: Dict = {
   prompt_group: "Prompt Button Group",
   tab_grid: "Grid",
   tab_config: "Config",
+  tab_batch: "Text",
   prompt_rows: "Rows",
   prompt_sender: "Send",
   command_placeholder: "command…",
@@ -279,6 +311,36 @@ const EN: Dict = {
   layout_reset: "Reset Layout",
   layout_reset_confirm: "Reset to default layout?",
   layout_drag_hint: "Drag cards in the grid below to customize layout",
+
+  // Remote / TCP
+  connection_serial: "Serial",
+  connection_tcp_client: "TCP Client",
+  connection_tcp_server: "TCP Server",
+  tcp_host: "Host",
+  tcp_port: "Port",
+  tcp_protocol: "Protocol",
+  tcp_connect: "Connect",
+  tcp_connecting: "Connecting...",
+  tcp_disconnect: "Disconnect",
+  tcp_connected_status: "Connected",
+  tcp_disconnected_status: "Disconnected",
+  tcp_server_start: "Start Server",
+  tcp_server_starting: "Starting...",
+  tcp_server_stop: "Stop Server",
+  tcp_server_running: "Running",
+  tcp_server_stopped_status: "Stopped",
+  tcp_server_listen_port: "Listen Port",
+  tcp_server_clients: "Clients",
+  tcp_server_no_clients: "No connected clients",
+  tcp_server_hint: "Open a serial port first, then start the server",
+
+  // Close behavior
+  close_behavior: "Close Behavior",
+  close_behavior_desc: "Action when clicking the window close button",
+
+  // Multi-instance
+  multi_instance: "Instance Policy",
+  multi_instance_desc: "Allow running multiple SCOM-T instances",
 
 };
 

@@ -10,12 +10,14 @@ import { FileSend } from "./components/FileSend.tsx";
 import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { SendPanel } from "./components/SendPanel.tsx";
 import { ReceiveLog } from "./components/ReceiveLog.tsx";
+import { BatchEditor } from "./components/BatchEditor.tsx";
 import { StatusBar } from "./components/ui/StatusBar.tsx";
 import { Button } from "./components/ui/Button.tsx";
 import { Checkbox } from "./components/ui/Checkbox.tsx";
 import { Input } from "./components/ui/Input.tsx";
 import { Select } from "./components/ui/Select.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
+import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
@@ -121,6 +123,7 @@ function useVSplit(initialRatio = 0.45, minTopPx = 120, minBottomPx = 80) {
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>("ascii");
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>("ascii");
   const [appendNewline, setAppendNewline] = useState<"" | "\r\n" | "\r" | "\n">("\r\n");
@@ -132,6 +135,10 @@ function App() {
     dataBits: "8",
     parity: "none",
     stopBits: "1",
+    connectionType: "serial",
+    tcpHost: "",
+    tcpPort: 23,
+    tcpProtocol: "rfc2217",
   });
   const [promptRows, setPromptRows] = useState<PromptRow[]>(() =>
     Array.from({ length: 100 }, (_, i) => ({
@@ -146,8 +153,27 @@ function App() {
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const { toasts, pushToast, removeToast } = useToast();
-  const { settings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateLayoutMode, updateGridLayout } = useSettings();
+  const { settings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout } = useSettings();
   const lang = settings.lang ?? "zh";
+
+  // ── Load prompts.yaml on startup ──
+  useEffect(() => {
+    async function load() {
+      try {
+        const { join } = await import("@tauri-apps/api/path");
+        const { homeDir } = await import("@tauri-apps/api/path");
+        const { readTextFile } = await import("@tauri-apps/plugin-fs");
+        const { parseYamlToRows } = await import("./utils/yamlConfig.ts");
+        const path = await join(await homeDir(), "SCOM-T", "prompts.yaml");
+        const text = await readTextFile(path);
+        const result = parseYamlToRows(text);
+        if (result.valid && result.rows.length > 0) {
+          setPromptRows(result.rows);
+        }
+      } catch { /* file may not exist yet */ }
+    }
+    load();
+  }, []);
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
     typeof window !== "undefined" ? Math.floor(window.innerWidth / 2) : 480,
   );
@@ -157,6 +183,7 @@ function App() {
     ports, logs, isConnected, isBusy, statusText, connectedPort,
     error, fileSendProgress,
     refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
+    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs,
   } = useSerialPort({ config, receiveMode });
 
   const logFile = useLogFile();
@@ -173,8 +200,9 @@ function App() {
   const [configName, setConfigName] = useState("");
   const [savedConfigs, setSavedConfigs] = useState<string[]>([]);
 
-  const [activePromptTab, setActivePromptTab] = useState<"grid" | "config">("grid");
+  const [activePromptTab, setActivePromptTab] = useState<"grid" | "config" | "batch">("grid");
   const [yamlText, setYamlText] = useState("");
+  const [batchText, setBatchText] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [topCollapsed, setTopCollapsed] = useState(false);
@@ -207,6 +235,66 @@ function App() {
     prevError.current = error;
   }, [error]);
 
+  // ── Native event prevention & custom context menu ──
+
+  const PREVENT_KEYS = ["f5", "f11", "f12"];
+  const PREVENT_COMBO = (e: KeyboardEvent) =>
+    (e.ctrlKey && ["f", "r", "n", "p", "u", "s"].includes(e.key.toLowerCase())) ||
+    (e.ctrlKey && e.shiftKey && ["i", "j"].includes(e.key.toLowerCase()));
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (PREVENT_KEYS.includes(e.key.toLowerCase()) || PREVENT_COMBO(e)) {
+        e.preventDefault();
+      }
+    }
+    function onContextMenu(e: MouseEvent) {
+      e.preventDefault();
+      setCtxMenu({ x: e.clientX, y: e.clientY });
+    }
+    function onDragOver(e: DragEvent) { e.preventDefault(); }
+    function onDrop(e: DragEvent) { e.preventDefault(); }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("dragover", onDragOver);
+      document.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
+  // ── System tray: show-about event ──
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    async function setup() {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen("show-about", () => setAboutOpen(true));
+    }
+    setup();
+    return () => unlisten?.();
+  }, []);
+
+  // ── Single-instance check ──
+  useEffect(() => {
+    if (settings.allowMultiInstance) return;
+    async function check() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const ok = await invoke<boolean>("try_claim_instance");
+      if (!ok) {
+        pushToast(lang === "zh" ? "SCOM-T 已在运行" : "SCOM-T is already running", "warn");
+        // Give user a moment to see the toast, then focus the existing window
+        await new Promise((r) => setTimeout(r, 500));
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        await getCurrentWindow().close();
+      }
+    }
+    check();
+  }, []);
+
   // Keep promptRows length in sync with promptRowCount
   useEffect(() => {
     setPromptRows((current) => {
@@ -221,6 +309,39 @@ function App() {
       });
     });
   }, [settings.promptRowCount]);
+
+  // ── Auto-save promptRows to ~/SCOM-T/prompts.yaml ──
+  const promptSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const promptRowsRef = useRef(promptRows);
+  promptRowsRef.current = promptRows;
+
+  useEffect(() => {
+    if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
+    promptSaveTimer.current = setTimeout(async () => {
+      try {
+        const { join } = await import("@tauri-apps/api/path");
+        const { homeDir } = await import("@tauri-apps/api/path");
+        const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
+        const { serializeToYaml } = await import("./utils/yamlConfig.ts");
+
+        const dir = await join(await homeDir(), "SCOM-T");
+        await mkdir(dir, { recursive: true }).catch(() => {});
+        const path = await join(dir, "prompts.yaml");
+        await writeTextFile(path, serializeToYaml(promptRows));
+      } catch { /* auto-save failure is non-critical */ }
+    }, 800);
+    return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
+  }, [promptRows]);
+
+  // Flush pending prompt save on beforeunload
+  useEffect(() => {
+    function flush() {
+      if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
+      // Synchronous best-effort flush — actual save happens on next mount
+    }
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, []);
 
   function updatePromptRow(id: number, patch: Partial<PromptRow>) {
     setPromptRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -248,7 +369,7 @@ function App() {
     }
   }
 
-  function handlePromptTabChange(tab: "grid" | "config") {
+  function handlePromptTabChange(tab: "grid" | "config" | "batch") {
     if (yamlDebounceRef.current) {
       clearTimeout(yamlDebounceRef.current);
       yamlDebounceRef.current = null;
@@ -257,7 +378,31 @@ function App() {
       setYamlText(serializeToYaml(promptRows));
       setYamlError(null);
     }
+    if (tab === "batch") {
+      setBatchText(promptRows.map((r) => r.command).join("\n"));
+    }
     setActivePromptTab(tab);
+  }
+
+  function handleBatchTextChange(text: string) {
+    setBatchText(text);
+    const lines = text.split("\n");
+    const count = Math.max(1, lines.length);
+
+    setPromptRows((current) =>
+      Array.from({ length: count }, (_, i) => {
+        const existing = current[i];
+        return {
+          id: i + 1,
+          selected: existing?.selected ?? false,
+          command: lines[i] ?? "",
+          isHex: existing?.isHex ?? false,
+          ender: (existing?.ender ?? "\r\n") as "" | "\r\n" | "\r" | "\n",
+          interval: existing?.interval ?? "",
+        };
+      }),
+    );
+    updatePromptRowCount(count);
   }
 
   function handleYamlChange(newValue: string) {
@@ -442,6 +587,9 @@ function App() {
                 isConnected={isConnected}
                 isBusy={isBusy}
                 lang={lang}
+                tcpConnectionStatus={tcpConnectionStatus}
+                tcpServerStatus={tcpServerStatus}
+                tcpServerClients={tcpServerClients}
                 onRefresh={handleRefreshPorts}
                 onConfigChange={setConfig}
                 onOpen={openPort}
@@ -536,6 +684,17 @@ function App() {
                   >
                     {t("tab_config", lang)}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePromptTabChange("batch")}
+                    className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                      activePromptTab === "batch"
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                    }`}
+                  >
+                    {t("tab_batch", lang)}
+                  </button>
                   {activePromptTab === "config" && (
                     <>
                       <span className="mx-1 text-[var(--border)]">|</span>
@@ -604,7 +763,7 @@ function App() {
                 </div>
               )}
 
-              {/* Scrollable command rows / YAML editor */}
+              {/* Scrollable command rows / YAML editor / Batch text */}
               <div className="min-h-0 flex-1">
                 {activePromptTab === "grid" ? (
                   <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
@@ -631,6 +790,13 @@ function App() {
                       ))}
                     </div>
                   </div>
+                ) : activePromptTab === "batch" ? (
+                  <BatchEditor
+                    value={batchText}
+                    onChange={handleBatchTextChange}
+                    placeholder={lang === "zh" ? "每行一条指令，粘贴后自动填充到指令网格" : "One command per line — pasted content auto-fills the command grid"}
+                    lang={lang}
+                  />
                 ) : (
                   <>
                     {configAction === "save" && (
@@ -675,7 +841,7 @@ function App() {
       <header className="flex h-10 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] px-3">
         <div className="flex items-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-lg">
-            <img src="../public/favicon.png" alt="Logo" className="h-8 w-8" />
+            <img src="/favicon.png" alt="Logo" className="h-8 w-8" />
           </div>
         </div>
 
@@ -768,6 +934,9 @@ function App() {
                     isConnected={isConnected}
                     isBusy={isBusy}
                     lang={lang}
+                    tcpConnectionStatus={tcpConnectionStatus}
+                    tcpServerStatus={tcpServerStatus}
+                    tcpServerClients={tcpServerClients}
                     onRefresh={handleRefreshPorts}
                     onConfigChange={setConfig}
                     onOpen={openPort}
@@ -875,6 +1044,17 @@ function App() {
                     >
                       {t("tab_config", lang)}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePromptTabChange("batch")}
+                      className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                        activePromptTab === "batch"
+                          ? "bg-[var(--accent)] text-white"
+                          : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                      }`}
+                    >
+                      {t("tab_batch", lang)}
+                    </button>
                     {activePromptTab === "config" && (
                       <>
                         <span className="mx-1 text-[var(--border)]">|</span>
@@ -944,7 +1124,7 @@ function App() {
             )}
           </div>
 
-          {/* Scrollable command rows / YAML editor */}
+          {/* Scrollable command rows / YAML editor / Batch text */}
           {activePromptTab === "grid" ? (
             <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
               <div className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
@@ -1013,6 +1193,15 @@ function App() {
                   </div>
                 ))}
               </div>
+            </div>
+          ) : activePromptTab === "batch" ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <BatchEditor
+                value={batchText}
+                onChange={handleBatchTextChange}
+                placeholder={lang === "zh" ? "每行一条指令，粘贴后自动填充到指令网格" : "One command per line — pasted content auto-fills the command grid"}
+                lang={lang}
+              />
             </div>
           ) : (
             <>
@@ -1112,6 +1301,7 @@ function App() {
           isConnected={isConnected}
           statusText={statusText}
           currentPortLabel={currentPortLabel}
+          latencyMs={latencyMs}
           onOpenConfigDir={handleOpenConfigDir}
           configDirTooltip={lang === "zh" ? "打开配置目录" : "Open config folder"}
         />
@@ -1123,6 +1313,8 @@ function App() {
         theme={settings.theme}
         lang={settings.lang}
         compactMode={settings.compactMode}
+        closeToTray={settings.closeToTray}
+        allowMultiInstance={settings.allowMultiInstance}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         onClose={() => setSettingsOpen(false)}
@@ -1131,10 +1323,39 @@ function App() {
         onThemeReset={resetTheme}
         onLangChange={updateLang}
         onCompactModeChange={updateCompactMode}
+        onCloseBehaviorChange={updateCloseBehavior}
+        onAllowMultiInstanceChange={updateAllowMultiInstance}
         onLayoutModeChange={updateLayoutMode}
         onGridLayoutChange={updateGridLayout}
       />
       <ToastContainer toasts={toasts} onClose={removeToast} />
+
+      {/* ── Custom context menu ── */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={[
+            {
+              id: "copy",
+              label: lang === "zh" ? "复制" : "Copy",
+              onClick: () => { void navigator.clipboard.writeText(document.getSelection()?.toString() ?? ""); },
+            },
+            {
+              id: "select-all",
+              label: lang === "zh" ? "全选" : "Select All",
+              onClick: () => { document.getSelection()?.selectAllChildren(document.body); },
+            },
+            { id: "sep1", label: "", separator: true, onClick: () => {} },
+            {
+              id: "about",
+              label: lang === "zh" ? "关于" : "About",
+              onClick: () => setAboutOpen(true),
+            },
+          ]}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }

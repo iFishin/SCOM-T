@@ -19,6 +19,8 @@ type SettingsModalProps = {
   theme: ThemeSettings;
   lang: Lang;
   compactMode?: boolean;
+  closeToTray?: boolean;
+  allowMultiInstance?: boolean;
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   onClose: () => void;
@@ -27,6 +29,8 @@ type SettingsModalProps = {
   onThemeReset: (mode?: ThemeSettings["mode"]) => void;
   onLangChange: (lang: Lang) => void;
   onCompactModeChange?: (v: boolean) => void;
+  onCloseBehaviorChange?: (v: boolean) => void;
+  onAllowMultiInstanceChange?: (v: boolean) => void;
   onLayoutModeChange?: (mode: "classic" | "grid") => void;
   onGridLayoutChange?: (layout: GridItemLayout[]) => void;
 };
@@ -39,6 +43,8 @@ export function SettingsModal({
   theme,
   lang,
   compactMode,
+  closeToTray,
+  allowMultiInstance,
   layoutMode,
   gridLayout,
   onClose,
@@ -47,6 +53,8 @@ export function SettingsModal({
   onThemeReset,
   onLangChange,
   onCompactModeChange,
+  onCloseBehaviorChange,
+  onAllowMultiInstanceChange,
   onLayoutModeChange,
   onGridLayoutChange,
 }: SettingsModalProps) {
@@ -99,7 +107,7 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} />
+              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} />
             )}
 
             {activeTab === 1 && (

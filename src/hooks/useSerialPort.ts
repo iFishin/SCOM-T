@@ -19,15 +19,31 @@ import {
 export type SendMode = "ascii" | "hex";
 export type ReceiveMode = "ascii" | "hex";
 export type SerialLogDirection = "sent" | "received";
+export type LogSource = "serial" | "tcp-client" | "tcp-server";
 export type LogDisplayMode = "card" | "text";
 
 export type SerialLogEntry = {
   id: string;
   direction: SerialLogDirection;
+  source?: LogSource;
   mode: SendMode | ReceiveMode;
   payload: string;
   timestamp: string;
+  /** Server-side timestamp embedded in TCP data stream, parsed for display */
+  serverTs?: string;
   seq: number;
+};
+
+// ── TCP / Connection types ──
+
+export type ConnectionType = "serial" | "tcp-client" | "tcp-server";
+export type TcpProtocol = "raw" | "rfc2217";
+export type TcpConnectionStatus = "disconnected" | "connecting" | "connected";
+export type TcpServerStatus = "stopped" | "starting" | "running";
+
+export type TcpClientInfo = {
+  id: string;
+  address: string;
 };
 
 export type SerialConfig = {
@@ -36,6 +52,11 @@ export type SerialConfig = {
   dataBits: "5" | "6" | "7" | "8";
   parity: "none" | "odd" | "even";
   stopBits: "1" | "1.5" | "2";
+  // TCP / remote fields
+  connectionType: ConnectionType;
+  tcpHost: string;
+  tcpPort: number;
+  tcpProtocol: TcpProtocol;
 };
 
 export type PortSummary = {
@@ -131,6 +152,11 @@ export function useSerialPort({
   const portRef = useRef<SerialPort | null>(null);
   const receiveModeRef = useRef(receiveMode);
   const seqCounter = useRef(0);
+  // Track last write to serial for echo suppression in TCP server mode
+  const lastWriteRef = useRef<{ data: Uint8Array; time: number } | null>(null);
+  // TCP latency measurement
+  const lastTcpSendRef = useRef<number>(0);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [ports, setPorts] = useState<PortSummary[]>([]);
   const [logs, setLogs] = useState<SerialLogEntry[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -142,6 +168,11 @@ export function useSerialPort({
     baudRate: number;
   } | null>(null);
   const [fileSendProgress, setFileSendProgress] = useState<number | null>(null);
+
+  // TCP-specific state
+  const [tcpConnectionStatus, setTcpConnectionStatus] = useState<TcpConnectionStatus>("disconnected");
+  const [tcpServerStatus, setTcpServerStatus] = useState<TcpServerStatus>("stopped");
+  const [tcpServerClients, setTcpServerClients] = useState<TcpClientInfo[]>([]);
 
   useEffect(() => {
     receiveModeRef.current = receiveMode;
@@ -169,7 +200,6 @@ export function useSerialPort({
 
       setPorts(normalized);
       setError(null);
-      // Return count so caller can show a toast when no ports found
       return normalized.length;
     } catch (refreshError) {
       setError(`扫描串口失败：${toMessage(refreshError)}`);
@@ -189,12 +219,155 @@ export function useSerialPort({
           seq,
         },
       ];
-      // Keep logs sorted by seq to preserve chronological order
       return next.sort((a, b) => a.seq - b.seq);
     });
   }
 
+  // ── TCP event listeners ──
+
+  useEffect(() => {
+    if (config.connectionType !== "tcp-client" && config.connectionType !== "tcp-server") return;
+
+    const unlisteners: (() => void)[] = [];
+
+    async function setup() {
+      const { listen } = await import("@tauri-apps/api/event");
+
+      if (config.connectionType === "tcp-client") {
+        // TCP data received (from server, may include server timestamp prefix)
+        const TS_RE = /^\[(\d{2}:\d{2}:\d{2}\.\d{3})\]\s/;
+        const un1 = await listen<{ data: number[] }>("tcp-data", (event) => {
+          const bytes = new Uint8Array(event.payload.data);
+          const formatted =
+            receiveModeRef.current === "hex"
+              ? bytesToHex(bytes)
+              : bytesToAscii(bytes);
+
+          // Try to parse the server timestamp prefix from the data
+          let serverTs: string | undefined;
+          let displayPayload = formatted;
+          const tsMatch = formatted.match(TS_RE);
+          if (tsMatch) {
+            serverTs = tsMatch[1];
+            displayPayload = formatted.slice(tsMatch[0].length);
+          }
+
+          appendLog({
+            direction: "received",
+            source: "tcp-client",
+            mode: receiveModeRef.current,
+            payload: displayPayload,
+            serverTs,
+          });
+
+          // RTT measurement: time since last TCP send
+          const lastSend = lastTcpSendRef.current;
+          if (lastSend > 0) {
+            setLatencyMs(Date.now() - lastSend);
+          }
+        });
+        unlisteners.push(un1);
+
+        // TCP connected
+        const un2 = await listen("tcp-connected", () => {
+          setTcpConnectionStatus("connected");
+          setIsConnected(true);
+          setConnectedPort({ path: `${config.tcpHost}:${config.tcpPort}`, baudRate: config.baudRate });
+          setStatusText("TCP已连接");
+          setError(null);
+        });
+        unlisteners.push(un2);
+
+        // TCP disconnected
+        const un3 = await listen<{ reason: string }>("tcp-disconnected", (event) => {
+          setTcpConnectionStatus("disconnected");
+          setIsConnected(false);
+          setConnectedPort(null);
+          setStatusText("TCP已断开");
+          if (event.payload.reason !== "用户断开连接") {
+            setError(`TCP断开：${event.payload.reason}`);
+          }
+        });
+        unlisteners.push(un3);
+      }
+
+      if (config.connectionType === "tcp-server") {
+        // Data from TCP client → forward to serial port
+        const un1 = await listen<{ clientId: string; data: number[] }>("tcp-server-data", async (event) => {
+          const raw = event.payload.data;
+          const bytes = new Uint8Array(raw);
+          const formatted =
+            receiveModeRef.current === "hex"
+              ? bytesToHex(bytes)
+              : bytesToAscii(bytes);
+
+          appendLog({
+            direction: "sent",
+            source: "tcp-server",
+            mode: receiveModeRef.current,
+            payload: formatted,
+          });
+
+          // Record the write for echo suppression
+          lastWriteRef.current = { data: bytes, time: Date.now() };
+
+          const currentPort = portRef.current;
+          if (currentPort) {
+            try {
+              await currentPort.writeBinary(raw);
+            } catch {
+              // Serial write failed — ignore
+            }
+          }
+        });
+        unlisteners.push(un1);
+
+        const un2 = await listen<{ id: string; address: string }>("tcp-server-client-connected", (event) => {
+          setTcpServerClients((prev) => [...prev, { id: event.payload.id, address: event.payload.address }]);
+        });
+        unlisteners.push(un2);
+
+        const un3 = await listen<{ id: string }>("tcp-server-client-disconnected", (event) => {
+          setTcpServerClients((prev) => prev.filter((c) => c.id !== event.payload.id));
+        });
+        unlisteners.push(un3);
+
+        const un4 = await listen("tcp-server-started", () => {
+          setTcpServerStatus("running");
+          setIsConnected(true);
+          setStatusText("TCP服务器运行中");
+        });
+        unlisteners.push(un4);
+
+        const un5 = await listen("tcp-server-stopped", () => {
+          setTcpServerStatus("stopped");
+          setIsConnected(false);
+          setStatusText("TCP服务器已停止");
+        });
+        unlisteners.push(un5);
+      }
+    }
+
+    setup();
+
+    return () => {
+      for (const un of unlisteners) un();
+    };
+  }, [config.connectionType, config.tcpHost, config.tcpPort]);
+
   async function closePort() {
+    // If TCP client is active, disconnect it first
+    if (config.connectionType === "tcp-client" && tcpConnectionStatus === "connected") {
+      await tcpDisconnect();
+      return;
+    }
+
+    // If TCP server is running, stop it first
+    if (config.connectionType === "tcp-server" && tcpServerStatus === "running") {
+      await tcpServerStop();
+      // Fall through to also close serial port
+    }
+
     const currentPort = portRef.current;
     if (!currentPort) {
       setIsConnected(false);
@@ -221,6 +394,24 @@ export function useSerialPort({
   }
 
   async function openPort() {
+    if (config.connectionType === "tcp-client") {
+      await tcpConnect();
+      return;
+    }
+
+    if (config.connectionType === "tcp-server") {
+      // For TCP server mode: first open serial port, then start TCP server
+      await openSerialPort();
+      if (portRef.current) {
+        await tcpServerStart();
+      }
+      return;
+    }
+
+    await openSerialPort();
+  }
+
+  async function openSerialPort() {
     setIsBusy(true);
     setError(null);
     try {
@@ -247,6 +438,25 @@ export function useSerialPort({
       await serial.startListening();
       await serial.listen((payload) => {
         const bytes = normalizePluginPayload(payload);
+        const dataArr = new Uint8Array(bytes);
+
+        // Echo suppression: in TCP server mode, skip data that matches
+        // what we just wrote to the serial port (driver echo / loopback)
+        const lastWrite = lastWriteRef.current;
+        if (config.connectionType === "tcp-server" && lastWrite) {
+          const elapsed = Date.now() - lastWrite.time;
+          if (
+            elapsed < 150 &&
+            dataArr.length === lastWrite.data.length &&
+            dataArr.every((b, i) => b === lastWrite.data[i])
+          ) {
+            lastWriteRef.current = null;
+            return; // Suppress echo — don't log or broadcast
+          }
+          // Clear stale write marker regardless
+          lastWriteRef.current = null;
+        }
+
         const formatted =
           receiveModeRef.current === "hex"
             ? bytesToHex(bytes)
@@ -257,6 +467,15 @@ export function useSerialPort({
           mode: receiveModeRef.current,
           payload: formatted,
         });
+
+        // In TCP server mode, broadcast serial data to all connected TCP clients
+        // with the server's local timestamp embedded in the data stream
+        if (config.connectionType === "tcp-server") {
+          const ts = formatTimestamp(new Date());
+          const prefix = new TextEncoder().encode(`${ts} `);
+          const dataWithTs = Array.from(prefix).concat(bytes);
+          void tcpServerBroadcast(dataWithTs);
+        }
       }, false);
       await serial.disconnected(() => {
         portRef.current = null;
@@ -289,6 +508,11 @@ export function useSerialPort({
     sendMode: SendMode,
     appendNewline: "" | "\r\n" | "\r" | "\n",
   ) {
+    if (config.connectionType === "tcp-client") {
+      await sendTcpData(value, sendMode, appendNewline);
+      return;
+    }
+
     const currentPort = portRef.current;
     if (!currentPort) {
       setError("串口未打开，无法发送数据。");
@@ -300,7 +524,6 @@ export function useSerialPort({
 
     try {
       if (sendMode === "hex") {
-        // For hex mode, parse the hex payload and append newline bytes (if any)
         const newlineBytes = appendNewline
           ? Array.from(new TextEncoder().encode(appendNewline))
           : [];
@@ -381,7 +604,6 @@ export function useSerialPort({
       setError(`发送文件失败：${toMessage(sendFileError)}`);
     } finally {
       setIsBusy(false);
-      // 保留进度条 1 秒后清除，让用户能看到 100%
       setTimeout(() => setFileSendProgress(null), 1000);
     }
   }
@@ -394,6 +616,119 @@ export function useSerialPort({
 
       return current.filter((item) => item.direction !== target);
     });
+  }
+
+  // ── TCP Client Actions ──
+
+  async function tcpConnect() {
+    setTcpConnectionStatus("connecting");
+    setError(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tcp_connect", {
+        host: config.tcpHost,
+        port: config.tcpPort,
+        protocol: config.tcpProtocol,
+      });
+      // isConnected and tcpConnectionStatus updated by event listener
+    } catch (err) {
+      setTcpConnectionStatus("disconnected");
+      setError(`TCP连接失败：${toMessage(err)}`);
+    }
+  }
+
+  async function tcpDisconnect() {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tcp_disconnect");
+      setTcpConnectionStatus("disconnected");
+      setIsConnected(false);
+      setConnectedPort(null);
+      setStatusText("TCP已断开");
+    } catch (err) {
+      setError(`断开失败：${toMessage(err)}`);
+    }
+  }
+
+  async function sendTcpData(
+    value: string,
+    sendMode: SendMode,
+    appendNewline: "" | "\r\n" | "\r" | "\n",
+  ) {
+    setError(null);
+    try {
+      let bytes: number[];
+
+      if (sendMode === "hex") {
+        const newlineBytes = appendNewline
+          ? Array.from(new TextEncoder().encode(appendNewline))
+          : [];
+        const hasPayload = (value || "").replace(/\s+/g, "") !== "";
+        if (hasPayload) {
+          bytes = parseHexString(value).concat(newlineBytes);
+        } else if (newlineBytes.length > 0) {
+          bytes = newlineBytes;
+        } else {
+          throw new Error("发送内容不能为空。");
+        }
+      } else {
+        const finalValue = `${value}${appendNewline}`;
+        if (!finalValue) throw new Error("发送内容不能为空。");
+        bytes = Array.from(new TextEncoder().encode(finalValue));
+      }
+
+      appendLog({
+        direction: "sent",
+        mode: sendMode,
+        payload:
+          sendMode === "hex"
+            ? bytesToHex(bytes)
+            : new TextDecoder().decode(new Uint8Array(bytes)),
+      });
+
+      const { invoke } = await import("@tauri-apps/api/core");
+      lastTcpSendRef.current = Date.now();
+      await invoke("tcp_send", { data: bytes });
+    } catch (err) {
+      setError(`TCP发送失败：${toMessage(err)}`);
+    }
+  }
+
+  // ── TCP Server Actions ──
+
+  async function tcpServerStart() {
+    setTcpServerStatus("starting");
+    setError(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tcp_server_start", {
+        listenPort: config.tcpPort,
+        protocol: config.tcpProtocol,
+      });
+    } catch (err) {
+      setTcpServerStatus("stopped");
+      setError(`TCP服务器启动失败：${toMessage(err)}`);
+    }
+  }
+
+  async function tcpServerStop() {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tcp_server_stop");
+      setTcpServerStatus("stopped");
+      setTcpServerClients([]);
+    } catch (err) {
+      setError(`停止TCP服务器失败：${toMessage(err)}`);
+    }
+  }
+
+  async function tcpServerBroadcast(data: number[]) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tcp_server_broadcast", { data });
+    } catch {
+      // Broadcast failures are non-fatal
+    }
   }
 
   useEffect(() => {
@@ -424,5 +759,16 @@ export function useSerialPort({
     sendData,
     sendFile,
     clearLogs,
+    // TCP-specific
+    connectionType: config.connectionType,
+    tcpConnectionStatus,
+    tcpServerStatus,
+    tcpServerClients,
+    latencyMs,
+    tcpConnect,
+    tcpDisconnect,
+    tcpServerStart,
+    tcpServerStop,
+    tcpServerBroadcast,
   };
 }

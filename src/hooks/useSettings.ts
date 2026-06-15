@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SendMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
 
@@ -46,11 +46,14 @@ export type AppSettings = {
   promptRowCount: number;
   lang: Lang;
   compactMode?: boolean;
+  closeToTray?: boolean;
+  allowMultiInstance?: boolean;
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
 };
 
 const STORAGE_KEY = "scom-t-settings";
+const CFG_FILE = "SCOM-T/config.yaml";
 
 export const DEFAULT_LIGHT_THEME: ThemeSettings = {
   mode: "light",
@@ -104,21 +107,15 @@ export const DEFAULT_GRID_LAYOUT: GridItemLayout[] = [
 ];
 
 const DEFAULT_HOTKEYS: HotkeyConfig[] = [
-  "Clear-Log",
-  "Read-ATC",
-  "Update-ATC",
-  "Restore-ATC",
-  "Internet",
-  "RST",
-  "ECHO",
-  "Version",
+  "Clear-Log", "Read-ATC", "Update-ATC", "Restore-ATC",
+  "Internet", "RST", "ECHO", "Version",
 ].map((label, index) => ({
   id: `hotkey-${index + 1}`,
   label,
   command: "",
-  sendMode: "ascii",
-  appendNewline: "",
-  actionType: "command",
+  sendMode: "ascii" as SendMode,
+  appendNewline: "" as AppendNewline,
+  actionType: "command" as const,
   builtinAction: undefined,
 }));
 
@@ -128,75 +125,132 @@ const DEFAULT_SETTINGS: AppSettings = {
   promptRowCount: 100,
   lang: "zh",
   compactMode: false,
+  closeToTray: true,
+  allowMultiInstance: false,
   layoutMode: "classic",
   gridLayout: DEFAULT_GRID_LAYOUT,
 };
 
-function readSettings(): AppSettings {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return DEFAULT_SETTINGS;
+/** Merge a raw parsed object into AppSettings with validation. */
+function mergeSettings(raw: Partial<AppSettings>): AppSettings {
+  return {
+    hotkeys: Array.isArray(raw.hotkeys)
+      ? raw.hotkeys.map((hk, i) => ({
+          id: hk.id || `hotkey-${i + 1}`,
+          label: hk.label || `Hotkey ${i + 1}`,
+          command: hk.command || "",
+          sendMode: hk.sendMode === "hex" ? "hex" : "ascii",
+          appendNewline: hk.appendNewline || "",
+          shortcut: hk.shortcut || undefined,
+          actionType: (hk as any).actionType === "builtin" ? "builtin" : "command",
+          builtinAction: (hk as any).builtinAction || undefined,
+        }))
+      : DEFAULT_HOTKEYS,
+    theme: { ...DEFAULT_LIGHT_THEME, ...(raw.theme || {}) },
+    promptRowCount: typeof raw.promptRowCount === "number" && raw.promptRowCount >= 1
+      ? raw.promptRowCount : 100,
+    lang: raw.lang === "en" || raw.lang === "zh" ? raw.lang : "zh",
+    compactMode: raw.compactMode === true,
+    closeToTray: raw.closeToTray !== false,
+    allowMultiInstance: raw.allowMultiInstance === true,
+    layoutMode: raw.layoutMode === "grid" ? "grid" : "classic",
+    gridLayout: Array.isArray(raw.gridLayout) && raw.gridLayout.length > 0
+      ? raw.gridLayout.map((item: any) => ({
+          i: item.i, x: item.x ?? 0, y: item.y ?? 0,
+          w: item.w ?? 4, h: item.h ?? 4,
+          minW: item.minW, minH: item.minH,
+        }))
+      : DEFAULT_GRID_LAYOUT,
+  };
+}
 
+/** Path helper — resolves ~/SCOM-T/config.yaml */
+async function configPath(): Promise<string> {
+  const { join } = await import("@tauri-apps/api/path");
+  const { homeDir } = await import("@tauri-apps/api/path");
+  return join(await homeDir(), CFG_FILE);
+}
+
+/** Ensure the config directory exists. */
+async function ensureDir(): Promise<void> {
+  const { join } = await import("@tauri-apps/api/path");
+  const { homeDir } = await import("@tauri-apps/api/path");
+  const { mkdir } = await import("@tauri-apps/plugin-fs");
+  const dir = await join(await homeDir(), "SCOM-T");
+  await mkdir(dir, { recursive: true }).catch(() => {});
+}
+
+/** Load settings from config.yaml (with localStorage migration). */
+async function loadSettingsFromFile(): Promise<AppSettings> {
   try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return {
-      hotkeys: Array.isArray(parsed.hotkeys)
-        ? parsed.hotkeys.map((hotkey, index) => ({
-            id: hotkey.id || `hotkey-${index + 1}`,
-            label: hotkey.label || `Hotkey ${index + 1}`,
-            command: hotkey.command || "",
-            sendMode: hotkey.sendMode === "hex" ? "hex" : "ascii",
-            appendNewline: hotkey.appendNewline || "",
-            shortcut: hotkey.shortcut || undefined,
-            actionType:
-              (hotkey as any).actionType === "builtin" ? "builtin" : "command",
-            builtinAction: (hotkey as any).builtinAction || undefined,
-          }))
-        : DEFAULT_HOTKEYS,
-      theme: {
-        ...DEFAULT_LIGHT_THEME,
-        ...(parsed.theme || {}),
-        fontSize:
-          typeof (parsed.theme as ThemeSettings | undefined)?.fontSize ===
-          "number"
-            ? (parsed.theme as ThemeSettings).fontSize
-            : DEFAULT_LIGHT_THEME.fontSize,
-        fontWeight:
-          typeof (parsed.theme as ThemeSettings | undefined)?.fontWeight ===
-          "number"
-            ? (parsed.theme as ThemeSettings).fontWeight
-            : DEFAULT_LIGHT_THEME.fontWeight,
-      },
-      promptRowCount:
-        typeof parsed.promptRowCount === "number" && parsed.promptRowCount >= 1
-          ? parsed.promptRowCount
-          : 100,
-      lang: parsed.lang === "en" || parsed.lang === "zh" ? parsed.lang : "zh",
-      compactMode:
-        typeof parsed.compactMode === "boolean" ? parsed.compactMode : false,
-      layoutMode:
-        parsed.layoutMode === "grid" ? "grid" : "classic",
-      gridLayout: Array.isArray(parsed.gridLayout) && parsed.gridLayout.length > 0
-        ? parsed.gridLayout.map((item: any) => ({
-            i: item.i,
-            x: item.x ?? 0,
-            y: item.y ?? 0,
-            w: item.w ?? 4,
-            h: item.h ?? 4,
-            minW: item.minW,
-            minH: item.minH,
-          }))
-        : DEFAULT_GRID_LAYOUT,
-    };
+    const { readTextFile } = await import("@tauri-apps/plugin-fs");
+    const text = await readTextFile(await configPath());
+    const raw = (await import("js-yaml")).load(text) as Partial<AppSettings>;
+    return mergeSettings(raw);
   } catch {
+    // If file doesn't exist, try migrating from localStorage
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Partial<AppSettings>;
+        const merged = mergeSettings(parsed);
+        // Migrate to file
+        await saveSettingsToFile(merged);
+        localStorage.removeItem(STORAGE_KEY);
+        return merged;
+      } catch { /* ignore migration errors */ }
+    }
     return DEFAULT_SETTINGS;
   }
 }
 
-export function useSettings() {
-  const [settings, setSettings] = useState<AppSettings>(() => readSettings());
+/** Save settings to config.yaml. */
+async function saveSettingsToFile(settings: AppSettings): Promise<void> {
+  try {
+    await ensureDir();
+    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+    const yamlStr = (await import("js-yaml")).dump(settings, {
+      indent: 2, lineWidth: -1, noRefs: true, quotingType: "'",
+    });
+    await writeTextFile(await configPath(), yamlStr);
+  } catch (e) {
+    console.error("Failed to save settings:", e);
+  }
+}
 
+export function useSettings() {
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [loaded, setLoaded] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Load from file on mount
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    loadSettingsFromFile().then((s) => {
+      setSettings(s);
+      setLoaded(true);
+    });
+  }, []);
+
+  // Debounced save on change
+  useEffect(() => {
+    if (!loaded) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveSettingsToFile(settings), 500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [settings, loaded]);
+
+  // Flush pending save on beforeunload
+  useEffect(() => {
+    function flush() {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveSettingsToFile(settings);
+      }
+    }
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
   }, [settings]);
 
   function updateHotkeys(hotkeys: HotkeyConfig[]) {
@@ -220,6 +274,20 @@ export function useSettings() {
 
   function updateCompactMode(compact: boolean) {
     setSettings((current) => ({ ...current, compactMode: compact }));
+  }
+
+  function updateCloseBehavior(closeToTray: boolean) {
+    setSettings((current) => ({ ...current, closeToTray }));
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      void invoke("set_close_behavior", { closeToTray });
+    });
+  }
+
+  function updateAllowMultiInstance(allow: boolean) {
+    setSettings((current) => ({ ...current, allowMultiInstance: allow }));
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      void invoke("set_allow_multi_instance", { allow });
+    });
   }
 
   function updateLayoutMode(mode: "classic" | "grid") {
@@ -247,12 +315,15 @@ export function useSettings() {
 
   return {
     settings,
+    loaded,
     updateHotkeys,
     updateTheme,
     resetTheme,
     updatePromptRowCount,
     updateLang,
     updateCompactMode,
+    updateCloseBehavior,
+    updateAllowMultiInstance,
     updateLayoutMode,
     updateGridLayout,
   };

@@ -6,9 +6,17 @@ type StatusBarProps = {
   currentPortLabel: string;
   onOpenConfigDir?: () => void;
   configDirTooltip?: string;
+  latencyMs?: number | null;
 };
 
-export function StatusBar({ isConnected, statusText, currentPortLabel, onOpenConfigDir, configDirTooltip }: StatusBarProps) {
+export function StatusBar({
+  isConnected,
+  statusText,
+  currentPortLabel,
+  onOpenConfigDir,
+  configDirTooltip,
+  latencyMs,
+}: StatusBarProps) {
   return (
     <footer className="flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 text-xs">
       <span className={`flex items-center gap-1.5 ${isConnected ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}>
@@ -18,6 +26,11 @@ export function StatusBar({ isConnected, statusText, currentPortLabel, onOpenCon
         }
         {statusText}
       </span>
+      {latencyMs !== undefined && latencyMs !== null && (
+        <span className="text-[var(--text-muted)]">
+          {latencyMs < 10 ? "<10ms" : `${latencyMs}ms`}
+        </span>
+      )}
       {onOpenConfigDir && (
         <button
           type="button"

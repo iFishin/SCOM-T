@@ -280,14 +280,29 @@ export function ReceiveLog({
               const isReceived = log.direction === "received";
               const ts = log.timestamp.replace(/^\[|\]$/g, "");
               const segments = searchRegex ? highlightSegments(log.payload, searchRegex) : [];
+              const tagColor =
+                log.source === "tcp-server"
+                  ? "text-amber-600"
+                  : log.source === "tcp-client"
+                    ? "text-violet-600"
+                    : isReceived
+                      ? "text-emerald-600"
+                      : "text-sky-600";
+              const tag =
+                log.source === "tcp-server"
+                  ? "S→T"
+                  : log.source === "tcp-client"
+                    ? "RXT"
+                    : isReceived
+                      ? "RX"
+                      : "TX";
               return (
                 <div
                   key={log.id}
-                  className={`break-all whitespace-pre-wrap rounded px-2 py-0.5 text-xs leading-relaxed ${
-                    isReceived ? "text-emerald-600" : "text-sky-600"
-                  }`}
+                  className={`break-all whitespace-pre-wrap rounded px-2 py-0.5 text-xs leading-relaxed ${tagColor}`}
                 >
                   <span className="opacity-80">
+                    {tag}{log.serverTs ? ` svr:${log.serverTs}` : ""}{" "}
                     {isReceived ? "[" : "("}{ts}{isReceived ? "]" : ")"}
                   </span>{" "}
                   {segments.length > 0
@@ -317,14 +332,27 @@ export function ReceiveLog({
                   <div className="mb-0.5 flex items-center gap-2 text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
                     <span
                       className={`rounded px-1 py-0.5 font-bold ${
-                        log.direction === "received"
-                          ? "bg-emerald-100 text-emerald-600"
-                          : "bg-sky-100 text-sky-600"
+                        log.source === "tcp-server"
+                          ? "bg-amber-100 text-amber-600"
+                          : log.source === "tcp-client"
+                            ? "bg-violet-100 text-violet-600"
+                            : log.direction === "received"
+                              ? "bg-emerald-100 text-emerald-600"
+                              : "bg-sky-100 text-sky-600"
                       }`}
                     >
-                      {log.direction === "received" ? "RX" : "TX"}
+                      {log.source === "tcp-server"
+                        ? "SERIAL→TCP"
+                        : log.source === "tcp-client"
+                          ? "RX TCP"
+                          : log.direction === "received"
+                            ? "RX"
+                            : "TX"}
                     </span>
                     <span>{log.timestamp}</span>
+                    {log.serverTs && (
+                      <span className="text-[var(--text-muted)] opacity-70">svr:{log.serverTs}</span>
+                    )}
                     <span className="opacity-60">{log.mode.toUpperCase()}</span>
                   </div>
                   <div className="break-all whitespace-pre-wrap leading-tight text-[var(--text-primary)]">
