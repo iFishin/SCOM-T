@@ -125,9 +125,21 @@ const ZH: Dict = {
   data_bits: "数据位",
   stop_bits: "停止位",
   parity: "校验位",
+  log: "日志",
+  search: "搜索",
 
   // Settings sidebar
   settings_lang: "语言设置",
+  compact_mode: "紧凑模式",
+  compact_mode_desc: "减小面板间距，在有限空间内显示更多内容。",
+  settings_layout: "布局",
+  layout_mode: "布局模式",
+  layout_classic: "经典分栏",
+  layout_grid: "自定义网格",
+  layout_grid_desc: "自由拖拽排列各面板的位置和大小。",
+  layout_reset: "重置布局",
+  layout_reset_confirm: "重置为默认布局？",
+  layout_drag_hint: "在下方网格中拖拽卡片调整布局",
 };
 
 const EN: Dict = {
@@ -254,6 +266,19 @@ const EN: Dict = {
   data_bits: "Data Bits",
   stop_bits: "Stop Bits",
   parity: "Parity",
+  log: "Log",
+  search: "Search",
+
+  compact_mode: "Compact Mode",
+  compact_mode_desc: "Reduce panel spacing to show more content in limited space.",
+  settings_layout: "Layout",
+  layout_mode: "Layout Mode",
+  layout_classic: "Classic Split",
+  layout_grid: "Custom Grid",
+  layout_grid_desc: "Freely drag and arrange the position and size of each panel.",
+  layout_reset: "Reset Layout",
+  layout_reset_confirm: "Reset to default layout?",
+  layout_drag_hint: "Drag cards in the grid below to customize layout",
 
 };
 

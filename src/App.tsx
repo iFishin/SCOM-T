@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Settings } from "lucide-react";
+import { ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { GridLayout } from "react-grid-layout";
+import type { Layout } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
 import { AboutPanel } from "./components/settings/AboutPanel.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
+import { FileSend } from "./components/FileSend.tsx";
+import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { SendPanel } from "./components/SendPanel.tsx";
 import { ReceiveLog } from "./components/ReceiveLog.tsx";
 import { StatusBar } from "./components/ui/StatusBar.tsx";
@@ -141,7 +146,7 @@ function App() {
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const { toasts, pushToast, removeToast } = useToast();
-  const { settings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode } = useSettings();
+  const { settings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateLayoutMode, updateGridLayout } = useSettings();
   const lang = settings.lang ?? "zh";
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
     typeof window !== "undefined" ? Math.floor(window.innerWidth / 2) : 480,
@@ -172,6 +177,25 @@ function App() {
   const [yamlText, setYamlText] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [topCollapsed, setTopCollapsed] = useState(false);
+  const [gridEditing, setGridEditing] = useState(false);
+  const gridWidthRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState(800);
+
+  // Layout effect to get grid container width synchronously
+  useEffect(() => {
+    const el = gridWidthRef.current?.parentElement;
+    if (el) {
+      setGridWidth(el.clientWidth - 16); // 16px padding from main
+    }
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setGridWidth(entry.contentRect.width);
+      }
+    });
+    if (el) ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     return () => { if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current); };
@@ -361,6 +385,291 @@ function App() {
     void sendData(hotkey.command, hotkey.sendMode, hotkey.appendNewline);
   }
 
+  function renderGridLayout() {
+    return (
+      <div className="relative flex h-full w-full min-h-0 flex-col overflow-y-auto">
+        {/* Editing toggle */}
+        <div className="shrink-0 flex items-center justify-end gap-2 px-2 py-1">
+          {gridEditing && (
+            <span className="text-[10px] text-[var(--accent)] font-semibold">
+              {lang === "zh" ? "📐 编辑模式 — 拖拽卡片调整布局" : "📐 Edit mode — drag cards to rearrange"}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setGridEditing((v) => !v)}
+            className={`rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+              gridEditing
+                ? "bg-[var(--accent)] text-white"
+                : "border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            {gridEditing
+              ? (lang === "zh" ? "锁定" : "Lock")
+              : (lang === "zh" ? "编辑布局" : "Edit Layout")}
+          </button>
+        </div>
+        <div ref={gridWidthRef} className="flex-1 min-h-0">
+          <GridLayout
+            width={gridWidth}
+            layout={settings.gridLayout as unknown as Layout}
+            gridConfig={{ cols: 12, rowHeight: 30, margin: [8, 8], containerPadding: [8, 0], maxRows: Infinity }}
+            dragConfig={{ enabled: gridEditing, cancel: 'input,select,textarea,button,a,.react-resizable-handle,.no-drag' }}
+            resizeConfig={{ enabled: gridEditing, handles: ['e', 's', 'se', 'w', 'n'] }}
+            autoSize
+            onLayoutChange={(newLayout: Layout) =>
+              updateGridLayout(
+                newLayout.map((item) => ({
+                  i: item.i,
+                  x: item.x,
+                  y: item.y,
+                  w: item.w,
+                  h: item.h,
+                  minW: (settings.gridLayout ?? []).find((l) => l.i === item.i)?.minW ?? 2,
+                  minH: (settings.gridLayout ?? []).find((l) => l.i === item.i)?.minH ?? 2,
+                }))
+              )
+            }
+          >
+            <div key="config" className="overflow-hidden rounded-lg">
+              <ConfigPanel
+                ports={ports}
+                config={config}
+                baudRates={BAUD_RATES}
+                dataBitsOptions={DATA_BITS_OPTIONS}
+                parityOptions={PARITY_OPTIONS}
+                stopBitsOptions={STOP_BITS_OPTIONS}
+                isConnected={isConnected}
+                isBusy={isBusy}
+                lang={lang}
+                onRefresh={handleRefreshPorts}
+                onConfigChange={setConfig}
+                onOpen={openPort}
+                onClose={closePort}
+              />
+            </div>
+
+            <div key="send" className="overflow-hidden rounded-lg">
+              <SendPanel
+                value={message}
+                sendMode={sendMode}
+                appendNewline={appendNewline}
+                receiveMode={receiveMode}
+                isConnected={isConnected}
+                isBusy={isBusy}
+                hotkeys={settings.hotkeys}
+                filePath={filePath}
+                fileSendProgress={fileSendProgress}
+                lang={lang}
+                mode="input-only"
+                onChange={setMessage}
+                onSendModeChange={setSendMode}
+                onReceiveModeChange={setReceiveMode}
+                onAppendNewlineChange={setAppendNewline}
+                onSend={() => sendData(message, sendMode, appendNewline)}
+                onClearSent={() => clearLogs("sent")}
+                onFileSelect={handleFileSelect}
+                onFileSend={() => sendFile(filePath)}
+                onHotkeySend={handleHotkeySend}
+                onPushToast={pushToast}
+              />
+            </div>
+
+            <div key="filesend" className="overflow-hidden rounded-lg">
+              <FileSend
+                filePath={filePath}
+                fileSendProgress={fileSendProgress}
+                isBusy={isBusy}
+                lang={lang}
+                isConnected={isConnected}
+                onFileSelect={handleFileSelect}
+                onFileSend={() => sendFile(filePath)}
+                onPushToast={pushToast}
+              />
+            </div>
+
+            <div key="hotkeys" className="overflow-hidden rounded-lg">
+              <HotkeysPanel hotkeys={settings.hotkeys} onHotkeySend={handleHotkeySend} lang={lang} />
+            </div>
+
+            <div key="receive" className="overflow-hidden flex flex-col rounded-lg">
+              <ReceiveLog
+                logs={logs}
+                receiveMode={receiveMode}
+                lang={lang}
+                savePath={logFile.savePath}
+                realTimeLog={logFile.realTime}
+                onReceiveModeChange={setReceiveMode}
+                onClearAll={() => clearLogs("all")}
+                onClearReceived={() => clearLogs("received")}
+                onClearSent={() => clearLogs("sent")}
+                onSelectLogFile={logFile.selectLogFile}
+                onToggleRealTime={() => logFile.setRealTime((v) => !v)}
+                onFlushLogs={() => logFile.flushAll(logs)}
+                onCloseLogFile={logFile.closeLogFile}
+              />
+            </div>
+
+            <div key="prompts" className="overflow-hidden rounded-lg flex flex-col bg-[var(--bg-surface)] border border-[var(--border)] p-2">
+              {/* Prompt controls */}
+              <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handlePromptTabChange("grid")}
+                    className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                      activePromptTab === "grid"
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                    }`}
+                  >
+                    {t("tab_grid", lang)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePromptTabChange("config")}
+                    className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                      activePromptTab === "config"
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                    }`}
+                  >
+                    {t("tab_config", lang)}
+                  </button>
+                  {activePromptTab === "config" && (
+                    <>
+                      <span className="mx-1 text-[var(--border)]">|</span>
+                      <button
+                        type="button"
+                        onClick={() => { setConfigName(""); setConfigAction("save"); }}
+                        className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                      >
+                        {t("save_config", lang)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleShowLoadList}
+                        className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                      >
+                        {t("load_config", lang)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenConfigDir}
+                        className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                      >
+                        {t("open_config_dir", lang)}
+                      </button>
+                    </>
+                  )}
+                </div>
+                {activePromptTab === "grid" && (
+                  <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
+                    {t("prompt_rows", lang)}
+                    <Input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={settings.promptRowCount}
+                      onChange={(e) => updatePromptRowCount(Number(e.currentTarget.value))}
+                      className="w-14 text-center"
+                    />
+                  </label>
+                )}
+              </div>
+              {activePromptTab === "grid" && (
+                <div className="flex gap-1.5 pb-2">
+                  <input
+                    readOnly
+                    value={lang === "zh" ? "指令：点击左侧行按钮发送…" : "COMMAND: click a row button to send…"}
+                    className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none"
+                  />
+                  <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+                    {lang === "zh" ? "预设" : "Prompt"}
+                  </Button>
+                  <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+                    Idx
+                  </Button>
+                  <Button className="rounded bg-[var(--accent)] px-3 py-1.5 text-white">
+                    {lang === "zh" ? "开始" : "Start"}
+                  </Button>
+                  <input
+                    readOnly
+                    value={lang === "zh" ? "总次数" : "Total Times"}
+                    className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none"
+                  />
+                  <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">
+                    {lang === "zh" ? "停止" : "Stop"}
+                  </Button>
+                </div>
+              )}
+
+              {/* Scrollable command rows / YAML editor */}
+              <div className="min-h-0 flex-1">
+                {activePromptTab === "grid" ? (
+                  <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
+                    <div className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+                      <div /><div /><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender_none", lang)}</div><div>{t("interval_placeholder", lang)}</div>
+                    </div>
+                    <div className="h-[calc(100%-30px)] overflow-y-auto">
+                      {promptRows.map((row) => (
+                        <div key={row.id} className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px] items-center gap-x-1.5 border-b border-[var(--border)] px-2 py-1 last:border-0 hover:bg-[var(--bg-hover)]">
+                          <div className="flex justify-center">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] text-[10px] text-[var(--text-muted)]">{row.id}</span>
+                          </div>
+                          <div className="flex justify-center">
+                            <Checkbox checked={row.selected} onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })} />
+                          </div>
+                          <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)}>{t("prompt_sender", lang)}</Button>
+                          <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent" />
+                          <div className="flex justify-center"><Checkbox checked={row.isHex} onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })} /></div>
+                          <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })}>
+                            <option value="\r\n">{t("ender_crlf", lang)}</option><option value="">{t("ender_none", lang)}</option><option value="\n">{t("ender_lf", lang)}</option><option value="\r">{t("ender_cr", lang)}</option>
+                          </Select>
+                          <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {configAction === "save" && (
+                      <div className="flex items-center gap-2 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-input)]">
+                        <input value={configName} onChange={(e) => setConfigName(e.currentTarget.value)} placeholder={t("config_name_hint", lang)} className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]" onKeyDown={(e) => { if (e.key === "Enter" && configName.trim()) handleSaveConfig(configName.trim()); if (e.key === "Escape") setConfigAction(null); }} autoFocus />
+                        <Button type="button" variant="primary" size="sm" disabled={!configName.trim()} onClick={() => handleSaveConfig(configName.trim())} className="px-2 py-1 text-[11px]">{t("save_config", lang)}</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfigAction(null)} className="px-2 py-1 text-[11px]">{lang === "zh" ? "取消" : "Cancel"}</Button>
+                      </div>
+                    )}
+                    {configAction === "load" && (
+                      <div className="border-b border-[var(--border)] bg-[var(--bg-input)]">
+                        {savedConfigs.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-[var(--text-muted)]">{t("no_configs", lang)}</div>
+                        ) : (
+                          <div className="divide-y divide-[var(--border)] max-h-32 overflow-y-auto">
+                            {savedConfigs.map((name) => (
+                              <div key={name} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)]">
+                                <button type="button" className="flex-1 text-left text-[var(--text-primary)]" onClick={() => handleLoadConfig(name)}>{name}</button>
+                                <button type="button" onClick={() => handleDeleteConfig(name)} className="rounded px-1 py-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors text-[10px]">{lang === "zh" ? "删除" : "Del"}</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="px-3 py-1.5 border-t border-[var(--border)]">
+                          <button type="button" onClick={() => setConfigAction(null)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">{lang === "zh" ? "取消" : "Cancel"}</button>
+                        </div>
+                      </div>
+                    )}
+                    <YamlEditor value={yamlText} onChange={handleYamlChange} error={yamlError} lang={lang} />
+                  </>
+                )}
+              </div>
+            </div>
+          </GridLayout>
+      </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <header className="flex h-10 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] px-3">
@@ -382,13 +691,6 @@ function App() {
           </Button>
           <Button
             type="button"
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${settings.compactMode ? 'bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]'}`}
-            onClick={() => updateCompactMode?.(!settings.compactMode)}
-          >
-            <span>{lang === 'zh' ? '紧凑' : 'Compact'}</span>
-          </Button>
-          <Button
-            type="button"
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
             <span>{t("help", lang)}</span>
@@ -402,12 +704,6 @@ function App() {
           </Button>
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
-          <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--text-muted)] sm:flex">
-            <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? "bg-[var(--accent)]" : "bg-[var(--text-muted)]"}`} />
-            {currentPortLabel}
-          </div>
-        </div>
       </header>
 
       {aboutOpen && (
@@ -430,166 +726,197 @@ function App() {
       )}
 
       {/* ── Main content ── */}
-      <main
-        ref={containerRef}
-        className="flex min-h-0 flex-1 gap-0 overflow-hidden p-2"
-      >
-        {/* Left column */}
-        <div
-          ref={leftColRef}
-          className="flex min-h-0 min-w-0 flex-col overflow-hidden"
-          style={{ width: leftWidth, flexShrink: 0 }}
-        >
-          {/* Top portion: config + send */}
-          <div
-            className="flex min-h-0 flex-col gap-2 overflow-y-auto pb-1"
-            style={{ height: `calc(${topRatio * 100}% - 4px)` }}
-          >
-            <ConfigPanel
-              ports={ports}
-              config={config}
-              baudRates={BAUD_RATES}
-              dataBitsOptions={DATA_BITS_OPTIONS}
-              parityOptions={PARITY_OPTIONS}
-              stopBitsOptions={STOP_BITS_OPTIONS}
-              isConnected={isConnected}
-              isBusy={isBusy}
-              lang={lang}
-              onRefresh={handleRefreshPorts}
-              onConfigChange={setConfig}
-              onOpen={openPort}
-              onClose={closePort}
-            />
-            <SendPanel
-              value={message}
-              sendMode={sendMode}
-              appendNewline={appendNewline}
-              receiveMode={receiveMode}
-              isConnected={isConnected}
-              isBusy={isBusy}
-              hotkeys={settings.hotkeys}
-              filePath={filePath}
-              fileSendProgress={fileSendProgress}
-              lang={lang}
-              onChange={setMessage}
-              onSendModeChange={setSendMode}
-              onReceiveModeChange={setReceiveMode}
-              onAppendNewlineChange={setAppendNewline}
-              onSend={() => sendData(message, sendMode, appendNewline)}
-              onClearSent={() => clearLogs("sent")}
-              onFileSelect={handleFileSelect}
-              onFileSend={() => sendFile(filePath)}
-              onHotkeySend={handleHotkeySend}
-              onPushToast={pushToast}
-            />
-          </div>
-
-          {/* Vertical drag handle */}
-          <div
-            onMouseDown={onVDividerMouseDown}
-            className="group my-0.5 flex h-2 shrink-0 cursor-row-resize items-center justify-center"
-          >
-            <div className="h-px w-full rounded-full bg-[var(--border)] transition-all group-hover:h-0.5 group-hover:bg-[var(--accent)] group-active:bg-[var(--accent)]" />
-          </div>
-
-          {/* Bottom portion: receive log */}
-          <div className="min-h-0 flex-1 flex flex-col">
-            <ReceiveLog
-              logs={logs}
-              receiveMode={receiveMode}
-              lang={lang}
-              savePath={logFile.savePath}
-              realTimeLog={logFile.realTime}
-              onReceiveModeChange={setReceiveMode}
-              onClearAll={() => clearLogs("all")}
-              onClearReceived={() => clearLogs("received")}
-              onClearSent={() => clearLogs("sent")}
-              onSelectLogFile={logFile.selectLogFile}
-              onToggleRealTime={() => logFile.setRealTime((v) => !v)}
-              onFlushLogs={() => logFile.flushAll(logs)}
-              onCloseLogFile={logFile.closeLogFile}
-            />
-          </div>
-        </div>
-
-        {/* Drag handle */}
-        <div
-          onMouseDown={onDividerMouseDown}
-          className="group mx-1 flex w-2 shrink-0 cursor-col-resize items-center justify-center"
-        >
-          <div className="h-full w-px rounded-full bg-[var(--border)] transition-all group-hover:w-0.5 group-hover:bg-[var(--accent)] group-active:bg-[var(--accent)]" />
-        </div>
-
-        {/* Right column */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-          {/* Prompt controls */}
-          <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2 text-xs">
-            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handlePromptTabChange("grid")}
-                  className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
-                    activePromptTab === "grid"
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
-                  }`}
+      <main ref={containerRef} className="flex min-h-0 flex-1 gap-0 overflow-hidden p-2">
+        {settings.layoutMode === "grid" && renderGridLayout()}
+        {settings.layoutMode !== "grid" && (
+          <>
+            {/* Left column */}
+            <div
+              ref={leftColRef}
+              className="flex min-h-0 min-w-0 flex-col overflow-hidden"
+              style={{ width: leftWidth, flexShrink: 0 }}
+            >
+              {/* Top portion: config + send */}
+              {topCollapsed ? (
+                <div
+                  onClick={() => setTopCollapsed(false)}
+                  className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 transition-colors hover:bg-[var(--bg-input)]"
                 >
-                  {t("tab_grid", lang)}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePromptTabChange("config")}
-                  className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
-                    activePromptTab === "config"
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
-                  }`}
+                  <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                    <ChevronDown size={14} />
+                    <span className="font-semibold uppercase tracking-widest">
+                      {lang === "zh" ? "配置与发送" : "Config & Send"}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? "bg-[var(--accent)]" : "bg-[var(--text-muted)]"}`} />
+                      <span>{statusText}</span>
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="flex min-h-0 flex-col gap-2 overflow-y-auto pb-1"
+                  style={{ height: `calc(${topRatio * 100}% - 4px)` }}
                 >
-                  {t("tab_config", lang)}
-                </button>
-                {activePromptTab === "config" && (
-                  <>
-                    <span className="mx-1 text-[var(--border)]">|</span>
-                    <button
-                      type="button"
-                      onClick={() => { setConfigName(""); setConfigAction("save"); }}
-                      className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
-                    >
-                      {t("save_config", lang)}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleShowLoadList}
-                      className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
-                    >
-                      {t("load_config", lang)}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleOpenConfigDir}
-                      className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
-                    >
-                      {t("open_config_dir", lang)}
-                    </button>
-                  </>
-                )}
-              </div>
-              {activePromptTab === "grid" && (
-                <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
-                  {t("prompt_rows", lang)}
-                  <Input
-                    type="number"
-                    min={1}
-                    max={500}
-                    value={settings.promptRowCount}
-                    onChange={(e) => updatePromptRowCount(Number(e.currentTarget.value))}
-                    className="w-14 text-center"
+                  <ConfigPanel
+                    ports={ports}
+                    config={config}
+                    baudRates={BAUD_RATES}
+                    dataBitsOptions={DATA_BITS_OPTIONS}
+                    parityOptions={PARITY_OPTIONS}
+                    stopBitsOptions={STOP_BITS_OPTIONS}
+                    isConnected={isConnected}
+                    isBusy={isBusy}
+                    lang={lang}
+                    onRefresh={handleRefreshPorts}
+                    onConfigChange={setConfig}
+                    onOpen={openPort}
+                    onClose={closePort}
                   />
-                </label>
+                  <SendPanel
+                    value={message}
+                    sendMode={sendMode}
+                    appendNewline={appendNewline}
+                    receiveMode={receiveMode}
+                    isConnected={isConnected}
+                    isBusy={isBusy}
+                    hotkeys={settings.hotkeys}
+                    filePath={filePath}
+                    fileSendProgress={fileSendProgress}
+                    lang={lang}
+                    onChange={setMessage}
+                    onSendModeChange={setSendMode}
+                    onReceiveModeChange={setReceiveMode}
+                    onAppendNewlineChange={setAppendNewline}
+                    onSend={() => sendData(message, sendMode, appendNewline)}
+                    onClearSent={() => clearLogs("sent")}
+                    onFileSelect={handleFileSelect}
+                    onFileSend={() => sendFile(filePath)}
+                    onHotkeySend={handleHotkeySend}
+                    onPushToast={pushToast}
+                  />
+                </div>
               )}
+
+              {/* Vertical drag handle — hidden when collapsed */}
+              {!topCollapsed && (
+                <div
+                  onMouseDown={onVDividerMouseDown}
+                  className="group relative my-0.5 flex h-3 shrink-0 cursor-row-resize items-center justify-center"
+                >
+                  <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setTopCollapsed(true); }}
+                      className="flex items-center gap-1 rounded bg-[var(--bg-surface)] px-2 py-0.5 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)]"
+                      title={lang === "zh" ? "收起配置面板" : "Collapse config panel"}
+                    >
+                      <ChevronUp size={10} />
+                      {lang === "zh" ? "收起" : "Collapse"}
+                    </button>
+                  </div>
+                  <div className="h-px w-full rounded-full bg-[var(--border)] transition-all group-hover:h-0.3" />
+                </div>
+              )}
+
+              {/* Bottom portion: receive log */}
+              <div className="min-h-0 flex-1 flex flex-col">
+                <ReceiveLog
+                  logs={logs}
+                  receiveMode={receiveMode}
+                  lang={lang}
+                  savePath={logFile.savePath}
+                  realTimeLog={logFile.realTime}
+                  onReceiveModeChange={setReceiveMode}
+                  onClearAll={() => clearLogs("all")}
+                  onClearReceived={() => clearLogs("received")}
+                  onClearSent={() => clearLogs("sent")}
+                  onSelectLogFile={logFile.selectLogFile}
+                  onToggleRealTime={() => logFile.setRealTime((v) => !v)}
+                  onFlushLogs={() => logFile.flushAll(logs)}
+                  onCloseLogFile={logFile.closeLogFile}
+                />
+              </div>
             </div>
-            {activePromptTab === "grid" && (
+
+            {/* Drag handle */}
+            <div
+              onMouseDown={onDividerMouseDown}
+              className="group mx-1 flex w-2 shrink-0 cursor-col-resize items-center justify-center"
+            >
+              <div className="h-full w-px rounded-full bg-[var(--border)] transition-all group-hover:w-0.5 group-hover:bg-[var(--accent)] group-active:bg-[var(--accent)]" />
+            </div>
+
+            {/* Right column */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+              {/* Prompt controls */}
+              <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2 text-xs">
+                <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handlePromptTabChange("grid")}
+                      className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                        activePromptTab === "grid"
+                          ? "bg-[var(--accent)] text-white"
+                          : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                      }`}
+                    >
+                      {t("tab_grid", lang)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePromptTabChange("config")}
+                      className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${
+                        activePromptTab === "config"
+                          ? "bg-[var(--accent)] text-white"
+                          : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                      }`}
+                    >
+                      {t("tab_config", lang)}
+                    </button>
+                    {activePromptTab === "config" && (
+                      <>
+                        <span className="mx-1 text-[var(--border)]">|</span>
+                        <button
+                          type="button"
+                          onClick={() => { setConfigName(""); setConfigAction("save"); }}
+                          className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                        >
+                          {t("save_config", lang)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleShowLoadList}
+                          className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                        >
+                          {t("load_config", lang)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleOpenConfigDir}
+                          className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                        >
+                          {t("open_config_dir", lang)}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {activePromptTab === "grid" && (
+                    <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
+                      {t("prompt_rows", lang)}
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={settings.promptRowCount}
+                        onChange={(e) => updatePromptRowCount(Number(e.currentTarget.value))}
+                        className="w-14 text-center"
+                      />
+                    </label>
+                  )}
+                </div>
+                {activePromptTab === "grid" && (
               <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
                 <input
                   readOnly
@@ -775,6 +1102,8 @@ function App() {
             </>
           )}
         </div>
+            </>
+          )}
       </main>
 
       {/* ── Status bar ── */}
@@ -793,11 +1122,17 @@ function App() {
         hotkeys={settings.hotkeys}
         theme={settings.theme}
         lang={settings.lang}
+        compactMode={settings.compactMode}
+        layoutMode={settings.layoutMode}
+        gridLayout={settings.gridLayout}
         onClose={() => setSettingsOpen(false)}
         onHotkeysChange={updateHotkeys}
         onThemeChange={updateTheme}
         onThemeReset={resetTheme}
         onLangChange={updateLang}
+        onCompactModeChange={updateCompactMode}
+        onLayoutModeChange={updateLayoutMode}
+        onGridLayoutChange={updateGridLayout}
       />
       <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>

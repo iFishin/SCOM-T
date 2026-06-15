@@ -141,18 +141,20 @@ export function ReceiveLog({
         )}
 
         {/* Search toggle */}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => setSearchOpen((v) => !v)}
           className={`rounded p-1 transition-colors ${
             searchOpen
               ? "bg-[var(--accent)] text-white"
               : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
           }`}
-          title={lang === "zh" ? "搜索" : "Search"}
         >
           <Search size={13} />
-        </button>
+          {t("search", lang)}
+        </Button>
 
         <Select
           value={displayMode}
@@ -171,17 +173,17 @@ export function ReceiveLog({
 
         <Button type="button" variant="ghost" size="sm" onClick={onClearReceived} title={t("clear_rx_log", lang)} className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:border-rose-300 hover:text-rose-500">
           <Eraser size={11} />
-          RX
+          {t("TX", lang)}
         </Button>
 
         <Button type="button" variant="ghost" size="sm" onClick={onClearSent} title={t("clear_tx_log", lang)} className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:border-rose-300 hover:text-rose-500">
           <Eraser size={11} />
-          TX
+          {t("TX", lang) }
         </Button>
 
         <Button type="button" variant="ghost" size="sm" onClick={onClearAll} title={ t("clear_log", lang) } className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:border-rose-300 hover:text-rose-500">
           <Trash2 size={11} />
-          { t("all", lang) }
+          {t("all", lang)}
         </Button>
 
         {/* ── Log file controls ── */}
@@ -193,44 +195,54 @@ export function ReceiveLog({
             >
               {savePath.split(/[\\/]/).pop()}
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={onToggleRealTime}
-              className={`rounded p-0.5 transition-colors ${
+              className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition-colors ${
                 realTimeLog ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
-              } hover:text-[var(--text-primary)]`}
+              } hover:text-[var(--text-primary)] whitespace-nowrap`}
               title={realTimeLog ? "Real-time: ON" : "Real-time: OFF"}
             >
               <Circle size={10} fill={realTimeLog ? "currentColor" : "none"} />
-            </button>
+            </Button>
             {!realTimeLog && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={onFlushLogs}
                 className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 title="Flush logs to file"
               >
                 <Save size={12} />
-              </button>
+                {t("log", lang)}
+              </Button>
             )}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={onCloseLogFile}
               className="rounded p-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors"
               title="Close log file"
             >
               <X size={12} />
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onSelectLogFile}
             className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-1"
             title="Save logs to file..."
           >
             <Save size={12} />
-          </button>
+            {t("log", lang)}
+          </Button>
         )}
       </div>
 

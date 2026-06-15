@@ -29,6 +29,7 @@ type SendPanelProps = {
   filePath: string;
   fileSendProgress: number | null;
   lang: Lang;
+  mode?: "combined" | "input-only";
   onChange: (value: string) => void;
   onSendModeChange: (mode: SendMode) => void;
   onReceiveModeChange: (mode: ReceiveMode) => void;
@@ -62,6 +63,7 @@ export function SendPanel({
   onFileSend,
   onHotkeySend,
   onPushToast,
+  mode = "combined",
 }: SendPanelProps) {
   const [expanded, setExpanded] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -190,7 +192,7 @@ export function SendPanel({
                   {lang === "zh" ? "HEX→ASCII" : "HEX→ASCII"}
                 </Button>
               </div>
-              <div className="text-[11px] text-[var(--text-muted)]">
+              <div className=" text-[11px] text-[var(--text-muted)]">
                 {(() => {
                   try {
                     const count = sendMode === "hex" ? parseHexString(value || "").length : new TextEncoder().encode(value || "").length;
@@ -246,18 +248,22 @@ export function SendPanel({
         </div>
       </Panel>
 
-      <FileSend
-        filePath={filePath}
-        fileSendProgress={fileSendProgress}
-        isBusy={isBusy}
-        lang={lang}
-        isConnected={isConnected}
-        onFileSelect={onFileSelect}
-        onFileSend={onFileSend}
-        onPushToast={onPushToast}
-      />
+      {mode === "combined" && (
+        <>
+          <FileSend
+            filePath={filePath}
+            fileSendProgress={fileSendProgress}
+            isBusy={isBusy}
+            lang={lang}
+            isConnected={isConnected}
+            onFileSelect={onFileSelect}
+            onFileSend={onFileSend}
+            onPushToast={onPushToast}
+          />
 
-      <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} />
+          <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} />
+        </>
+      )}
 
       <div className="hidden">
         <Button type="button" onClick={() => onReceiveModeChange(receiveMode === "hex" ? "ascii" : "hex")} />
