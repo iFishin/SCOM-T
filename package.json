@@ -6,8 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri:build": "node scripts/set-build-version.mjs",
+    "tauri": "tauri",
+    "bump:patch": "node scripts/bump-version.mjs patch",
+    "bump:minor": "node scripts/bump-version.mjs minor",
+    "bump:major": "node scripts/bump-version.mjs major",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

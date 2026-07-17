@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, FolderOpen } from "lucide-react";
+import { Plug, Unplug, FolderOpen } from "lucide-react";
 
 type StatusBarProps = {
   isConnected: boolean;
@@ -21,8 +21,8 @@ export function StatusBar({
     <footer className="flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 text-xs">
       <span className={`flex items-center gap-1.5 ${isConnected ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}>
         {isConnected
-          ? <Wifi size={12} className="shrink-0" />
-          : <WifiOff size={12} className="shrink-0" />
+          ? <Plug size={12} className="shrink-0" />
+          : <Unplug size={12} className="shrink-0" />
         }
         {statusText}
       </span>

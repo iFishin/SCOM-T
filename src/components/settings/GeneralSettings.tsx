@@ -6,17 +6,19 @@ import { t } from "../../i18n.ts";
 import type { Lang } from "../../i18n.ts";
 import type { ThemeSettings } from "../../hooks/useSettings.ts";
 
-export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange }: {
+export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, notificationUrl, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange, onNotificationUrlChange }: {
   theme: ThemeSettings;
   lang: Lang;
   compactMode?: boolean;
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
+  notificationUrl?: string;
   onThemeChange: (t: ThemeSettings) => void;
   onLangChange: (l: Lang) => void;
   onCompactModeChange?: (v: boolean) => void;
   onCloseBehaviorChange?: (v: boolean) => void;
   onAllowMultiInstanceChange?: (v: boolean) => void;
+  onNotificationUrlChange?: (v: string) => void;
 }) {
   function handleModeChange(mode: ThemeSettings["mode"]) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
@@ -139,6 +141,18 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
             {lang === "zh" ? "多实例" : "Multi"}
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+        <div className="mb-2 text-sm font-semibold">{t("notification", lang)}</div>
+        <div className="text-xs text-[var(--text-muted)] mb-3">{t("notification_desc", lang)}</div>
+        <input
+          type="url"
+          value={notificationUrl ?? ""}
+          onChange={(e) => onNotificationUrlChange?.(e.currentTarget.value)}
+          placeholder="https://example.com/notifications.json"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)] transition-colors"
+        />
       </div>
     </div>
   );

@@ -55,12 +55,12 @@ export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
   }, []);
 
   // Debounce layout persistence — only save after drag/resize stops
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function queueSave(newLayout: GridItemLayout[]) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      if (process.env.NODE_ENV === "development") {
+      if (import.meta.env.DEV) {
         console.log("[LayoutEditor] Saving layout:", newLayout);
       }
       onLayoutChange(newLayout);
@@ -95,23 +95,23 @@ export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
             }}
             autoSize
             onLayoutChange={(newLayout: Layout) => {
-              if (process.env.NODE_ENV === "development") {
+              if (import.meta.env.DEV) {
                 console.log("[LayoutEditor] onLayoutChange", newLayout);
               }
               queueSave(toGridItemLayout(newLayout));
             }}
             onDragStart={() => {
-              if (process.env.NODE_ENV === "development") {
+              if (import.meta.env.DEV) {
                 console.log("[LayoutEditor] onDragStart");
               }
             }}
             onDrag={() => {
-              if (process.env.NODE_ENV === "development") {
+              if (import.meta.env.DEV) {
                 console.log("[LayoutEditor] onDrag");
               }
             }}
             onDragStop={(newLayout: Layout) => {
-              if (process.env.NODE_ENV === "development") {
+              if (import.meta.env.DEV) {
                 console.log("[LayoutEditor] onDragStop", newLayout);
               }
             }}
@@ -122,7 +122,7 @@ export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
               return (
                 <div
                   key={key}
-                  className="flex flex-col overflow-hidden rounded-lg border border-[var(--border)] border-l-4 bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] shadow-sm transition-shadow hover:shadow-md"
+                  className={`flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] shadow-sm transition-shadow hover:shadow-md ${color}`}
                 >
                   <div className="flex items-center gap-1 border-b border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
                     <span className="text-[10px] select-none">⠿</span>

@@ -67,8 +67,17 @@ const ZH: Dict = {
   close_port: "关闭端口",
   opened: "已打开",
   closed: "已关闭",
+  collapse: "折叠",
+  expand: "展开",
   advanced: "高级",
   advanced_note: "注：不支持 1.5 停止位；占用设备将尝试强制释放。",
+  flow_control: "流控",
+  flow_control_none: "无",
+  flow_control_software: "软件 (XON/XOFF)",
+  flow_control_hardware: "硬件 (RTS/CTS)",
+  rts: "RTS",
+  dtr: "DTR",
+  rts_dtr_desc: "打开端口后自动设置 RTS/DTR 信号电平",
   send: "发送",
   send_placeholder: "Enter 发送 · Shift/Ctrl+Enter 换行",
   send_hex_placeholder: "A0 B1 C2 …",
@@ -85,7 +94,8 @@ const ZH: Dict = {
   no_data: "暂无串口数据",
   display_label: "展示方式",
   display_card: "卡片视图",
-  display_text: "文本格式",
+  display_text: "文本视图",
+  display_hex: "十六进制",
   prompt_group: "提示按钮组",
   tab_grid: "网格",
   tab_config: "配置",
@@ -93,6 +103,7 @@ const ZH: Dict = {
   prompt_rows: "行数",
   prompt_sender: "发送",
   command_placeholder: "指令…",
+  ender: "结尾符",
   ender_none: "无",
   ender_crlf: "CRLF",
   ender_lf: "LF",
@@ -163,14 +174,33 @@ const ZH: Dict = {
   tcp_server_clients: "客户端",
   tcp_server_no_clients: "暂无已连接的客户端",
   tcp_server_hint: "请先选择串口并打开，再启动服务器",
-
-  // Close behavior
   close_behavior: "关闭行为",
   close_behavior_desc: "点击窗口关闭按钮时的行为",
-
-  // Multi-instance
   multi_instance: "实例策略",
   multi_instance_desc: "是否允许同时运行多个 SCOM-T",
+  ascii2hex: "ASCII → HEX",
+  hex2ascii: "HEX → ASCII",
+  log_cap_title: "日志上限",
+  log_cap_desc:
+    "内存日志已达 10,000 条上限，最早的数据将被丢弃。日志文件仍会完整记录。",
+  scom_t_description_1:
+    "一款基于 Tauri 重写的串口调试工具，适用于开发和调试场景。",
+  scom_t_description_2: "（ 前身：Pyside 版和 QT 版，均已停止热更新。 ）",
+  scom_t_view_on_github: "在 GitHub 上查看",
+  update_check: "版本更新检查",
+  update_check_btn: "检查更新",
+  update_checking: "正在检查新版本...",
+  update_latest: "已是最新版本",
+  update_available: "新版本可用",
+  update_download: "前往下载",
+  update_error: "检查失败",
+  close: "关闭",
+  notification: "消息通知",
+  notification_desc: "输入 JSON 通知地址以接收系统消息",
+  notification_loading: "正在加载通知...",
+  notification_fetch_error: "获取通知失败",
+  notification_link: "查看详情",
+  about_short: "简要介绍",
 };
 
 const EN: Dict = {
@@ -232,15 +262,28 @@ const EN: Dict = {
   hide_developer: "Hide Developer Info",
   developer_text:
     "SCOM-T is a serial debugging desktop tool. Current version focuses on serial connection, data transmit, file sending, hotkeys and theme customization.",
+  scom_t_description_1:
+    "A serial communication tool rewritten with Tauri, suitable for development and debugging.",
+  scom_t_description_2:
+    "( Previously: Pyside edition and QT edition — both archived, as is tradition. )",
   port: "Port",
   baud: "Baud",
   open_port: "Open Port",
   close_port: "Close Port",
   opened: "Opened",
   closed: "Closed",
+  collapse: "Collapse",
+  expand: "Expand",
   advanced: "Advanced",
   advanced_note:
     "Note: 1.5 stop bits not supported; occupied devices will be force-released.",
+  flow_control: "Flow Control",
+  flow_control_none: "None",
+  flow_control_software: "Software (XON/XOFF)",
+  flow_control_hardware: "Hardware (RTS/CTS)",
+  rts: "RTS",
+  dtr: "DTR",
+  rts_dtr_desc: "Set RTS/DTR signal levels after opening port",
   send: "Send",
   send_placeholder: "Enter to send · Shift/Ctrl+Enter for newline",
   send_hex_placeholder: "A0 B1 C2 …",
@@ -256,7 +299,8 @@ const EN: Dict = {
   no_data: "No data yet",
   display_label: "Display",
   display_card: "Card",
-  display_text: "Text",
+  display_text: "Text View",
+  display_hex: "Hex Dump",
   prompt_group: "Prompt Button Group",
   tab_grid: "Grid",
   tab_config: "Config",
@@ -264,6 +308,7 @@ const EN: Dict = {
   prompt_rows: "Rows",
   prompt_sender: "Send",
   command_placeholder: "command…",
+  ender: "Ender",
   ender_none: "None",
   ender_crlf: "CRLF",
   ender_lf: "LF",
@@ -302,12 +347,14 @@ const EN: Dict = {
   search: "Search",
 
   compact_mode: "Compact Mode",
-  compact_mode_desc: "Reduce panel spacing to show more content in limited space.",
+  compact_mode_desc:
+    "Reduce panel spacing to show more content in limited space.",
   settings_layout: "Layout",
   layout_mode: "Layout Mode",
   layout_classic: "Classic Split",
   layout_grid: "Custom Grid",
-  layout_grid_desc: "Freely drag and arrange the position and size of each panel.",
+  layout_grid_desc:
+    "Freely drag and arrange the position and size of each panel.",
   layout_reset: "Reset Layout",
   layout_reset_confirm: "Reset to default layout?",
   layout_drag_hint: "Drag cards in the grid below to customize layout",
@@ -333,15 +380,30 @@ const EN: Dict = {
   tcp_server_clients: "Clients",
   tcp_server_no_clients: "No connected clients",
   tcp_server_hint: "Open a serial port first, then start the server",
-
-  // Close behavior
+  close: "Close",
   close_behavior: "Close Behavior",
   close_behavior_desc: "Action when clicking the window close button",
-
-  // Multi-instance
   multi_instance: "Instance Policy",
   multi_instance_desc: "Allow running multiple SCOM-T instances",
-
+  ascii2hex: "ASCII → HEX",
+  hex2ascii: "HEX → ASCII",
+  log_cap_title: "Log Cap",
+  log_cap_desc:
+    "In-memory log reached 10,000 entries. Oldest data will be dropped. Log file recording is unaffected.",
+  scom_t_view_on_github: "View on GitHub",
+  update_check: "Update Check",
+  update_check_btn: "Check",
+  update_checking: "Checking for updates...",
+  update_latest: "Up to date",
+  update_available: "New version available",
+  update_download: "Download",
+  update_error: "Check failed",
+  about_short: "Short intro",
+  notification: "Notifications",
+  notification_desc: "Custom JSON notification URL",
+  notification_loading: "Loading notification...",
+  notification_fetch_error: "Failed to load notification",
+  notification_link: "View details",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };

@@ -78,6 +78,12 @@ html, body, #root {
   margin: 0;
 }
 
+/* 阻止页面文本被意外全选（Ctrl+A 或鼠标拖选），输入框/文本域不受影响 */
+#root {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 button, input, select, textarea { font: inherit; }
 textarea { resize: none; }
 

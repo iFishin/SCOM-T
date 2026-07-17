@@ -9,6 +9,10 @@ export function useHotkeys(
 ) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      // Don't intercept when user is typing in an input/textarea/select
+      const tag = (event.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
       if (!isConnected) return;
       const matched = hotkeys.find(
         (hotkey) => hotkey.shortcut && matchShortcut(hotkey.shortcut, event),

@@ -50,6 +50,7 @@ export type AppSettings = {
   allowMultiInstance?: boolean;
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
+  notificationUrl?: string;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -129,6 +130,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   allowMultiInstance: false,
   layoutMode: "classic",
   gridLayout: DEFAULT_GRID_LAYOUT,
+  notificationUrl: "",
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -161,6 +163,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
           minW: item.minW, minH: item.minH,
         }))
       : DEFAULT_GRID_LAYOUT,
+    notificationUrl: typeof raw.notificationUrl === "string" ? raw.notificationUrl : "",
   };
 }
 
@@ -231,6 +234,15 @@ export function useSettings() {
     });
   }, []);
 
+  // Sync Rust backend settings on load (close behavior, multi-instance)
+  useEffect(() => {
+    if (!loaded) return;
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      invoke("set_close_behavior", { closeToTray: settings.closeToTray !== false });
+      invoke("set_allow_multi_instance", { allow: settings.allowMultiInstance === true });
+    });
+  }, [loaded]);
+
   // Debounced save on change
   useEffect(() => {
     if (!loaded) return;
@@ -294,6 +306,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, layoutMode: mode }));
   }
 
+  function updateNotificationUrl(url: string) {
+    setSettings((current) => ({ ...current, notificationUrl: url }));
+  }
+
   function updateGridLayout(layout: GridItemLayout[]) {
     setSettings((current) => ({ ...current, gridLayout: layout }));
   }
@@ -326,5 +342,6 @@ export function useSettings() {
     updateAllowMultiInstance,
     updateLayoutMode,
     updateGridLayout,
+    updateNotificationUrl,
   };
 }

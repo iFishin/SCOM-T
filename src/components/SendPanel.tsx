@@ -1,6 +1,6 @@
 import React from "react";
 // Hotkeys/Files refactor applied: layout extracted to separate components
-import { Send, Maximize2, Minimize2 } from "lucide-react";
+import { Send, Maximize2, Minimize2, ChevronDown, ChevronUp, File } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Input } from "./ui/Input";
@@ -66,6 +66,8 @@ export function SendPanel({
   mode = "combined",
 }: SendPanelProps) {
   const [expanded, setExpanded] = React.useState(false);
+  const [fileSendCollapsed, setFileSendCollapsed] = React.useState(true);
+  const [hotkeysCollapsed, setHotkeysCollapsed] = React.useState(true);
   const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   function toggleExpanded() {
@@ -175,7 +177,7 @@ export function SendPanel({
                   }}
                   className="px-2 py-1 text-xs"
                 >
-                  {lang === "zh" ? "ASCII→HEX" : "ASCII→HEX"}
+                  {t("ascii2hex", lang)}
                 </Button>
                 <Button
                   type="button"
@@ -189,7 +191,7 @@ export function SendPanel({
                   }}
                   className="px-2 py-1 text-xs"
                 >
-                  {lang === "zh" ? "HEX→ASCII" : "HEX→ASCII"}
+                  {t("hex2ascii", lang)}
                 </Button>
               </div>
               <div className=" text-[11px] text-[var(--text-muted)]">
@@ -207,7 +209,7 @@ export function SendPanel({
                   type="button"
                   onClick={toggleExpanded}
                   className="px-2 py-1 text-xs"
-                  title={expanded ? (lang === "zh" ? "收起输入" : "Collapse input") : (lang === "zh" ? "展开输入" : "Expand input")}
+                  title={expanded ? (t("collapse", lang)) : (t("expand", lang))}
                 >
                   {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                 </Button>
@@ -250,18 +252,45 @@ export function SendPanel({
 
       {mode === "combined" && (
         <>
-          <FileSend
-            filePath={filePath}
-            fileSendProgress={fileSendProgress}
-            isBusy={isBusy}
-            lang={lang}
-            isConnected={isConnected}
-            onFileSelect={onFileSelect}
-            onFileSend={onFileSend}
-            onPushToast={onPushToast}
-          />
+          {/* File send — collapsible */}
+          <div>
+            <div
+              className="flex cursor-pointer items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+              onClick={() => setFileSendCollapsed((v) => !v)}
+            >
+              <span className="flex items-center gap-1">
+                <File size={11} />
+                {t("file", lang)}
+              </span>
+              {fileSendCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            </div>
+            {!fileSendCollapsed && (
+              <FileSend
+                filePath={filePath}
+                fileSendProgress={fileSendProgress}
+                isBusy={isBusy}
+                lang={lang}
+                isConnected={isConnected}
+                onFileSelect={onFileSelect}
+                onFileSend={onFileSend}
+                onPushToast={onPushToast}
+              />
+            )}
+          </div>
 
-          <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} />
+          {/* Hotkeys — collapsible */}
+          <div>
+            <div
+              className="flex cursor-pointer items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+              onClick={() => setHotkeysCollapsed((v) => !v)}
+            >
+              <span>{t("hotkeys_title", lang)}</span>
+              {hotkeysCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            </div>
+            {!hotkeysCollapsed && (
+              <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} />
+            )}
+          </div>
         </>
       )}
 

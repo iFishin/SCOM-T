@@ -62,3 +62,50 @@ export function formatTimestamp(date = new Date()): string {
 
   return `[${hours}:${minutes}:${seconds}.${milliseconds}]`;
 }
+
+/** Convert a string payload (ascii or hex-mode) back to bytes */
+export function payloadToBytes(payload: string, mode: "ascii" | "hex"): number[] {
+  if (mode === "hex") {
+    try {
+      return parseHexString(payload);
+    } catch {
+      return [];
+    }
+  }
+  return Array.from(new TextEncoder().encode(payload));
+}
+
+/** Format bytes as a classic hex dump (up to `maxBytes`). Returns lines of [offset, hex, ascii]. */
+export function formatHexDump(
+  bytes: number[],
+  maxBytes = 2048,
+): { offset: string; hex: string; ascii: string }[] {
+  const slice = bytes.slice(0, maxBytes);
+  const lines: { offset: string; hex: string; ascii: string }[] = [];
+  const bytesPerLine = 16;
+
+  for (let i = 0; i < slice.length; i += bytesPerLine) {
+    const line = slice.slice(i, i + bytesPerLine);
+    const offset = i.toString(16).padStart(8, "0");
+    const hexParts: string[] = [];
+    const asciiChars: string[] = [];
+    for (let j = 0; j < bytesPerLine; j++) {
+      if (j < line.length) {
+        hexParts.push(line[j].toString(16).padStart(2, "0"));
+        asciiChars.push(line[j] >= 0x20 && line[j] <= 0x7e ? String.fromCharCode(line[j]) : ".");
+      } else {
+        hexParts.push("  ");
+        asciiChars.push(" ");
+      }
+      if (j === 7) hexParts.push(""); // extra space at midpoint
+    }
+    const hexStr = hexParts.join(" ");
+    lines.push({
+      offset,
+      hex: hexStr,
+      ascii: asciiChars.join(""),
+    });
+  }
+
+  return lines;
+}

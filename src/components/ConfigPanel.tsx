@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  RefreshCw,
   ChevronDown,
   ChevronRight,
   PlugZap,
@@ -40,6 +39,7 @@ type ConfigPanelProps = {
   onConfigChange: (config: SerialConfig) => void;
   onOpen: () => Promise<void>;
   onClose: () => Promise<void>;
+  onSetSignals?: (rts: boolean, dtr: boolean) => void;
 };
 
 const CONNECTION_TYPES: ConnectionType[] = ["serial", "tcp-client", "tcp-server"];
@@ -69,6 +69,7 @@ export function ConfigPanel({
   onConfigChange,
   onOpen,
   onClose,
+  onSetSignals,
 }: ConfigPanelProps) {
   const [advOpen, setAdvOpen] = useState(false);
 
@@ -118,173 +119,147 @@ export function ConfigPanel({
 
         {/* ── Serial mode ── */}
         {isSerialMode && (
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
-              <div className="flex items-center gap-2 mt-1">
-                <select
-                  className={`${sel} w-36 truncate`}
-                  title={config.path}
-                  value={config.path}
-                  onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
-                  disabled={isConnected || isBusy}
-                >
-                  <option value="">{t("select_port", lang)}</option>
-                  {ports.map((p) => (
-                    <option key={p.path} value={p.path}>{p.label}</option>
-                  ))}
-                </select>
+          <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-1">
+            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
+            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
+            <div></div>
+
+            <select
+              className={`${sel} max-w-44 truncate`}
+              title={config.path}
+              value={config.path}
+              onClick={() => void onRefresh()}
+              onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
+              disabled={isConnected || isBusy}
+            >
+              <option value="">{t("select_port", lang)}</option>
+              {ports.map((p) => (
+                <option key={p.path} value={p.path}>{p.label}</option>
+              ))}
+            </select>
+            <select
+              className={sel}
+              value={config.baudRate}
+              onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
+              disabled={isConnected || isBusy}
+            >
+              {baudRates.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1.5">
+              {!isConnected ? (
                 <Button
                   type="button"
-                  onClick={() => void onRefresh()}
-                  disabled={isBusy}
-                  title={t("refresh_ports", lang)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-40"
+                  onClick={() => void onOpen()}
+                  disabled={isBusy || !config.path}
+                  className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
                 >
-                  <RefreshCw size={14} />
+                  <PlugZap size={13} />
+                  {t("open_port", lang)}
                 </Button>
-              </div>
-            </div>
-
-            <div className="w-24">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
-              <div className="mt-1">
-                <select
-                  className={`${sel} w-full`}
-                  value={config.baudRate}
-                  onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
-                  disabled={isConnected || isBusy}
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => void onClose()}
+                  disabled={isBusy}
+                  className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
                 >
-                  {baudRates.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <div className="invisible text-[11px] font-medium select-none">_</div>
-              <div className="flex items-center gap-1.5">
-                {!isConnected ? (
-                  <Button
-                    type="button"
-                    onClick={() => void onOpen()}
-                    disabled={isBusy || !config.path}
-                    className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
-                  >
-                    <PlugZap size={13} />
-                    {t("open_port", lang)}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={() => void onClose()}
-                    disabled={isBusy}
-                    className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
-                  >
-                    <Plug size={13} />
-                    {t("close_port", lang)}
-                  </Button>
-                )}
+                  <Plug size={13} />
+                  {t("close_port", lang)}
+                </Button>
+              )}
+              <span
+                className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                  isConnected
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "bg-[var(--bg-input)] text-[var(--text-muted)]"
+                }`}
+              >
                 <span
-                  className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
-                    isConnected
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-[var(--bg-input)] text-[var(--text-muted)]"
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    isConnected ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
                   }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isConnected ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
-                    }`}
-                  />
-                  {isConnected ? t("opened", lang) : t("closed", lang)}
-                </span>
-              </div>
+                />
+                {isConnected ? t("opened", lang) : t("closed", lang)}
+              </span>
             </div>
           </div>
         )}
 
         {/* ── TCP Client mode ── */}
         {isTcpClient && (
-          <div className="flex items-start gap-2">
-            <div className="flex-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_host", lang)}</label>
-              <input
-                className={`${sel} mt-1`}
-                type="text"
-                placeholder="192.168.1.100"
-                value={config.tcpHost}
-                onChange={(e) => onConfigChange({ ...config, tcpHost: e.currentTarget.value })}
-                disabled={isConnected || isBusy}
-              />
-            </div>
-            <div className="w-20">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_port", lang)}</label>
-              <input
-                className={`${sel} mt-1`}
-                type="number"
-                min={1}
-                max={65535}
-                value={config.tcpPort}
-                onChange={(e) => onConfigChange({ ...config, tcpPort: Number(e.currentTarget.value) })}
-                disabled={isConnected || isBusy}
-              />
-            </div>
-            <div className="w-24">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_protocol", lang)}</label>
-              <select
-                className={`${sel} mt-1`}
-                value={config.tcpProtocol}
-                onChange={(e) =>
-                  onConfigChange({ ...config, tcpProtocol: e.currentTarget.value as TcpProtocol })
-                }
-                disabled={isConnected || isBusy}
-              >
-                {PROTOCOL_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="invisible text-[11px] font-medium select-none">_</div>
-              <div className="flex items-center gap-1.5">
-                {!isConnected ? (
-                  <Button
-                    type="button"
-                    onClick={() => void onOpen()}
-                    disabled={isBusy || isTcpConnecting || !config.tcpHost || !config.tcpPort}
-                    className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
-                  >
-                    <Globe size={13} />
-                    {isTcpConnecting ? t("tcp_connecting", lang) : t("tcp_connect", lang)}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={() => void onClose()}
-                    disabled={isBusy}
-                    className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
-                  >
-                    <Plug size={13} />
-                    {t("tcp_disconnect", lang)}
-                  </Button>
-                )}
-                <span
-                  className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
-                    isConnected
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-[var(--bg-input)] text-[var(--text-muted)]"
-                  }`}
+          <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 gap-y-1">
+            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_host", lang)}</label>
+            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_port", lang)}</label>
+            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_protocol", lang)}</label>
+            <div></div>
+
+            <input
+              className={sel}
+              type="text"
+              placeholder="192.168.1.100"
+              value={config.tcpHost}
+              onChange={(e) => onConfigChange({ ...config, tcpHost: e.currentTarget.value })}
+              disabled={isConnected || isBusy}
+            />
+            <input
+              className={sel}
+              type="number"
+              min={1}
+              max={65535}
+              value={config.tcpPort}
+              onChange={(e) => onConfigChange({ ...config, tcpPort: Number(e.currentTarget.value) })}
+              disabled={isConnected || isBusy}
+            />
+            <select
+              className={sel}
+              value={config.tcpProtocol}
+              onChange={(e) =>
+                onConfigChange({ ...config, tcpProtocol: e.currentTarget.value as TcpProtocol })
+              }
+              disabled={isConnected || isBusy}
+            >
+              {PROTOCOL_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1.5">
+              {!isConnected ? (
+                <Button
+                  type="button"
+                  onClick={() => void onOpen()}
+                  disabled={isBusy || isTcpConnecting || !config.tcpHost || !config.tcpPort}
+                  className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
                 >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isConnected ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
-                    }`}
-                  />
-                  {isConnected ? t("tcp_connected_status", lang) : t("tcp_disconnected_status", lang)}
-                </span>
-              </div>
+                  <Globe size={13} />
+                  {isTcpConnecting ? t("tcp_connecting", lang) : t("tcp_connect", lang)}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => void onClose()}
+                  disabled={isBusy}
+                  className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
+                >
+                  <Plug size={13} />
+                  {t("tcp_disconnect", lang)}
+                </Button>
+              )}
+              <span
+                className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                  isConnected
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "bg-[var(--bg-input)] text-[var(--text-muted)]"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    isConnected ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
+                  }`}
+                />
+                {isConnected ? t("tcp_connected_status", lang) : t("tcp_disconnected_status", lang)}
+              </span>
             </div>
           </div>
         )}
@@ -292,53 +267,35 @@ export function ConfigPanel({
         {/* ── TCP Server mode ── */}
         {isTcpServer && (
           <>
-            <div className="flex items-start gap-3">
-              <div className="flex-1 min-w-0">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <select
-                    className={`${sel} w-36 truncate`}
-                    title={config.path}
-                    value={config.path}
-                    onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
-                    disabled={isConnected || isBusy}
-                  >
-                    <option value="">{t("select_port", lang)}</option>
-                    {ports.map((p) => (
-                      <option key={p.path} value={p.path}>{p.label}</option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    onClick={() => void onRefresh()}
-                    disabled={isBusy}
-                    title={t("refresh_ports", lang)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-40"
-                  >
-                    <RefreshCw size={14} />
-                  </Button>
-                </div>
-              </div>
+            <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-1">
+              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
+              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
+              <div></div>
 
-              <div className="w-24">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
-                <div className="mt-1">
-                  <select
-                    className={`${sel} w-full`}
-                    value={config.baudRate}
-                    onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
-                    disabled={isConnected || isBusy}
-                  >
-                    {baudRates.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <div className="invisible text-[11px] font-medium select-none">_</div>
-                <div className="flex items-center gap-1.5">
+              <select
+                className={`${sel} max-w-44 truncate`}
+                title={config.path}
+                value={config.path}
+                onClick={() => void onRefresh()}
+                onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
+                disabled={isConnected || isBusy}
+              >
+                <option value="">{t("select_port", lang)}</option>
+                {ports.map((p) => (
+                  <option key={p.path} value={p.path}>{p.label}</option>
+                ))}
+              </select>
+              <select
+                className={sel}
+                value={config.baudRate}
+                onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
+                disabled={isConnected || isBusy}
+              >
+                {baudRates.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1.5">
                 {!isServerRunning ? (
                   <Button
                     type="button"
@@ -376,7 +333,6 @@ export function ConfigPanel({
                 </span>
               </div>
             </div>
-          </div>
 
             <div className="flex items-center gap-3">
               <div className="w-28">
@@ -488,6 +444,57 @@ export function ConfigPanel({
               </select>
             </div>
           </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("flow_control", lang)}</div>
+              <select
+                className={sel}
+                value={config.flowControl}
+                onChange={(e) =>
+                  onConfigChange({ ...config, flowControl: e.currentTarget.value as SerialConfig["flowControl"] })
+                }
+                disabled={isConnected || isBusy}
+              >
+                <option value="none">{t("flow_control_none", lang)}</option>
+                <option value="software">{t("flow_control_software", lang)}</option>
+                <option value="hardware">{t("flow_control_hardware", lang)}</option>
+              </select>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("rts", lang)}</div>
+              <select
+                className={sel}
+                value={config.rts ? "high" : "low"}
+                onChange={(e) => {
+                  const rts = e.currentTarget.value === "high";
+                  onConfigChange({ ...config, rts });
+                  if (isConnected && onSetSignals) onSetSignals(rts, config.dtr);
+                }}
+                disabled={isBusy}
+              >
+                <option value="high">High (1)</option>
+                <option value="low">Low (0)</option>
+              </select>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("dtr", lang)}</div>
+              <select
+                className={sel}
+                value={config.dtr ? "high" : "low"}
+                onChange={(e) => {
+                  const dtr = e.currentTarget.value === "high";
+                  onConfigChange({ ...config, dtr });
+                  if (isConnected && onSetSignals) onSetSignals(config.rts, dtr);
+                }}
+                disabled={isBusy}
+              >
+                <option value="high">High (1)</option>
+                <option value="low">Low (0)</option>
+              </select>
+            </div>
+          </div>
+
           <p className="text-[10px] text-[var(--text-muted)]">
             {isTcpClient && config.tcpProtocol === "rfc2217"
               ? "RFC 2217 模式下，串口参数将通过 Telnet 协商发送到远程设备。"

@@ -19,6 +19,8 @@
     "serialplugin:allow-cancel-read",
     "serialplugin:allow-start-listening",
     "serialplugin:allow-stop-listening",
+    "serialplugin:allow-write-request-to-send",
+    "serialplugin:allow-write-data-terminal-ready",
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:allow-read-file",

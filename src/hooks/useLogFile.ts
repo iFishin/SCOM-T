@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import type { SerialLogEntry } from "./useSerialPort";
@@ -15,6 +15,40 @@ export function useLogFile() {
   const lastSeqRef = useRef(0);
   const writingRef = useRef(false);
   const logCountRef = useRef(0);
+  const logsRef = useRef<SerialLogEntry[]>([]);
+
+  /** Sync latest logs from the hook (ref-based, no re-render) */
+  const syncLogs = useCallback((logs: SerialLogEntry[]) => {
+    logsRef.current = logs;
+  }, []);
+
+  /** Core write: flush all pending entries to disk */
+  const doWrite = useCallback(async () => {
+    if (!savePath || !realTime || writingRef.current) return;
+    const logs = logsRef.current;
+    const pending = logs.filter((l) => l.seq > lastSeqRef.current);
+    if (pending.length === 0) return;
+
+    writingRef.current = true;
+    try {
+      const text = pending.map(formatLogEntry).join("");
+      await invoke("append_to_file", { path: savePath, content: text });
+      lastSeqRef.current = pending[pending.length - 1].seq;
+      logCountRef.current += pending.length;
+    } catch (err) {
+      console.error("Log write failed:", err);
+    } finally {
+      writingRef.current = false;
+    }
+  }, [savePath, realTime]);
+
+  // Periodic flush timer — drives writes on a schedule instead of React effects
+  useEffect(() => {
+    if (!savePath || !realTime) return;
+    doWrite(); // flush immediately when starting
+    const timer = setInterval(doWrite, 2000);
+    return () => clearInterval(timer);
+  }, [savePath, realTime, doWrite]);
 
   const selectLogFile = useCallback(async () => {
     const now = new Date();
@@ -36,29 +70,6 @@ export function useLogFile() {
       logCountRef.current = 0;
     }
   }, []);
-
-  /** Append new (unwritten) log entries to file — used in real-time mode */
-  const appendNewLogs = useCallback(
-    async (logs: SerialLogEntry[]) => {
-      if (!savePath || !realTime || writingRef.current) return;
-
-      const newLogs = logs.filter((l) => l.seq > lastSeqRef.current);
-      if (newLogs.length === 0) return;
-
-      writingRef.current = true;
-      try {
-        const text = newLogs.map(formatLogEntry).join("");
-        await invoke("append_to_file", { path: savePath, content: text });
-        lastSeqRef.current = newLogs[newLogs.length - 1].seq;
-        logCountRef.current += newLogs.length;
-      } catch (err) {
-        console.error("Log write failed:", err);
-      } finally {
-        writingRef.current = false;
-      }
-    },
-    [savePath, realTime],
-  );
 
   /** Flush ALL unwritten logs at once — used for manual save */
   const flushAll = useCallback(
@@ -92,7 +103,7 @@ export function useLogFile() {
     realTime,
     setRealTime,
     selectLogFile,
-    appendNewLogs,
+    syncLogs,
     flushAll,
     closeLogFile,
   };
