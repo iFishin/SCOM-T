@@ -201,6 +201,9 @@ const ZH: Dict = {
   notification_fetch_error: "获取通知失败",
   notification_link: "查看详情",
   about_short: "简要介绍",
+  copy_log: "复制日志",
+  open_in_editor: "在编辑器中打开",
+  log_editor_title: "日志编辑",
 };
 
 const EN: Dict = {
@@ -399,6 +402,9 @@ const EN: Dict = {
   update_download: "Download",
   update_error: "Check failed",
   about_short: "Short intro",
+  copy_log: "Copy Log",
+  open_in_editor: "Open in Editor",
+  log_editor_title: "Log Editor",
   notification: "Notifications",
   notification_desc: "Custom JSON notification URL",
   notification_loading: "Loading notification...",

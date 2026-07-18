@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, useCallback, useMemo, useEffect } from "react";
-import { Search, Trash2, Eraser, ArrowDownToLine, Save, Circle, X, ChevronDown } from "lucide-react";
+import { Search, Trash2, Eraser, ArrowDownToLine, Save, Circle, X, ChevronDown, Copy, Check } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Panel } from "./ui/Panel";
 import { Select } from "./ui/Select";
@@ -14,6 +14,7 @@ import type { LogDisplayMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 import { payloadToBytes, formatHexDump } from "../utils/hexConverter.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
+import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
 
 type ReceiveLogProps = {
   logs: SerialLogEntry[];
@@ -81,6 +82,25 @@ function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
   return groups;
 }
 
+/** Format logs as text-view style string for copy / editing */
+function formatLogsAsText(logs: SerialLogEntry[]): string {
+  return logs
+    .map((log) => {
+      const isReceived = log.direction === "received";
+      const tag =
+        log.source === "tcp-server"
+          ? "S→T"
+          : log.source === "tcp-client"
+            ? "RXT"
+            : isReceived
+              ? "RX"
+              : "TX";
+      const ts = log.timestamp.replace(/^\[|\]$/g, "");
+      return `[${tag}] [${ts}] ${log.payload}`;
+    })
+    .join("\n");
+}
+
 export function ReceiveLog({
   logs,
   lang,
@@ -108,6 +128,10 @@ export function ReceiveLog({
   const [clearOpen, setClearOpen] = useState(false);
   const clearRef = useRef<HTMLDivElement>(null);
   const [dismissedCapWarning, setDismissedCapWarning] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [logEditorOpen, setLogEditorOpen] = useState(false);
+  const [logEditorContent, setLogEditorContent] = useState("");
 
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
@@ -173,6 +197,84 @@ export function ReceiveLog({
     }
   }, [searchMatches.length]);
 
+  // ── Copy log ──
+  const handleCopyLog = useCallback(async () => {
+    const text = formatLogsAsText(logs);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }, [logs]);
+
+  // ── Context menu (native listener on scrollable log area only) ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handler = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenuPos({ x: e.clientX, y: e.clientY });
+    };
+
+    el.addEventListener("contextmenu", handler);
+    return () => el.removeEventListener("contextmenu", handler);
+  }, []);
+
+  const handleOpenEditor = useCallback(() => {
+    setLogEditorContent(formatLogsAsText(logs));
+    setLogEditorOpen(true);
+  }, [logs]);
+
+  const handleSelectAll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    const sel = window.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }, []);
+
+  const contextMenuItems: ContextMenuItem[] = useMemo(
+    () => [
+      {
+        id: "open-editor",
+        label: t("open_in_editor", lang),
+        onClick: handleOpenEditor,
+        disabled: logs.length === 0,
+      },
+      {
+        id: "copy-all",
+        label: t("copy_log", lang),
+        onClick: handleCopyLog,
+        disabled: logs.length === 0,
+      },
+      {
+        id: "select-all",
+        label: lang === "zh" ? "全选" : "Select All",
+        onClick: handleSelectAll,
+        disabled: logs.length === 0,
+      },
+    ],
+    [handleOpenEditor, handleCopyLog, handleSelectAll, lang, logs.length],
+  );
+
+  // ── Escape key closes log editor ──
+  useEffect(() => {
+    if (!logEditorOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLogEditorOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [logEditorOpen]);
+
   return (
     <Panel className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
       <div className="flex shrink-0 items-center gap-1.5 border-b border-[var(--border)] px-2 py-1">
@@ -202,6 +304,21 @@ export function ReceiveLog({
           <Search size={13} />
           {t("search", lang)}
         </Button>
+
+        {/* Copy log */}
+        <button
+          type="button"
+          onClick={handleCopyLog}
+          disabled={logs.length === 0}
+          className={`rounded p-1 transition-colors ${
+            copyFeedback
+              ? "bg-emerald-100 text-emerald-600"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] disabled:opacity-30"
+          }`}
+          title={t("copy_log", lang)}
+        >
+          {copyFeedback ? <Check size={13} /> : <Copy size={13} />}
+        </button>
 
         <Select
           value={displayMode}
@@ -525,6 +642,89 @@ export function ReceiveLog({
           </div>
         )}
       </div>
+
+      {/* ── Right-click context menu ── */}
+      {contextMenuPos && (
+        <ContextMenu
+          x={contextMenuPos.x}
+          y={contextMenuPos.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenuPos(null)}
+        />
+      )}
+
+      {/* ── Log editor modal ── */}
+      {logEditorOpen && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLogEditorOpen(false);
+          }}
+        >
+          <div className="flex w-[80vw] max-w-4xl h-[70vh] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-2">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">
+                {t("log_editor_title", lang)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLogEditorOpen(false)}
+                className="rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Editable textarea */}
+            <textarea
+              className="flex-1 resize-none border-0 bg-[var(--bg-primary)] p-4 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none"
+              value={logEditorContent}
+              onChange={(e) => setLogEditorContent(e.target.value)}
+              spellCheck={false}
+            />
+
+            {/* Footer */}
+            <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-input)] px-4 py-2">
+              <span className="text-[10px] text-[var(--text-muted)]">
+                {logEditorContent.split("\n").length}{" "}
+                {lang === "zh" ? "行" : "lines"}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(logEditorContent);
+                    setCopyFeedback(true);
+                    setTimeout(() => setCopyFeedback(false), 1500);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="ml-auto flex items-center gap-1 text-xs"
+              >
+                {copyFeedback ? <Check size={12} /> : <Copy size={12} />}
+                {copyFeedback
+                  ? lang === "zh"
+                    ? "已复制"
+                    : "Copied"
+                  : lang === "zh"
+                    ? "复制全部"
+                    : "Copy All"}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setLogEditorOpen(false)}
+                className="text-xs"
+              >
+                {t("close", lang)}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }

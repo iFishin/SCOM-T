@@ -35,6 +35,7 @@
                    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --mono-font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
   --font-size:     13px;
+  --control-font-size: 12px;
   --font-weight:   400;
 
   /* spacing tokens */
@@ -181,13 +182,16 @@ textarea { resize: none; }
     border-radius: var(--radius-sm);
     background: var(--bg-input);
     color: var(--text-primary);
-    font-size: var(--font-size);
+    font-size: var(--control-font-size);
     outline: none;
     transition: border-color 140ms ease, box-shadow 140ms ease;
   }
 
   .input::placeholder,
-  .textarea::placeholder { color: var(--text-placeholder); }
+  .textarea::placeholder {
+    color: var(--text-placeholder);
+    opacity: 0.65;
+  }
 
   .input:focus,
   .textarea:focus,
@@ -228,6 +232,7 @@ textarea { resize: none; }
 
   .select[multiple] option {
     padding: var(--btn-py) var(--btn-px);
+    font-size: var(--control-font-size);
   }
 
   /* ── Panel / Card ── */
@@ -247,7 +252,7 @@ textarea { resize: none; }
   .checkbox-wrap input[type="checkbox"] { @apply sr-only; }
 
   .checkbox-box {
-    @apply flex h-4 w-4 flex-none items-center justify-center rounded;
+    @apply flex h-[18px] w-[18px] flex-none items-center justify-center rounded;
     border: 1.5px solid var(--border);
     background: var(--bg-input);
     transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
@@ -285,6 +290,7 @@ textarea { resize: none; }
   --control-gap:   0.25rem;
   --panel-padding: 0.25rem;
   --font-size:     12px;
+  --control-font-size: 11px;
 }
 
 /* ── About panel: easter egg animations ────────────────────── */

@@ -13,7 +13,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, Props>(function Check
     <label className={["checkbox-wrap", className].filter(Boolean).join(" ")}>
       <input ref={ref} type="checkbox" {...rest} />
       <span className="checkbox-box" aria-hidden>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
           stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
