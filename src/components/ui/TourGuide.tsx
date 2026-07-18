@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { Button } from "./Button";
 
 export type TourStep = {
@@ -80,23 +80,39 @@ export function TourGuide({ steps, lang, onFinish, onSkip }: TourGuideProps) {
 
     switch (step.placement || "bottom") {
       case "bottom":
-        tooltipStyle.top = Math.min(rect.bottom + gap, wh - 140);
-        tooltipStyle.left = Math.max(10, Math.min(rect.left + rect.width / 2 - 160, ww - 340));
+        tooltipStyle.top = rect.bottom + gap;
+        tooltipStyle.left = rect.left + rect.width / 2 - 160;
         break;
       case "top":
-        tooltipStyle.left = Math.max(10, Math.min(rect.left + rect.width / 2 - 160, ww - 340));
-        tooltipStyle.bottom = wh - Math.max(rect.top - gap, 10);
+        tooltipStyle.left = rect.left + rect.width / 2 - 160;
+        tooltipStyle.bottom = wh - (rect.top - gap);
         break;
       case "left":
-        tooltipStyle.top = Math.max(10, Math.min(rect.top + rect.height / 2 - 70, wh - 160));
-        tooltipStyle.right = ww - Math.min(rect.left - gap, ww - 10);
+        tooltipStyle.top = rect.top + rect.height / 2 - 70;
+        tooltipStyle.right = ww - (rect.left - gap);
         break;
       case "right":
-        tooltipStyle.top = Math.max(10, Math.min(rect.top + rect.height / 2 - 70, wh - 160));
-        tooltipStyle.left = Math.min(rect.right + gap, ww - 340);
+        tooltipStyle.top = rect.top + rect.height / 2 - 70;
+        tooltipStyle.left = rect.right + gap;
         break;
     }
   }
+
+  // ── Clamp tooltip inside viewport after render ──
+  useLayoutEffect(() => {
+    const el = tooltipRef.current;
+    if (!el || !rect) return;
+    const tr = el.getBoundingClientRect();
+    const ww = window.innerWidth;
+    const wh = window.innerHeight;
+    const pad = 10;
+
+    if (tr.left < pad) el.style.left = `${pad}px`;
+    else if (tr.right > ww - pad) el.style.left = `${ww - tr.width - pad}px`;
+
+    if (tr.top < pad) el.style.top = `${pad}px`;
+    else if (tr.bottom > wh - pad) el.style.top = `${wh - tr.height - pad}px`;
+  }, [rect, current]);
 
   return (
     /* ── Overlay — pointer-events: none so clicks pass through ── */
