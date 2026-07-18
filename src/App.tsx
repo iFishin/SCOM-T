@@ -18,6 +18,8 @@ import { SettingsModal } from "./components/SettingsModal.tsx";
 import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
+import { LogEditor } from "./components/LogEditor.tsx";
+import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
 import { t } from "./i18n.ts";
@@ -71,6 +73,8 @@ function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [logViewerOpen, setLogViewerOpen] = useState(false);
+  const [logViewerContent, setLogViewerContent] = useState("");
   const [tourOpen, setTourOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>("ascii");
@@ -110,6 +114,68 @@ function App() {
   const logFile = useLogFile();
   // Sync logs to log file hook via ref (no re-render trigger)
   useEffect(() => { logFile.syncLogs(logs); }, [logs]);
+
+  // ── App logger initialisation ──
+  useEffect(() => {
+    appLogger.init().then(() => {
+      appLogger.info("App", "SCOM-T started");
+    });
+  }, []);
+
+  // ── Log viewer ──
+  const handleOpenLogViewer = useCallback(async () => {
+    if (!appLogger.ready) {
+      setLogViewerContent("Logger not ready yet. Please try again.");
+      setLogViewerOpen(true);
+      return;
+    }
+    try {
+      const path = await appLogger.getTodayPath();
+      if (!path) {
+        setLogViewerContent("Unable to determine log path.");
+        setLogViewerOpen(true);
+        return;
+      }
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const content = await readTextFile(path).catch(() => "");
+      setLogViewerContent(content || "No log entries yet.");
+      setLogViewerOpen(true);
+    } catch {
+      setLogViewerContent("Failed to read log file.");
+      setLogViewerOpen(true);
+    }
+  }, []);
+
+  // ── Log key events ──
+  const prevConnectedRef = useRef(isConnected);
+  useEffect(() => {
+    if (isConnected && !prevConnectedRef.current) {
+      appLogger.info("Serial", `Port ${config.path} opened @ ${config.baudRate}`);
+    } else if (!isConnected && prevConnectedRef.current) {
+      appLogger.info("Serial", `Port ${config.path} closed`);
+    }
+    prevConnectedRef.current = isConnected;
+  }, [isConnected, config.path, config.baudRate]);
+
+  const prevTcpStatus = useRef(tcpConnectionStatus);
+  useEffect(() => {
+    if (tcpConnectionStatus === "connected" && prevTcpStatus.current !== "connected") {
+      appLogger.info("TCP", `Connected to ${config.tcpHost}:${config.tcpPort}`);
+    } else if (tcpConnectionStatus === "disconnected" && prevTcpStatus.current === "connected") {
+      appLogger.info("TCP", `Disconnected from ${config.tcpHost}:${config.tcpPort}`);
+    }
+    prevTcpStatus.current = tcpConnectionStatus;
+  }, [tcpConnectionStatus, config.tcpHost, config.tcpPort]);
+
+  const prevSvrStatus = useRef(tcpServerStatus);
+  useEffect(() => {
+    if (tcpServerStatus === "running" && prevSvrStatus.current !== "running") {
+      appLogger.info("TCP-Server", `Started on port ${config.tcpPort}`);
+    } else if (tcpServerStatus === "stopped" && prevSvrStatus.current === "running") {
+      appLogger.info("TCP-Server", "Stopped");
+    }
+    prevSvrStatus.current = tcpServerStatus;
+  }, [tcpServerStatus, config.tcpPort]);
 
   const [topCollapsed, setTopCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -481,6 +547,13 @@ function App() {
           </Button>
           <Button
             type="button"
+            onClick={handleOpenLogViewer}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+          >
+            <span>{t("app_logs", lang)}</span>
+          </Button>
+          <Button
+            type="button"
             onClick={() => setAboutOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
@@ -506,6 +579,22 @@ function App() {
               <AboutPanel lang={lang} notificationUrl={settings.notificationUrl} />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Log viewer modal ── */}
+      {logViewerOpen && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLogViewerOpen(false);
+          }}
+        >
+          <LogEditor
+            initialContent={logViewerContent}
+            lang={lang}
+            onClose={() => setLogViewerOpen(false)}
+          />
         </div>
       )}
 
