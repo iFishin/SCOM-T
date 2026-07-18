@@ -15,7 +15,7 @@ import { payloadToBytes, formatHexDump } from "../utils/hexConverter.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
-import { LineNumbers } from "./ui/LineNumbers";
+import { LogEditor } from "./LogEditor";
 
 type ReceiveLogProps = {
   logs: SerialLogEntry[];
@@ -136,9 +136,6 @@ export function ReceiveLog({
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [logEditorOpen, setLogEditorOpen] = useState(false);
   const [logEditorContent, setLogEditorContent] = useState("");
-  const [editorSearchOpen, setEditorSearchOpen] = useState(false);
-  const editorTextRef = useRef<HTMLTextAreaElement>(null);
-  const editorLineRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
@@ -668,106 +665,11 @@ export function ReceiveLog({
             if (e.target === e.currentTarget) setLogEditorOpen(false);
           }}
         >
-          <div className="flex w-[80vw] max-w-4xl h-[70vh] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
-            {/* Header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-2">
-              <span className="text-sm font-semibold text-[var(--text-primary)]">
-                {t("log_editor_title", lang)}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setEditorSearchOpen((v) => !v)}
-                  className={`rounded p-1 transition-colors ${
-                    editorSearchOpen
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
-                  }`}
-                  title={t("search", lang)}
-                >
-                  <Search size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLogEditorOpen(false)}
-                  className="rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Search bar for editor */}
-            {editorSearchOpen && (
-              <div className="shrink-0">
-                <SearchReplace
-                  value={logEditorContent}
-                  onValueChange={setLogEditorContent}
-                  allowReplace
-                  onClose={() => setEditorSearchOpen(false)}
-                  lang={lang}
-                />
-              </div>
-            )}
-
-            {/* Editor: line numbers + textarea */}
-            <div className="relative flex min-h-0 flex-1 overflow-hidden">
-              <div ref={editorLineRef} className="shrink-0">
-                <LineNumbers text={logEditorContent} className="py-2" />
-              </div>
-              <textarea
-                ref={editorTextRef}
-                className="flex-1 resize-none border-0 bg-[var(--bg-primary)] p-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none"
-                value={logEditorContent}
-                onChange={(e) => setLogEditorContent(e.target.value)}
-                onScroll={() => {
-                  if (editorLineRef.current && editorTextRef.current) {
-                    editorLineRef.current.scrollTop = editorTextRef.current.scrollTop;
-                  }
-                }}
-                spellCheck={false}
-              />
-            </div>
-
-            {/* Footer */}
-            <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-input)] px-4 py-2">
-              <span className="text-[10px] text-[var(--text-muted)]">
-                {logEditorContent.split("\n").length}{" "}
-                {lang === "zh" ? "行" : "lines"}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(logEditorContent);
-                    setCopyFeedback(true);
-                    setTimeout(() => setCopyFeedback(false), 1500);
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                className="ml-auto flex items-center gap-1 text-xs"
-              >
-                {copyFeedback ? <Check size={12} /> : <Copy size={12} />}
-                {copyFeedback
-                  ? lang === "zh"
-                    ? "已复制"
-                    : "Copied"
-                  : lang === "zh"
-                    ? "复制全部"
-                    : "Copy All"}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setLogEditorOpen(false)}
-                className="text-xs"
-              >
-                {t("close", lang)}
-              </Button>
-            </div>
-          </div>
+          <LogEditor
+            initialContent={logEditorContent}
+            lang={lang}
+            onClose={() => setLogEditorOpen(false)}
+          />
         </div>
       )}
     </Panel>
