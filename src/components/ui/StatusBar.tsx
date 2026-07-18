@@ -1,4 +1,4 @@
-import { Plug, Unplug, FolderOpen } from "lucide-react";
+import { Plug, Unplug, FolderOpen, Save } from "lucide-react";
 
 type StatusBarProps = {
   isConnected: boolean;
@@ -7,6 +7,9 @@ type StatusBarProps = {
   onOpenConfigDir?: () => void;
   configDirTooltip?: string;
   latencyMs?: number | null;
+  /** Log file info for display */
+  logFileName?: string | null;
+  realTimeLog?: boolean;
 };
 
 export function StatusBar({
@@ -16,6 +19,8 @@ export function StatusBar({
   onOpenConfigDir,
   configDirTooltip,
   latencyMs,
+  logFileName,
+  realTimeLog,
 }: StatusBarProps) {
   return (
     <footer className="flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 text-xs">
@@ -31,6 +36,22 @@ export function StatusBar({
           {latencyMs < 10 ? "<10ms" : `${latencyMs}ms`}
         </span>
       )}
+
+      {/* Log file indicator */}
+      {logFileName && (
+        <span className="flex items-center gap-1 text-[var(--text-muted)]" title={logFileName}>
+          <span className="relative">
+            <Save size={11} />
+            <span
+              className={`absolute -right-0.5 -top-0.5 block h-1.5 w-1.5 rounded-full ${
+                realTimeLog ? "bg-[var(--accent)]" : "bg-amber-400"
+              }`}
+            />
+          </span>
+          <span className="max-w-[120px] truncate">{logFileName}</span>
+        </span>
+      )}
+
       {onOpenConfigDir && (
         <button
           type="button"

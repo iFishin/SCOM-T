@@ -136,6 +136,7 @@ export function ReceiveLog({
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [logEditorOpen, setLogEditorOpen] = useState(false);
   const [logEditorContent, setLogEditorContent] = useState("");
+  const [logManagerOpen, setLogManagerOpen] = useState(false);
 
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
@@ -281,7 +282,7 @@ export function ReceiveLog({
 
   return (
     <Panel className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-[var(--border)] px-2 py-1">
+      <div className="flex shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
           {t("received", lang)}
         </span>
@@ -292,6 +293,18 @@ export function ReceiveLog({
             {t("scroll_follow", lang)}
           </Button>
         )}
+
+        <Select
+          value={displayMode}
+          onChange={(e) => setDisplayMode(e.currentTarget.value as LogDisplayMode)}
+          className="ml-auto w-auto"
+        >
+          <option value="card">{t("display_card", lang)}</option>
+          <option value="text">{t("display_text", lang)}</option>
+          <option value="hex">{t("display_hex", lang)}</option>
+        </Select>
+
+        {/* ── Right-side icon group ── */}
 
         {/* Search toggle */}
         <Button
@@ -304,9 +317,9 @@ export function ReceiveLog({
               ? "bg-[var(--accent)] text-white"
               : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
           }`}
+          title={t("search", lang)}
         >
           <Search size={13} />
-          {t("search", lang)}
         </Button>
 
         {/* Copy log */}
@@ -323,16 +336,6 @@ export function ReceiveLog({
         >
           {copyFeedback ? <Check size={13} /> : <Copy size={13} />}
         </button>
-
-        <Select
-          value={displayMode}
-          onChange={(e) => setDisplayMode(e.currentTarget.value as LogDisplayMode)}
-          className="ml-auto w-auto"
-        >
-          <option value="card">{t("display_card", lang)}</option>
-          <option value="text">{t("display_text", lang)}</option>
-          <option value="hex">{t("display_hex", lang)}</option>
-        </Select>
 
         {/* Clear actions dropdown */}
         <div className="relative" ref={clearRef}>
@@ -371,64 +374,26 @@ export function ReceiveLog({
           )}
         </div>
 
-        {/* ── Log file controls ── */}
-        {savePath ? (
-          <div className="flex items-center gap-1 pl-2 ml-1 border-l border-[var(--border)]">
-            <span
-              className="text-[10px] text-[var(--text-muted)] max-w-[100px] truncate"
-              title={savePath}
-            >
-              {savePath.split(/[\\/]/).pop()}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onToggleRealTime}
-              className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition-colors ${
-                realTimeLog ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
-              } hover:text-[var(--text-primary)] whitespace-nowrap`}
-              title={realTimeLog ? "Real-time: ON" : "Real-time: OFF"}
-            >
-              <Circle size={10} fill={realTimeLog ? "currentColor" : "none"} />
-            </Button>
-            {!realTimeLog && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onFlushLogs}
-                className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                title="Flush logs to file"
-              >
-                <Save size={12} />
-                {t("log", lang)}
-              </Button>
+        {/* ── Log file management ── */}
+        <button
+          type="button"
+          onClick={() => setLogManagerOpen(true)}
+          className={`rounded p-1 transition-colors ${
+            savePath
+              ? "text-[var(--accent)] hover:text-[var(--accent-dark)] hover:bg-[var(--bg-input)]"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+          }`}
+          title={savePath ? `Log: ${savePath.split(/[\\/]/).pop()}` : "Save logs to file..."}
+        >
+          <div className="relative">
+            <Save size={13} />
+            {savePath && (
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2">
+                <span className={`block h-full w-full rounded-full ${realTimeLog ? "bg-[var(--accent)]" : "bg-amber-400"}`} />
+              </span>
             )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onCloseLogFile}
-              className="rounded p-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors"
-              title="Close log file"
-            >
-              <X size={12} />
-            </Button>
           </div>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onSelectLogFile}
-            className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-1"
-            title="Save logs to file..."
-          >
-            <Save size={12} />
-            {t("log", lang)}
-          </Button>
-        )}
+        </button>
       </div>
 
       {/* Search bar */}
@@ -670,6 +635,114 @@ export function ReceiveLog({
             lang={lang}
             onClose={() => setLogEditorOpen(false)}
           />
+        </div>
+      )}
+
+      {/* ── Log manager modal ── */}
+      {logManagerOpen && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLogManagerOpen(false);
+          }}
+        >
+          <div className="flex w-[420px] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-2.5">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">
+                {lang === "zh" ? "串口日志管理" : "Log File Manager"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLogManagerOpen(false)}
+                className="rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 space-y-3">
+              {savePath ? (
+                <>
+                  <div>
+                    <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+                      {lang === "zh" ? "日志文件" : "Log File"}
+                    </div>
+                    <div className="text-xs text-[var(--text-primary)] break-all bg-[var(--bg-input)] rounded border border-[var(--border)] px-2 py-1.5 font-mono">
+                      {savePath}
+                    </div>
+                  </div>
+
+                  {/* Real-time toggle */}
+                  <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
+                    <div>
+                      <div className="text-xs font-medium text-[var(--text-primary)]">
+                        {lang === "zh" ? "实时写入" : "Real-time Write"}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                        {lang === "zh" ? "数据到达时立即写入日志文件" : "Write entries to file as they arrive"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onToggleRealTime}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
+                        realTimeLog
+                          ? "bg-[var(--accent)] text-white"
+                          : "bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border)]"
+                      }`}
+                    >
+                      <Circle size={8} fill={realTimeLog ? "currentColor" : "none"} />
+                      {realTimeLog
+                        ? (lang === "zh" ? "已开启" : "On")
+                        : (lang === "zh" ? "已关闭" : "Off")}
+                    </button>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    {!realTimeLog && (
+                      <Button variant="primary" size="sm" onClick={onFlushLogs} className="flex-1 justify-center text-xs">
+                        <Save size={12} />
+                        {lang === "zh" ? "立即写入" : "Flush Now"}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onCloseLogFile}
+                      className={`${realTimeLog ? "flex-1" : ""} justify-center text-xs text-rose-500 hover:text-rose-600`}
+                    >
+                      <X size={12} />
+                      {lang === "zh" ? "关闭文件" : "Close File"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="py-4 text-center">
+                  <Save size={32} className="mx-auto mb-2 text-[var(--text-muted)] opacity-40" />
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {lang === "zh" ? "未选择日志文件" : "No log file selected"}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] opacity-60 mt-1">
+                    {lang === "zh" ? "选择一个文件来保存串口日志" : "Select a file to save serial logs"}
+                  </p>
+                  <Button variant="primary" size="sm" onClick={onSelectLogFile} className="mt-3">
+                    <Save size={12} />
+                    {lang === "zh" ? "选择日志文件" : "Select Log File"}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex shrink-0 justify-end border-t border-[var(--border)] bg-[var(--bg-input)] px-4 py-2">
+              <Button variant="ghost" size="sm" onClick={() => setLogManagerOpen(false)} className="text-xs">
+                {t("close", lang)}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </Panel>

@@ -820,6 +820,8 @@ function App() {
           statusText={statusText}
           currentPortLabel={currentPortLabel}
           latencyMs={latencyMs}
+          logFileName={logFile.savePath ? logFile.savePath.split(/[\\/]/).pop() ?? null : null}
+          realTimeLog={logFile.realTime}
         />
       </div>
 
