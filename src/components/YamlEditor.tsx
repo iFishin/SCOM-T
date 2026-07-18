@@ -1,9 +1,10 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Search } from "lucide-react";
 import { highlightYaml, formatYaml } from "../utils/yamlHighlighter.ts";
 import { SearchReplace } from "./SearchReplace.tsx";
 import type { MatchRange } from "../hooks/useSearch.ts";
 import { Button } from "./ui/Button.tsx";
+import { LineNumbers } from "./ui/LineNumbers.tsx";
 
 type Props = {
   value: string;
@@ -45,25 +46,14 @@ function setCaretAtOffset(root: HTMLElement, targetOffset: number) {
   }
 }
 
-/** Build an array of line numbers for display */
-function buildLineNumbers(text: string): number[] {
-  const lines = text.split("\n");
-  // Ensure at least one line at the bottom for empty trailing line
-  return Array.from({ length: lines.length + 1 }, (_, i) => i + 1);
-}
-
 export function YamlEditor({ value, onChange, error, lang }: Props) {
   const editorRef = useRef<HTMLPreElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchMatches] = useState<MatchRange[]>([]);
   const [searchCurrentIdx] = useState(-1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
   const supressInputRef = useRef(false);
-
-  const lineNumbers = buildLineNumbers(value);
 
   /* ── Format ── */
   const handleFormat = useCallback(() => {
@@ -130,20 +120,6 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
     [],
   );
 
-  /* ── Scroll sync for line numbers ── */
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setScrollTop(el.scrollTop);
-  }, []);
-
-  // Sync gutter position
-  useEffect(() => {
-    if (gutterRef.current) {
-      gutterRef.current.style.transform = `translateY(${-scrollTop}px)`;
-    }
-  }, [scrollTop]);
-
   /* ── Search close: refocus editor ── */
   const handleSearchClose = useCallback(() => {
     setSearchOpen(false);
@@ -188,47 +164,38 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
         />
       )}
 
-      {/* Editor area */}
-      <div className="relative flex-1 flex overflow-hidden">
-        {/* --- Gutter (line numbers) --- */}
-        <div className="shrink-0 overflow-hidden select-none border-r border-[var(--border)] bg-[var(--bg-input)]"
-             style={{ width: `${Math.max(3, String(lineNumbers.length).length + 1)}ch` }}>
-          <div ref={gutterRef} className="will-change-transform">
-            {lineNumbers.map((n) => (
-              <div
-                key={n}
-                className="pr-2 text-right font-mono text-xs leading-relaxed text-[var(--text-muted)] opacity-50"
-              >
-                {n}
-              </div>
-            ))}
-          </div>
+      {/* Editor area — unified scroll container */}
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 overflow-auto bg-[var(--bg-input)]"
+      >
+        {/* Line numbers — sticky left, scrolls vertically with content */}
+        <div className="sticky left-0 top-0 z-10 shrink-0 self-start">
+          <LineNumbers text={value + "\n"} className="min-h-full" />
         </div>
 
-        {/* --- Scrollable content --- */}
-        <div ref={scrollRef} className="flex-1 overflow-auto" onScroll={handleScroll}>
-          <div className="relative">
-            {/* Vertical ruler line at column ~20 */}
-            <div
-              className="absolute inset-y-0 w-px pointer-events-none"
-              style={{
-                left: "calc(20ch + 12px)",
-                background: "color-mix(in srgb, var(--accent) 15%, transparent)",
-              }}
-            />
+        {/* Content area */}
+        <div className="relative flex-1">
+          {/* Vertical ruler line at column ~20 */}
+          <div
+            className="absolute inset-y-0 w-px pointer-events-none"
+            style={{
+              left: "calc(20ch + 12px)",
+              background: "color-mix(in srgb, var(--accent) 15%, transparent)",
+            }}
+          />
 
-            {/* contentEditable editor — no overlay needed */}
-            <pre
-              ref={editorRef}
-              contentEditable="plaintext-only"
-              className="font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none p-3 text-[var(--text-primary)]"
-              style={{ fontFamily: "var(--mono-font-family)" }}
-              dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-              onInput={handleInput}
-              onKeyDown={handleKeyDown}
-              spellCheck={false}
-            />
-          </div>
+          {/* contentEditable editor */}
+          <pre
+            ref={editorRef}
+            contentEditable="plaintext-only"
+            className="font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none p-3 text-[var(--text-primary)]"
+            style={{ fontFamily: "var(--mono-font-family)" }}
+            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            spellCheck={false}
+          />
         </div>
       </div>
 
