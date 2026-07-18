@@ -170,24 +170,15 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
         className="flex min-h-0 flex-1 overflow-auto bg-[var(--bg-input)]"
       >
         {/* Line numbers — sticky left, scrolls vertically with content */}
-        <div className="sticky left-0 top-0 z-10 shrink-0 self-start">
+        <div className="sticky left-0 top-0 z-10 shrink-0 self-start min-h-0">
           <LineNumbers text={value + "\n"} className="min-h-full" />
         </div>
-
-        {/* Vertical ruler line at column ~20 */}
-        <div
-          className="absolute z-20 inset-y-0 w-px pointer-events-none"
-          style={{
-            left: "calc(5ch + 20ch + 16px)",
-            background: "color-mix(in srgb, var(--accent) 15%, transparent)",
-          }}
-        />
 
         {/* contentEditable editor — inline syntax highlighting */}
         <pre
           ref={editorRef}
           contentEditable="plaintext-only"
-          className="flex-1 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none p-3 text-[var(--text-primary)]"
+          className="flex-1 min-h-0 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none px-3 py-2 text-[var(--text-primary)]"
           style={{ fontFamily: "var(--mono-font-family)" }}
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
           onInput={handleInput}

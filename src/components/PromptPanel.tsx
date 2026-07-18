@@ -244,6 +244,12 @@ export function PromptPanel({
     updatePromptRowCount(promptRowCount - 1);
   }
 
+  // Auto-sync to batch when on batch tab and promptRows change
+  useEffect(() => {
+    if (activePromptTab !== "batch") return;
+    setBatchText(promptRows.map((r) => r.command).join("\n"));
+  }, [promptRows, activePromptTab]);
+
   function handleYamlChange(newValue: string) {
     setYamlText(newValue);
     if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current);

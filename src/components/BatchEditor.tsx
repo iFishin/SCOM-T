@@ -82,7 +82,7 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
           className="flex min-h-0 flex-1 overflow-auto bg-[var(--bg-input)]"
         >
           {/* Line numbers — sticky to left, scrolls vertically with content */}
-          <div className="sticky left-0 top-0 z-10 shrink-0 self-start">
+          <div className="sticky left-0 top-0 z-10 shrink-0 self-start min-h-0">
             <LineNumbers text={value} activeLine={cursorLine} className="min-h-full" />
           </div>
 
