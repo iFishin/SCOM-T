@@ -6,7 +6,9 @@ import type { SerialLogEntry } from "./useSerialPort";
 function formatLogEntry(log: SerialLogEntry): string {
   const dir = log.direction === "received" ? "RX" : "TX";
   const ts = log.timestamp.replace(/^\[|\]$/g, "");
-  return `[${ts}] [${dir}] [${log.mode.toUpperCase()}] ${log.payload}\n`;
+  const payload = log.payload.replace(/[\r\n]+$/, "");
+  if (!payload) return "";
+  return `[${ts}] [${dir}] [${log.mode.toUpperCase()}] ${payload}\n`;
 }
 
 export function useLogFile() {
