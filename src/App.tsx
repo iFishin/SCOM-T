@@ -16,6 +16,7 @@ import { StatusBar } from "./components/ui/StatusBar.tsx";
 import { Button } from "./components/ui/Button.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { ContextMenu } from "./components/ui/ContextMenu.tsx";
+import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
@@ -70,6 +71,7 @@ function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>("ascii");
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>("ascii");
@@ -230,6 +232,53 @@ function App() {
     return `${connectedPort.path} @ ${connectedPort.baudRate}`;
   }, [connectedPort, isConnected]);
 
+  // ── Tour steps ──
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "#tour-config",
+        title: lang === "zh" ? "串口配置" : "Serial Configuration",
+        content:
+          lang === "zh"
+            ? "选择串口端口、波特率、数据位等参数，然后点击「打开端口」开始连接。\n\n高级选项中可配置流控和 RTS/DTR 信号。"
+            : "Select the serial port, baud rate, and data bits, then click「Open Port」to connect.\n\nAdvanced options include flow control and RTS/DTR signals.",
+      },
+      {
+        target: "#tour-send",
+        title: lang === "zh" ? "发送数据" : "Send Data",
+        content:
+          lang === "zh"
+            ? "在输入框中输入指令，按 Enter 发送。支持 ASCII 和 HEX 两种模式。\n\nShift+Enter 可换行输入多行内容。"
+            : "Type your command and press Enter to send. Supports ASCII and HEX modes.\n\nShift+Enter inserts a newline for multi-line input.",
+      },
+      {
+        target: "#tour-receive",
+        title: lang === "zh" ? "日志接收" : "Receive Log",
+        content:
+          lang === "zh"
+            ? "此处显示串口收到的所有数据。支持卡片视图、文本视图和十六进制视图三种展示方式。\n\n右上角按钮可搜索、复制或清空日志。"
+            : "All received serial data is shown here. Supports Card, Text, and Hex Dump views.\n\nUse the toolbar buttons to search, copy, or clear logs.",
+      },
+      {
+        target: "#tour-prompts",
+        title: lang === "zh" ? "指令组" : "Command Prompts",
+        content:
+          lang === "zh"
+            ? "预设和管理常用的串口指令。网格视图中每一行为一条指令，可设置结尾符和发送间隔。\n\n还支持 YAML 配置编辑和批量文本导入。"
+            : "Pre-set and manage common serial commands. Each row in the grid is one command with configurable ender and interval.\n\nAlso supports YAML config editing and batch text import.",
+      },
+      {
+        target: "#tour-settings-btn",
+        title: lang === "zh" ? "设置与热键" : "Settings & Hotkeys",
+        content:
+          lang === "zh"
+            ? "在这里调整主题、字体、语言、紧凑模式等全局设置。\n\n还可以为常用指令绑定快捷键，实现一键发送。"
+            : "Customize theme, fonts, language, compact mode, and more.\n\nYou can also bind hotkeys to frequently used commands for one-click sending.",
+      },
+    ],
+    [lang],
+  );
+
   async function handleRefreshPorts() {
     const count = await refreshPorts();
     if (count === 0) pushToast(t("status_no_ports", lang), "warn");
@@ -313,7 +362,7 @@ function App() {
               )
             : undefined}
           >
-            <div key="config" className="overflow-hidden rounded-lg">
+            <div key="config" id="tour-config" className="overflow-hidden rounded-lg">
               <ConfigPanel
                 ports={ports}
                 config={config}
@@ -334,7 +383,7 @@ function App() {
               />
             </div>
 
-            <div key="send" className="overflow-hidden rounded-lg">
+            <div key="send" id="tour-send" className="overflow-hidden rounded-lg">
               <SendPanel
                 value={message}
                 sendMode={sendMode}
@@ -377,7 +426,7 @@ function App() {
               <HotkeysPanel hotkeys={settings.hotkeys} onHotkeySend={handleHotkeySend} lang={lang} />
             </div>
 
-            <div key="receive" className="overflow-hidden flex flex-col rounded-lg">
+            <div key="receive" id="tour-receive" className="overflow-hidden flex flex-col rounded-lg">
               <ReceiveLog
                 logs={logs}
                 lang={lang}
@@ -394,7 +443,7 @@ function App() {
               />
             </div>
 
-            <div key="prompts" className="overflow-hidden flex flex-col">
+            <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
               <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} />
             </div>
           </GridLayout>
@@ -416,6 +465,7 @@ function App() {
         <nav className="flex items-center gap-0.5">
           <Button
             type="button"
+            id="tour-settings-btn"
             onClick={() => setSettingsOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
@@ -424,6 +474,7 @@ function App() {
           </Button>
           <Button
             type="button"
+            onClick={() => setTourOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
             <span>{t("help", lang)}</span>
@@ -458,6 +509,15 @@ function App() {
         </div>
       )}
 
+      {tourOpen && (
+        <TourGuide
+          steps={tourSteps}
+          lang={lang}
+          onFinish={() => setTourOpen(false)}
+          onSkip={() => setTourOpen(false)}
+        />
+      )}
+
       {/* ── Main content ── */}
       <main ref={containerRef} className="flex min-h-0 flex-1 gap-0 overflow-hidden p-2">
         {settings.layoutMode === "grid" && renderGridLayout()}
@@ -488,7 +548,7 @@ function App() {
                   </div>
                 </div>
               ) : (
-                <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
+                <div id="tour-config" className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
                   <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
                     {lang === "zh" ? "配置" : "Config"}
                   </div>
@@ -533,7 +593,7 @@ function App() {
               )}
 
               {/* Receive log */}
-              <div className="min-h-0 flex-1 flex flex-col pt-2">
+              <div id="tour-receive" className="min-h-0 flex-1 flex flex-col pt-2">
                 <ReceiveLog
                   logs={logs}
                   lang={lang}
@@ -596,7 +656,7 @@ function App() {
             {!rightCollapsed && (
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {/* Send card */}
-                <div className="shrink-0">
+                <div id="tour-send" className="shrink-0">
                   {!rightSendCollapsed && (
                     <SendPanel
                       value={message}
@@ -655,7 +715,7 @@ function App() {
                 )}
 
                 {/* Prompt panel */}
-                <div className="min-h-0 flex-1 flex flex-col pt-2">
+                <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
                   <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} />
                 </div>
               </div>
