@@ -98,7 +98,9 @@ function formatLogsAsText(logs: SerialLogEntry[]): string {
               ? "RX"
               : "TX";
       const ts = log.timestamp.replace(/^\[|\]$/g, "");
-      return `[${tag}] [${ts}] ${log.payload}`;
+      // Trim trailing \r\n from payload to prevent extra blank lines
+      const cleanPayload = log.payload.replace(/[\r\n]+$/, "");
+      return `[${tag}] [${ts}] ${cleanPayload}`;
     })
     .join("\n");
 }
