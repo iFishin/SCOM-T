@@ -181,17 +181,17 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
         />
       )}
 
-      {/* ── Single scroll container ── */}
+      {/* ── Grid scroll container ── */}
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 overflow-auto bg-[var(--bg-primary)]"
+        className="grid grid-cols-[auto_1fr] min-h-0 flex-1 overflow-auto bg-[var(--bg-primary)]"
       >
         {/* Line numbers */}
-        <div className="sticky left-0 top-0 z-10 shrink-0 self-start">
+        <div className="sticky left-0 top-0 z-10 self-start">
           <LineNumbers
             text={content}
             activeLine={cursorLine}
-            className="min-h-full"
+            className="min-h-screen"
           />
         </div>
 
@@ -204,7 +204,7 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
           onKeyUp={updateCursorLine}
           onMouseUp={updateCursorLine}
           onClick={updateCursorLine}
-          className="flex-1 whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none"
+          className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none min-w-0"
           style={{ minHeight: "100%" }}
           spellCheck={false}
         />

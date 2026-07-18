@@ -164,21 +164,21 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
         />
       )}
 
-      {/* Editor area — unified scroll container */}
+      {/* Editor area — scrollable grid container */}
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 overflow-auto bg-[var(--bg-input)]"
+        className="grid grid-cols-[auto_1fr] overflow-auto flex-1 min-h-0 bg-[var(--bg-input)]"
       >
-        {/* Line numbers — sticky left, scrolls vertically with content */}
-        <div className="sticky left-0 top-0 z-10 shrink-0 self-start min-h-0">
-          <LineNumbers text={value + "\n"} className="min-h-full" />
+        {/* Line numbers */}
+        <div className="sticky left-0 top-0 z-10 self-start">
+          <LineNumbers text={value + "\n"} className="min-h-screen" />
         </div>
 
-        {/* contentEditable editor — inline syntax highlighting */}
+        {/* contentEditable editor */}
         <pre
           ref={editorRef}
           contentEditable="plaintext-only"
-          className="flex-1 min-h-0 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none px-3 py-2 text-[var(--text-primary)]"
+          className="font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none px-3 py-2 text-[var(--text-primary)] min-w-0"
           style={{ fontFamily: "var(--mono-font-family)" }}
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
           onInput={handleInput}

@@ -75,15 +75,15 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
         </div>
       )}
 
-      {/* Single scroll container */}
+      {/* Single scroll container (grid layout) */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden rounded border border-[var(--border)]">
         <div
           ref={scrollRef}
-          className="flex min-h-0 flex-1 overflow-auto bg-[var(--bg-input)]"
+          className="grid grid-cols-[auto_1fr] overflow-auto flex-1 min-h-0 bg-[var(--bg-input)]"
         >
-          {/* Line numbers — sticky to left, scrolls vertically with content */}
-          <div className="sticky left-0 top-0 z-10 shrink-0 self-start min-h-0">
-            <LineNumbers text={value} activeLine={cursorLine} className="min-h-full" />
+          {/* Line numbers */}
+          <div className="sticky left-0 top-0 z-10 self-start">
+            <LineNumbers text={value} activeLine={cursorLine} className="min-h-screen" />
           </div>
 
           {/* ContentEditable — each line is a <div> */}
@@ -96,7 +96,7 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
             onMouseUp={updateCursorLine}
             onClick={updateCursorLine}
             onKeyDown={handleKeyDown}
-            className="flex-1 whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none"
+            className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none min-w-0"
             data-placeholder={placeholder}
             spellCheck={false}
           />
