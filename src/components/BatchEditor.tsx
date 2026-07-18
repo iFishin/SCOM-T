@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { Search } from "lucide-react";
 import { Button } from "./ui/Button";
 import { LineNumbers } from "./ui/LineNumbers";
@@ -20,13 +20,22 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
 
   const lines = value.split("\n");
 
-  // ── Sync content back when editing ──
+  // ── Sync content back when user edits ──
   const handleInput = useCallback(() => {
     if (!contentRef.current) return;
-    const text = contentRef.current.innerText || "";
-    // Replace &nbsp; with space to match normal text
-    onChange(text.replace(/ /g, " "));
+    onChange(contentRef.current.innerText || "");
   }, [onChange]);
+
+  // ── Sync content when value changes from parent (tab switch etc.) ──
+  const valueRef = useRef(value);
+  useEffect(() => {
+    if (valueRef.current !== value && contentRef.current) {
+      contentRef.current.innerHTML = lines
+        .map((l: string) => `<div>${l}</div>`)
+        .join("");
+      valueRef.current = value;
+    }
+  }, [value, lines]);
 
   // ── Cursor tracking ──
   const updateCursorLine = useCallback(() => {
@@ -50,7 +59,6 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
       e.preventDefault();
       setSearchOpen((v) => !v);
     }
-    // Let default Enter behavior create new <div>
   }, []);
 
   return (

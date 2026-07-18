@@ -174,29 +174,26 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
           <LineNumbers text={value + "\n"} className="min-h-full" />
         </div>
 
-        {/* Content area */}
-        <div className="relative flex-1">
-          {/* Vertical ruler line at column ~20 */}
-          <div
-            className="absolute inset-y-0 w-px pointer-events-none"
-            style={{
-              left: "calc(20ch + 12px)",
-              background: "color-mix(in srgb, var(--accent) 15%, transparent)",
-            }}
-          />
+        {/* Vertical ruler line at column ~20 */}
+        <div
+          className="absolute z-20 inset-y-0 w-px pointer-events-none"
+          style={{
+            left: "calc(5ch + 20ch + 16px)",
+            background: "color-mix(in srgb, var(--accent) 15%, transparent)",
+          }}
+        />
 
-          {/* contentEditable editor */}
-          <pre
-            ref={editorRef}
-            contentEditable="plaintext-only"
-            className="font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none p-3 text-[var(--text-primary)]"
-            style={{ fontFamily: "var(--mono-font-family)" }}
-            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-          />
-        </div>
+        {/* contentEditable editor — inline syntax highlighting */}
+        <pre
+          ref={editorRef}
+          contentEditable="plaintext-only"
+          className="flex-1 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none p-3 text-[var(--text-primary)]"
+          style={{ fontFamily: "var(--mono-font-family)" }}
+          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          spellCheck={false}
+        />
       </div>
 
       {/* Error bar */}
