@@ -205,6 +205,25 @@ const ZH: Dict = {
   copy_log: "复制日志",
   open_in_editor: "在编辑器中打开",
   log_editor_title: "日志编辑",
+
+  signal_status: "信号状态",
+  signal_cts: "CTS",
+  signal_dsr: "DSR",
+  signal_cd: "CD",
+  signal_ri: "RI",
+  signal_rts: "RTS",
+  signal_dtr: "DTR",
+  traffic_monitor: "流量监控",
+  traffic_tx: "发送",
+  traffic_rx: "接收",
+  traffic_bytes: "字节",
+  traffic_rate: "速率",
+  connection_health: "连接健康",
+  health_latency: "延迟",
+  health_avg: "平均",
+  health_max: "最大",
+  log_timeline: "日志时间线",
+  dialog_close: "关闭",
 };
 
 const EN: Dict = {
@@ -412,6 +431,25 @@ const EN: Dict = {
   notification_loading: "Loading notification...",
   notification_fetch_error: "Failed to load notification",
   notification_link: "View details",
+
+  signal_status: "Signal Status",
+  signal_cts: "CTS",
+  signal_dsr: "DSR",
+  signal_cd: "CD",
+  signal_ri: "RI",
+  signal_rts: "RTS",
+  signal_dtr: "DTR",
+  traffic_monitor: "Traffic Monitor",
+  traffic_tx: "TX",
+  traffic_rx: "RX",
+  traffic_bytes: "bytes",
+  traffic_rate: "Rate",
+  connection_health: "Connection Health",
+  health_latency: "Latency",
+  health_avg: "Avg",
+  health_max: "Max",
+  log_timeline: "Log Timeline",
+  dialog_close: "Close",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };

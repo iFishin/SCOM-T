@@ -103,6 +103,21 @@ export function useSerialPort({
   } | null>(null);
   const [fileSendProgress, setFileSendProgress] = useState<number | null>(null);
 
+  // ── Visualization states ──
+  const [txBytes, setTxBytes] = useState(0);
+  const [rxBytes, setRxBytes] = useState(0);
+  const [txRate, setTxRate] = useState(0);
+  const [rxRate, setRxRate] = useState(0);
+  const txBytesRef = useRef(0);
+  const rxBytesRef = useRef(0);
+  const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
+  const [signalStates, setSignalStates] = useState<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }>({
+    cts: false,
+    dsr: false,
+    cd: false,
+    ri: false,
+  });
+
   // TCP-specific state
   const [tcpConnectionStatus, setTcpConnectionStatus] = useState<TcpConnectionStatus>("disconnected");
   const [tcpServerStatus, setTcpServerStatus] = useState<TcpServerStatus>("stopped");
@@ -111,6 +126,45 @@ export function useSerialPort({
   useEffect(() => {
     receiveModeRef.current = receiveMode;
   }, [receiveMode]);
+
+  // ── Rate calculation (every 1s) ──
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTxRate(txBytesRef.current);
+      setRxRate(rxBytesRef.current);
+      setTxBytes((prev) => prev + txBytesRef.current);
+      setRxBytes((prev) => prev + rxBytesRef.current);
+      txBytesRef.current = 0;
+      rxBytesRef.current = 0;
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ── Signal state polling (when connected via serial) ──
+  useEffect(() => {
+    if (!isConnected || config.connectionType !== "serial") {
+      setSignalStates({ cts: false, dsr: false, cd: false, ri: false });
+      return;
+    }
+    const interval = setInterval(async () => {
+      const svc = serialRef.current;
+      if (svc) {
+        const states = await svc.readSignals();
+        setSignalStates(states);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isConnected, config.connectionType]);
+
+  // ── Latency history (keep last 60 values) ──
+  useEffect(() => {
+    if (latencyMs === null) return;
+    setLatencyHistory((prev) => {
+      const next = [...prev, latencyMs];
+      if (next.length > 60) next.splice(0, next.length - 60);
+      return next;
+    });
+  }, [latencyMs]);
 
   function toMessage(error: unknown) {
     return error instanceof Error ? error.message : String(error);
@@ -124,6 +178,7 @@ export function useSerialPort({
       // Wire up serial data callback
       serialRef.current.onData((data: Uint8Array) => {
         const bytes = Array.from(data);
+        rxBytesRef.current += bytes.length;
 
         // Echo suppression: in TCP server mode, skip data matching what we just wrote
         const lastWrite = lastWriteRef.current;
@@ -192,6 +247,7 @@ export function useSerialPort({
 
       svc.onData((data: Uint8Array) => {
         const bytes = Array.from(data);
+        rxBytesRef.current += bytes.length;
         const formatted =
           receiveModeRef.current === "hex"
             ? bytesToHex(bytes)
@@ -252,6 +308,7 @@ export function useSerialPort({
 
       svc.onData((_clientId: string, data: Uint8Array) => {
         const bytes = Array.from(data);
+        rxBytesRef.current += bytes.length;
         const formatted =
           receiveModeRef.current === "hex"
             ? bytesToHex(bytes)
@@ -591,6 +648,7 @@ export function useSerialPort({
           mode: sendMode,
           payload: bytesToHex(bytes),
         });
+        txBytesRef.current += bytes.length;
         await s.sendBinary(bytes);
       } else {
         const finalValue = `${value}${appendNewline}`;
@@ -603,6 +661,7 @@ export function useSerialPort({
           mode: sendMode,
           payload: finalValue,
         });
+        txBytesRef.current += new TextEncoder().encode(finalValue).length;
         await s.sendText(finalValue);
       }
     } catch (sendError) {
@@ -652,6 +711,7 @@ export function useSerialPort({
         throw new Error("TCP 未连接");
       }
       lastTcpSendRef.current = Date.now();
+      txBytesRef.current += bytes.length;
       await tcpClientRef.current.send(bytes);
     } catch (err) {
       setError(`TCP发送失败：${toMessage(err)}`);
@@ -682,6 +742,7 @@ export function useSerialPort({
       for (let offset = 0; offset < total; offset += CHUNK_SIZE) {
         const chunk = Array.from(bytes.slice(offset, offset + CHUNK_SIZE));
         await s.sendBinary(chunk);
+        txBytesRef.current += chunk.length;
         setFileSendProgress(
           Math.min(100, Math.round(((offset + CHUNK_SIZE) / total) * 100)),
         );
@@ -809,5 +870,12 @@ export function useSerialPort({
     tcpServerStop,
     tcpServerBroadcast,
     setSignals,
+    // Visualization states
+    txBytes,
+    rxBytes,
+    txRate,
+    rxRate,
+    latencyHistory,
+    signalStates,
   };
 }

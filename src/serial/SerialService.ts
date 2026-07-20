@@ -72,6 +72,9 @@ export interface ISerialService {
   /** Set RTS/DTR signal levels */
   setSignals(rts: boolean, dtr: boolean): Promise<void>;
 
+  /** Read modem input signal states */
+  readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }>;
+
   /** Register data callback (null to unregister) */
   onData(cb: ((data: Uint8Array) => void) | null): void;
   /** Register disconnect callback (null to unregister) */
@@ -195,6 +198,17 @@ export class TauriSerialService implements ISerialService {
     if (!this.port) return;
     await this.port.writeRequestToSend(rts).catch(() => undefined);
     await this.port.writeDataTerminalReady(dtr).catch(() => undefined);
+  }
+
+  async readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }> {
+    if (!this.port) return { cts: false, dsr: false, cd: false, ri: false };
+    const [cts, dsr, cd, ri] = await Promise.all([
+      this.port.readClearToSend().catch(() => false),
+      this.port.readDataSetReady().catch(() => false),
+      this.port.readCarrierDetect().catch(() => false),
+      this.port.readRingIndicator().catch(() => false),
+    ]);
+    return { cts, dsr, cd, ri };
   }
 
   async dispose(): Promise<void> {

@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Activity, BarChart3, HeartPulse, Timeline } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { AboutPanel } from "./components/settings/AboutPanel.tsx";
+import { SignalDialog } from "./components/signal/SignalDialog.tsx";
+import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
+import { HealthDialog } from "./components/signal/HealthDialog.tsx";
+import { TimelineDialog } from "./components/signal/TimelineDialog.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { FileSend } from "./components/FileSend.tsx";
 import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
@@ -33,6 +37,8 @@ import {
   type SendMode,
   type SerialConfig,
 } from "./hooks/useSerialPort.ts";
+
+const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
 function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
   const [leftWidth, setLeftWidth] = useState(initialPx);
@@ -77,6 +83,12 @@ function App() {
   const [logViewerContent, setLogViewerContent] = useState("");
   const [tourOpen, setTourOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [appVersion, setAppVersion] = useState("0.0.0");
+  const [signalOpen, setSignalOpen] = useState(false);
+  const [trafficOpen, setTrafficOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [sendMode, setSendMode] = useState<SendMode>("ascii");
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>("ascii");
   const [appendNewline, setAppendNewline] = useState<"" | "\r\n" | "\r" | "\n">("\r\n");
@@ -98,7 +110,7 @@ function App() {
   });
 
   const { toasts, pushToast, removeToast } = useToast();
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateNotificationUrl } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout } = useSettings();
   const lang = settings.lang ?? "zh";
 
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
@@ -109,6 +121,7 @@ function App() {
     error, fileSendProgress, logCapWarning,
     refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
     tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals,
+    txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates,
   } = useSerialPort({ config, receiveMode });
 
   const logFile = useLogFile();
@@ -273,6 +286,68 @@ function App() {
     }
     check();
   }, [loaded, settings.allowMultiInstance]);
+
+  /** Compare semver strings, returns >0 if a > b */
+  function compareVersion(a: string, b: string): number {
+    const pa = a.split(".").map(Number);
+    const pb = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const na = pa[i] ?? 0;
+      const nb = pb[i] ?? 0;
+      if (na !== nb) return na - nb;
+    }
+    return 0;
+  }
+
+  // ── Startup notification check ──
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+    (async () => {
+      let ver = appVersion;
+      try {
+        const { getVersion } = await import("@tauri-apps/api/app");
+        ver = await getVersion();
+        if (!cancelled) setAppVersion(ver);
+      } catch { /* Tauri API not available */ }
+
+      try {
+        const res = await fetch(DEFAULT_NOTIFICATION_URL);
+        const data = await res.json();
+        if (cancelled) return;
+
+        // Normalize to array
+        const list: { id?: string; title?: string; body?: string; minVersion?: string; maxVersion?: string; display?: string }[] = Array.isArray(data) ? data : [data];
+        const valid = list.filter((n) => n.title || n.body);
+        if (valid.length === 0) return;
+
+        // Filter by version + display:once tracking
+        const filtered = valid.filter((n) => {
+          if (n.minVersion && compareVersion(ver, n.minVersion) < 0) return false;
+          if (n.maxVersion && compareVersion(ver, n.maxVersion) > 0) return false;
+          if (n.display === "once" && n.id) {
+            try {
+              const raw = localStorage.getItem("scom_t_notification_seen");
+              const seen = new Set<string>(raw ? JSON.parse(raw) : []);
+              if (seen.has(n.id)) return false;
+            } catch { /* ignore */ }
+          }
+          return true;
+        });
+
+        if (filtered.length > 0) {
+          setHasUnreadNotifications(true);
+          pushToast(
+            lang === "zh"
+              ? `有 ${filtered.length} 条新通知，请查看「关于」`
+              : `${filtered.length} new notification${filtered.length > 1 ? "s" : ""} — check About`,
+            "info",
+          );
+        }
+      } catch { /* fetch failed, skip silently */ }
+    })();
+    return () => { cancelled = true; };
+  }, [loaded]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -552,12 +627,51 @@ function App() {
           >
             <span>{t("app_logs", lang)}</span>
           </Button>
+          <span className="w-px h-4 bg-[var(--border)] mx-1" />
           <Button
             type="button"
-            onClick={() => setAboutOpen(true)}
+            onClick={() => setSignalOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            title={t("signal_status", lang)}
+          >
+            <Activity size={13} />
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setTrafficOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            title={t("traffic_monitor", lang)}
+          >
+            <BarChart3 size={13} />
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setHealthOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            title={t("connection_health", lang)}
+          >
+            <HeartPulse size={13} />
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setTimelineOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            title={t("log_timeline", lang)}
+          >
+            <Timeline size={13} />
+          </Button>
+          <span className="w-px h-4 bg-[var(--border)] mx-1" />
+          <Button
+            type="button"
+            onClick={() => { setAboutOpen(true); setHasUnreadNotifications(false); }}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
           >
-            <span>{t("about", lang)}</span>
+            <span className="relative inline-flex items-center justify-center">
+              <span>{t("about", lang)}</span>
+              {hasUnreadNotifications && (
+                <span className="absolute -right-2 -top-1 inline-block h-2 w-2 rounded-full bg-rose-500 ring-1 ring-[var(--bg-surface)]" />
+              )}
+            </span>
           </Button>
         </nav>
 
@@ -576,10 +690,49 @@ function App() {
               </Button>
             </div>
             <div className="p-4">
-              <AboutPanel lang={lang} notificationUrl={settings.notificationUrl} />
+              <AboutPanel lang={lang} />
             </div>
           </div>
         </div>
+      )}
+
+      {signalOpen && (
+        <SignalDialog
+          lang={lang}
+          isConnected={isConnected}
+          config={config}
+          signalStates={signalStates}
+          onClose={() => setSignalOpen(false)}
+        />
+      )}
+      {trafficOpen && (
+        <TrafficDialog
+          lang={lang}
+          isConnected={isConnected}
+          txBytes={txBytes}
+          rxBytes={rxBytes}
+          txRate={txRate}
+          rxRate={rxRate}
+          onClose={() => setTrafficOpen(false)}
+        />
+      )}
+      {healthOpen && (
+        <HealthDialog
+          lang={lang}
+          isConnected={isConnected}
+          connectionType={config.connectionType}
+          latencyMs={latencyMs}
+          latencyHistory={latencyHistory}
+          connectedPort={connectedPort}
+          onClose={() => setHealthOpen(false)}
+        />
+      )}
+      {timelineOpen && (
+        <TimelineDialog
+          lang={lang}
+          logs={logs}
+          onClose={() => setTimelineOpen(false)}
+        />
       )}
 
       {/* ── Log viewer modal ── */}
@@ -833,7 +986,6 @@ function App() {
         compactMode={settings.compactMode}
         closeToTray={settings.closeToTray}
         allowMultiInstance={settings.allowMultiInstance}
-        notificationUrl={settings.notificationUrl}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         onClose={() => setSettingsOpen(false)}
@@ -844,7 +996,6 @@ function App() {
         onCompactModeChange={updateCompactMode}
         onCloseBehaviorChange={updateCloseBehavior}
         onAllowMultiInstanceChange={updateAllowMultiInstance}
-        onNotificationUrlChange={updateNotificationUrl}
         onLayoutModeChange={updateLayoutMode}
         onGridLayoutChange={updateGridLayout}
       />

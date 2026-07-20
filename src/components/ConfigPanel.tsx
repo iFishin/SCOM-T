@@ -128,7 +128,7 @@ export function ConfigPanel({
               className={`${sel} max-w-44 truncate`}
               title={config.path}
               value={config.path}
-              onClick={() => void onRefresh()}
+              onMouseDown={() => void onRefresh()}
               onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
               disabled={isConnected || isBusy}
             >
@@ -276,7 +276,7 @@ export function ConfigPanel({
                 className={`${sel} max-w-44 truncate`}
                 title={config.path}
                 value={config.path}
-                onClick={() => void onRefresh()}
+                onMouseDown={() => void onRefresh()}
                 onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
                 disabled={isConnected || isBusy}
               >
