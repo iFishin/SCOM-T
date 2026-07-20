@@ -19,7 +19,7 @@ export const LineNumbers = forwardRef<HTMLDivElement, LineNumbersProps>(
     return (
       <div
         ref={ref}
-        className={`pointer-events-none select-none overflow-hidden border-r border-[var(--border)] bg-[var(--bg-input)] py-2 text-right font-mono text-xs leading-relaxed text-[var(--text-muted)] ${className}`}
+        className={`pointer-events-none select-none overflow-hidden border-r border-[var(--border)] bg-[var(--bg-input)] py-2 text-right font-mono text-xs leading-[20px] text-[var(--text-muted)] ${className}`}
         style={{
           minWidth: `${Math.max(3, String(lines.length).length + 1)}ch`,
           paddingRight: "0.5rem",

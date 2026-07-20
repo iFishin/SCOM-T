@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Search } from "lucide-react";
 import { Button } from "./ui/Button";
 import { LineNumbers } from "./ui/LineNumbers";
@@ -12,48 +12,42 @@ type BatchEditorProps = {
   lang: Lang;
 };
 
+/** Shared monospace font style for pixel-perfect alignment between textarea and LineNumbers */
+const MONO_STYLE = {
+  fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
+  fontSize: "12px",
+  lineHeight: "20px",
+};
+
 export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const numRef = useRef<HTMLDivElement>(null);
+  const valRef = useRef(value);
+  valRef.current = value;
   const [searchOpen, setSearchOpen] = useState(false);
   const [cursorLine, setCursorLine] = useState(1);
 
   const lines = value.split("\n");
 
-  // ── Sync content back when user edits ──
-  const handleInput = useCallback(() => {
-    if (!contentRef.current) return;
-    onChange(contentRef.current.innerText || "");
-  }, [onChange]);
-
-  // ── Sync content when value changes from parent (tab switch etc.) ──
-  const valueRef = useRef(value);
-  useEffect(() => {
-    if (valueRef.current !== value && contentRef.current) {
-      contentRef.current.innerHTML = lines
-        .map((l: string) => `<div>${l}</div>`)
-        .join("");
-      valueRef.current = value;
-    }
-  }, [value, lines]);
-
-  // ── Cursor tracking ──
+  /** Track cursor line — use valRef to avoid stale closure */
   const updateCursorLine = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || !sel.focusNode || !contentRef.current) return;
-    let node: Node | null = sel.focusNode;
-    while (node && node !== contentRef.current) {
-      if (node.parentNode === contentRef.current) {
-        const children = Array.from(contentRef.current.children);
-        const idx = children.indexOf(node as HTMLElement);
-        setCursorLine(idx >= 0 ? idx + 1 : 1);
-        return;
-      }
-      node = node.parentNode;
+    const el = textRef.current;
+    if (!el) return;
+    const line = valRef.current.substring(0, el.selectionStart).split("\n").length;
+    setCursorLine(line);
+  }, []);
+
+  /** Sync line numbers scroll with textarea scroll */
+  const handleScroll = useCallback(() => {
+    if (numRef.current && textRef.current) {
+      numRef.current.scrollTop = textRef.current.scrollTop;
     }
   }, []);
 
-  // ── Handle Enter in contenteditable (insert line) ──
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.currentTarget.value);
+  }, [onChange]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "f") {
       e.preventDefault();
@@ -75,32 +69,32 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
         </div>
       )}
 
-      {/* Single scroll container (grid layout) */}
-      <div className="relative flex min-h-0 flex-1 overflow-hidden rounded border border-[var(--border)]">
-        <div
-          ref={scrollRef}
-          className="grid grid-cols-[auto_1fr] overflow-auto flex-1 min-h-0 bg-[var(--bg-input)]"
-        >
-          {/* Line numbers */}
-          <div className="sticky left-0 top-0 z-10 self-start">
-            <LineNumbers text={value} activeLine={cursorLine} className="min-h-screen" />
-          </div>
+      {/* Editor area */}
+      <div className="flex min-h-0 flex-1 rounded border border-[var(--border)] bg-[var(--bg-input)]">
+        {/* Line numbers */}
+        <LineNumbers
+          ref={numRef}
+          text={value}
+          activeLine={cursorLine}
+          className="shrink-0"
+        />
 
-          {/* ContentEditable — each line is a <div> */}
-          <div
-            ref={contentRef}
-            contentEditable
-            suppressContentEditableWarning
-            onInput={handleInput}
-            onKeyUp={updateCursorLine}
-            onMouseUp={updateCursorLine}
-            onClick={updateCursorLine}
-            onKeyDown={handleKeyDown}
-            className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none min-w-0"
-            data-placeholder={placeholder}
-            spellCheck={false}
-          />
-        </div>
+        {/* Plain textarea — font styles explicitly set to match LineNumbers exactly */}
+        <textarea
+          ref={textRef}
+          value={value}
+          onChange={handleChange}
+          onScroll={handleScroll}
+          onKeyUp={updateCursorLine}
+          onMouseUp={updateCursorLine}
+          onClick={updateCursorLine}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          spellCheck={false}
+          wrap="off"
+          className="overflow-y-auto resize-none flex-1 min-w-0 border-0 bg-transparent py-2 px-3 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] placeholder:opacity-65"
+          style={MONO_STYLE}
+        />
       </div>
 
       {/* Bottom toolbar */}

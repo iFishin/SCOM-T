@@ -1,8 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { Search } from "lucide-react";
-import { highlightYaml, formatYaml } from "../utils/yamlHighlighter.ts";
+import { formatYaml } from "../utils/yamlHighlighter.ts";
 import { SearchReplace } from "./SearchReplace.tsx";
-import type { MatchRange } from "../hooks/useSearch.ts";
 import { Button } from "./ui/Button.tsx";
 import { LineNumbers } from "./ui/LineNumbers.tsx";
 
@@ -13,47 +12,19 @@ type Props = {
   lang: "zh" | "en";
 };
 
-/** Walk text nodes inside a parent element and find the total text offset for a given node+offset */
-function getTextOffset(root: HTMLElement, node: Node, offset: number): number {
-  let total = 0;
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const tn = walker.currentNode as Text;
-    if (tn === node) return total + offset;
-    total += tn.textContent?.length ?? 0;
-  }
-  return total;
-}
-
-/** Walk text nodes and place the caret at the given text offset */
-function setCaretAtOffset(root: HTMLElement, targetOffset: number) {
-  const sel = window.getSelection();
-  if (!sel) return;
-  let accumulated = 0;
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const tn = walker.currentNode as Text;
-    const len = tn.textContent?.length ?? 0;
-    if (accumulated + len >= targetOffset) {
-      const range = document.createRange();
-      range.setStart(tn, targetOffset - accumulated);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      return;
-    }
-    accumulated += len;
-  }
-}
+const MONO_STYLE = {
+  fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
+  fontSize: "12px",
+  lineHeight: "20px",
+};
 
 export function YamlEditor({ value, onChange, error, lang }: Props) {
-  const editorRef = useRef<HTMLPreElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const numRef = useRef<HTMLDivElement>(null);
+  const valRef = useRef(value);
+  valRef.current = value;
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchMatches] = useState<MatchRange[]>([]);
-  const [searchCurrentIdx] = useState(-1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const supressInputRef = useRef(false);
 
   /* ── Format ── */
   const handleFormat = useCallback(() => {
@@ -65,68 +36,44 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
     }
   }, [value, onChange, lang]);
 
-  /* ── contentEditable input handler ── */
-  const handleInput = useCallback(() => {
-    if (supressInputRef.current) return;
-    const el = editorRef.current;
-    if (!el) return;
-
-    // Save caret position before re-render
-    const sel = window.getSelection();
-    let savedOffset = 0;
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      savedOffset = getTextOffset(el, range.startContainer, range.startOffset);
+  /* ── Sync line numbers scroll ── */
+  const handleScroll = useCallback(() => {
+    if (numRef.current && textRef.current) {
+      numRef.current.scrollTop = textRef.current.scrollTop;
     }
+  }, []);
 
-    // Extract plain text (strips any rich formatting from paste)
-    const plainText = el.textContent ?? "";
-
-    // Notify parent (triggers re-render with new highlighted HTML)
-    onChange(plainText);
-
-    // After React re-renders, restore caret
-    requestAnimationFrame(() => {
-      if (editorRef.current) {
-        // Clamp offset to valid range
-        const totalLen = editorRef.current.textContent?.length ?? 0;
-        setCaretAtOffset(editorRef.current, Math.min(savedOffset, totalLen));
-      }
-    });
-  }, [onChange]);
-
-  /* ── Prevent Enter from inserting <div> (keep everything in <pre>) ── */
+  /* ── Tab → 2 spaces ── */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
         setSearchOpen(true);
+        return;
       }
-      // Tab → insert 2 spaces
       if (e.key === "Tab") {
         e.preventDefault();
-        const sel = window.getSelection();
-        if (!sel || !sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        range.insertNode(document.createTextNode("  "));
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        // Trigger input event
-        editorRef.current?.dispatchEvent(new Event("input", { bubbles: true }));
+        const el = textRef.current;
+        if (!el) return;
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        const newVal = value.substring(0, start) + "  " + value.substring(end);
+        onChange(newVal);
+        requestAnimationFrame(() => {
+          if (textRef.current) {
+            textRef.current.selectionStart = textRef.current.selectionEnd = start + 2;
+          }
+        });
       }
     },
-    [],
+    [value, onChange],
   );
 
-  /* ── Search close: refocus editor ── */
+  /* ── Search close ── */
   const handleSearchClose = useCallback(() => {
     setSearchOpen(false);
-    requestAnimationFrame(() => editorRef.current?.focus());
+    requestAnimationFrame(() => textRef.current?.focus());
   }, []);
-
-  const highlightedHtml = highlightYaml(value, searchMatches, searchCurrentIdx);
 
   return (
     <div
@@ -164,26 +111,26 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
         />
       )}
 
-      {/* Editor area — scrollable grid container */}
-      <div
-        ref={scrollRef}
-        className="grid grid-cols-[auto_1fr] overflow-auto flex-1 min-h-0 bg-[var(--bg-input)]"
-      >
+      {/* Editor area: line numbers + plain textarea */}
+      <div className="flex min-h-0 flex-1 bg-[var(--bg-input)]">
         {/* Line numbers */}
-        <div className="sticky left-0 top-0 z-10 self-start">
-          <LineNumbers text={value + "\n"} className="min-h-screen" />
-        </div>
+        <LineNumbers
+          ref={numRef}
+          text={value + "\n"}
+          className="shrink-0"
+        />
 
-        {/* contentEditable editor */}
-        <pre
-          ref={editorRef}
-          contentEditable="plaintext-only"
-          className="font-mono text-xs leading-relaxed whitespace-pre-wrap break-all outline-none px-3 py-2 text-[var(--text-primary)] min-w-0"
-          style={{ fontFamily: "var(--mono-font-family)" }}
-          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-          onInput={handleInput}
+        {/* Plain textarea — no syntax highlighting overlay, just like BatchEditor */}
+        <textarea
+          ref={textRef}
+          value={value}
+          onChange={(e) => onChange(e.currentTarget.value)}
+          onScroll={handleScroll}
           onKeyDown={handleKeyDown}
           spellCheck={false}
+          wrap="off"
+          className="overflow-y-auto resize-none flex-1 min-w-0 border-0 bg-transparent py-2 px-3 text-[var(--text-primary)] outline-none"
+          style={MONO_STYLE}
         />
       </div>
 

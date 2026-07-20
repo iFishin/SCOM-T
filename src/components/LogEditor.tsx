@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { X, Search, Copy, Check } from "lucide-react";
 import { Button } from "./ui/Button";
 import { LineNumbers } from "./ui/LineNumbers";
@@ -15,9 +15,7 @@ type LogEditorProps = {
 };
 
 /**
- * Editable log viewer with line numbers, search/replace, and cursor-line highlight.
- * Uses a single scroll container — line numbers and `<div contenteditable>` share
- * the same scroll context so they are guaranteed to stay aligned.
+ * Log viewer with line numbers and search. Uses plain <textarea> for reliable input and scrolling.
  */
 export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
   const [content, setContent] = useState(initialContent);
@@ -26,41 +24,26 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
   const [searchMatches, setSearchMatches] = useState<MatchRange[]>([]);
   const [searchIndex, setSearchIndex] = useState(-1);
   const [cursorLine, setCursorLine] = useState(1);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const numRef = useRef<HTMLDivElement>(null);
+  const valRef = useRef(content);
+  valRef.current = content;
 
   const lines = content.split("\n");
 
-  // ── Cursor tracking ──
+  /** Track cursor line — use valRef to avoid stale closure */
   const updateCursorLine = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || !sel.focusNode || !contentRef.current) return;
-    let node: Node | null = sel.focusNode;
-    let lineNum = 1;
-    // Walk up to find the line <div> container
-    while (node && node !== contentRef.current) {
-      if (node.parentNode === contentRef.current) {
-        // node is a direct child of the content div → it's a line
-        const children = Array.from(contentRef.current.children);
-        const idx = children.indexOf(node as HTMLElement);
-        if (idx >= 0) lineNum = idx + 1;
-        break;
-      }
-      node = node.parentNode;
-    }
-    setCursorLine(lineNum);
-
-    // Also update content state on cursor move (selection may have been via keyboard)
-    const text = contentRef.current.innerText || "";
-    const newContent = text.replace(/ /g, " "); // &nbsp; → space
-    setContent(newContent);
+    const el = textRef.current;
+    if (!el) return;
+    const line = valRef.current.substring(0, el.selectionStart).split("\n").length;
+    setCursorLine(line);
   }, []);
 
-  // ── Keep content in sync when user edits ──
-  const handleInput = useCallback(() => {
-    if (!contentRef.current) return;
-    const text = contentRef.current.innerText || "";
-    setContent(text.replace(/ /g, " "));
+  /** Sync scroll with line numbers */
+  const handleScroll = useCallback(() => {
+    if (numRef.current && textRef.current) {
+      numRef.current.scrollTop = textRef.current.scrollTop;
+    }
   }, []);
 
   // ── Search ──
@@ -72,55 +55,14 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
 
   const handleNavigate = useCallback((idx: number) => {
     setSearchIndex(Math.max(0, Math.min(idx, searchMatches.length - 1)));
-    // Scroll match into view
-    if (!contentRef.current || !searchMatches.length) return;
+    if (!textRef.current || !searchMatches.length) return;
     const match = searchMatches[Math.max(0, Math.min(idx, searchMatches.length - 1))];
     const lineOfs = content.substring(0, match.start).split("\n").length - 1;
-    const lineEl = contentRef.current.children[lineOfs] as HTMLElement;
-    lineEl?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+
+    // Scroll textarea to approximately that line (20px leading)
+    const LINE_HEIGHT = 20;
+    textRef.current.scrollTop = Math.max(0, lineOfs * LINE_HEIGHT - 40);
   }, [searchMatches, content]);
-
-  // ── Set initial content and cursor ──
-  useEffect(() => {
-    if (!contentRef.current) return;
-    // Populate line <div>s
-    contentRef.current.innerHTML = lines
-      .map((line: string) => `<div>${line}</div>`)
-      .join("");
-    // Focus and put cursor at end
-    contentRef.current.focus();
-    const sel = window.getSelection();
-    if (sel) {
-      const range = document.createRange();
-      const lastChild = contentRef.current.lastElementChild;
-      if (lastChild) {
-        const textNode = lastChild.firstChild;
-        if (textNode) {
-          range.setStartAfter(textNode);
-          range.collapse(true);
-        } else {
-          range.setStart(lastChild, 0);
-          range.collapse(true);
-        }
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    }
-    setCursorLine(lines.length);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Handle keyboard for search toggle ──
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-        e.preventDefault();
-        setSearchOpen((v) => !v);
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, []);
 
   // ── Copy ──
   const handleCopy = useCallback(async () => {
@@ -130,9 +72,6 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
       setTimeout(() => setCopyFeedback(false), 1500);
     } catch { /* ignore */ }
   }, [content]);
-
-  // ── Render search-highlighted content ──
-  // (placeholder for future inline highlight rendering)
 
   return (
     <div className="flex h-[70vh] w-[80vw] max-w-4xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
@@ -181,32 +120,33 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
         />
       )}
 
-      {/* ── Grid scroll container ── */}
-      <div
-        ref={scrollRef}
-        className="grid grid-cols-[auto_1fr] min-h-0 flex-1 overflow-auto bg-[var(--bg-primary)]"
-      >
+      {/* Editor area */}
+      <div className="flex flex-1 min-h-0 bg-[var(--bg-primary)]">
         {/* Line numbers */}
-        <div className="sticky left-0 top-0 z-10 self-start">
-          <LineNumbers
-            text={content}
-            activeLine={cursorLine}
-            className="min-h-screen"
-          />
-        </div>
+        <LineNumbers
+          ref={numRef}
+          text={content}
+          activeLine={cursorLine}
+          className="shrink-0"
+        />
 
-        {/* Editable content */}
-        <div
-          ref={contentRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleInput}
+        {/* Plain textarea */}
+        <textarea
+          ref={textRef}
+          value={content}
+          onChange={(e) => setContent(e.currentTarget.value)}
+          onScroll={handleScroll}
           onKeyUp={updateCursorLine}
           onMouseUp={updateCursorLine}
           onClick={updateCursorLine}
-          className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-[var(--text-primary)] outline-none min-w-0"
-          style={{ minHeight: "100%" }}
           spellCheck={false}
+          wrap="off"
+          className="overflow-y-auto resize-none flex-1 min-w-0 border-0 bg-transparent py-2 px-3 text-[var(--text-primary)] outline-none"
+          style={{
+            fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
+            fontSize: "12px",
+            lineHeight: "20px",
+          }}
         />
       </div>
 
