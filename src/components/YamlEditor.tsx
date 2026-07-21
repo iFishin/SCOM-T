@@ -1,7 +1,8 @@
 import { useRef, useState, useCallback } from "react";
 import { Search } from "lucide-react";
-import { formatYaml } from "../utils/yamlHighlighter.ts";
+import { highlightYaml, formatYaml } from "../utils/yamlHighlighter.ts";
 import { SearchReplace } from "./SearchReplace.tsx";
+import type { MatchRange } from "../hooks/useSearch.ts";
 import { Button } from "./ui/Button.tsx";
 import { LineNumbers } from "./ui/LineNumbers.tsx";
 
@@ -12,7 +13,7 @@ type Props = {
   lang: "zh" | "en";
 };
 
-const MONO_STYLE = {
+const EDITOR_FONT = {
   fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
   fontSize: "12px",
   lineHeight: "20px",
@@ -20,10 +21,11 @@ const MONO_STYLE = {
 
 export function YamlEditor({ value, onChange, error, lang }: Props) {
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
   const numRef = useRef<HTMLDivElement>(null);
-  const valRef = useRef(value);
-  valRef.current = value;
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchMatches] = useState<MatchRange[]>([]);
+  const [searchCurrentIdx] = useState(-1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   /* ── Format ── */
@@ -36,11 +38,15 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
     }
   }, [value, onChange, lang]);
 
-  /* ── Sync line numbers scroll ── */
+  /* ── Scroll sync: pre + line numbers follow textarea ── */
   const handleScroll = useCallback(() => {
-    if (numRef.current && textRef.current) {
-      numRef.current.scrollTop = textRef.current.scrollTop;
+    const el = textRef.current;
+    if (!el) return;
+    if (preRef.current) {
+      preRef.current.scrollTop = el.scrollTop;
+      preRef.current.scrollLeft = el.scrollLeft;
     }
+    if (numRef.current) numRef.current.scrollTop = el.scrollTop;
   }, []);
 
   /* ── Tab → 2 spaces ── */
@@ -75,9 +81,11 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
     requestAnimationFrame(() => textRef.current?.focus());
   }, []);
 
+  const highlightedHtml = highlightYaml(value, searchMatches, searchCurrentIdx);
+
   return (
     <div
-      className={`min-h-0 flex-1 overflow-hidden rounded-lg border flex flex-col ${
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border ${
         error ? "border-red-500 dark:border-red-700" : "border-[var(--border)]"
       } bg-[var(--bg-surface)]`}
     >
@@ -111,8 +119,8 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
         />
       )}
 
-      {/* Editor area: line numbers + plain textarea */}
-      <div className="flex min-h-0 flex-1 bg-[var(--bg-input)]">
+      {/* Editor area: line numbers + dual-layer textarea/pre */}
+      <div className="flex flex-1 min-h-0 bg-[var(--bg-input)]">
         {/* Line numbers */}
         <LineNumbers
           ref={numRef}
@@ -120,18 +128,33 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
           className="shrink-0"
         />
 
-        {/* Plain textarea — no syntax highlighting overlay, just like BatchEditor */}
-        <textarea
-          ref={textRef}
-          value={value}
-          onChange={(e) => onChange(e.currentTarget.value)}
-          onScroll={handleScroll}
-          onKeyDown={handleKeyDown}
-          spellCheck={false}
-          wrap="off"
-          className="overflow-y-auto resize-none flex-1 min-w-0 border-0 bg-transparent py-2 px-3 text-[var(--text-primary)] outline-none"
-          style={MONO_STYLE}
-        />
+        {/* Dual-layer: CSS Grid stacking — same cell for pre and textarea */}
+        <div className="grid grid-cols-1 grid-rows-1 flex-1 min-w-0 min-h-0">
+          {/* Layer 1: syntax-highlighted pre */}
+          <pre
+            ref={preRef}
+            className="row-start-1 col-start-1 overflow-hidden pointer-events-none font-mono text-xs leading-[20px] whitespace-pre py-2 px-3"
+            style={{ ...EDITOR_FONT, margin: 0 }}
+            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+          />
+
+          {/* Layer 2: transparent textarea */}
+          <textarea
+            ref={textRef}
+            value={value}
+            onChange={(e) => onChange(e.currentTarget.value)}
+            onScroll={handleScroll}
+            onKeyDown={handleKeyDown}
+            spellCheck={false}
+            wrap="off"
+            className="row-start-1 col-start-1 resize-none overflow-auto border-0 font-mono text-xs leading-[20px] whitespace-pre py-2 px-3 bg-transparent outline-none"
+            style={{
+              ...EDITOR_FONT,
+              color: "transparent",
+              caretColor: "var(--text-primary)",
+            }}
+          />
+        </div>
       </div>
 
       {/* Error bar */}

@@ -31,6 +31,7 @@ type PromptPanelProps = {
   promptRowCount: number;
   updatePromptRowCount: (count: number) => void;
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
+  onNavigateToConfig?: () => void;
 };
 
 export function PromptPanel({
@@ -41,6 +42,7 @@ export function PromptPanel({
   promptRowCount,
   updatePromptRowCount,
   pushToast,
+  onNavigateToConfig,
 }: PromptPanelProps) {
   const promptConfig = usePromptConfig();
 
@@ -373,7 +375,7 @@ export function PromptPanel({
   const tabBar = (
     <div className="flex items-center gap-1">
       <button type="button" onClick={() => handlePromptTabChange("grid")} className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
-      <button type="button" onClick={() => handlePromptTabChange("config")} className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "config" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_config", lang)}</button>
+      <button type="button" onClick={() => onNavigateToConfig?.()} className="rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
       <button type="button" onClick={() => handlePromptTabChange("batch")} className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
       {activePromptTab === "config" && (
         <>

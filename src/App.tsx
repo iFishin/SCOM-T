@@ -11,6 +11,7 @@ import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { TimelineDialog } from "./components/signal/TimelineDialog.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
+import { ConfigPage } from "./components/ConfigPage.tsx";
 import { FileSend } from "./components/FileSend.tsx";
 import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { PromptPanel } from "./components/PromptPanel.tsx";
@@ -77,6 +78,7 @@ function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
 }
 
 function App() {
+  const [page, setPage] = useState<"main" | "config">("main");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [logViewerOpen, setLogViewerOpen] = useState(false);
@@ -158,6 +160,8 @@ function App() {
       setLogViewerOpen(true);
     }
   }, []);
+
+  const handleNavigateToConfig = useCallback(() => setPage("config"), []);
 
   // ── Log key events ──
   const prevConnectedRef = useRef(isConnected);
@@ -585,7 +589,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} />
             </div>
           </GridLayout>
       </div>
@@ -595,6 +599,13 @@ function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      {page === "config" ? (
+        <ConfigPage
+          lang={lang}
+          pushToast={pushToast}
+          onBack={() => setPage("main")}
+        />
+      ) : (<>
       <header className="flex h-10 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] px-3">
         <div className="flex items-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-lg">
@@ -958,7 +969,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} />
                 </div>
               </div>
             )}
@@ -1027,6 +1038,7 @@ function App() {
           onClose={() => setCtxMenu(null)}
         />
       )}
+      </>)}
     </div>
   );
 }

@@ -476,7 +476,7 @@ export function ReceiveLog({
                       ? "RX"
                       : "TX";
               return (
-                <div key={log.id} className="flex items-baseline gap-1 px-1 py-px text-xs leading-relaxed" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 22px" }}>
+                <div key={log.id} className="flex items-baseline gap-1 px-1 py-px text-xs leading-relaxed">
                   <span className={`shrink-0 font-bold ${tagColor}`}>
                     {tag}
                   </span>
@@ -514,7 +514,7 @@ export function ReceiveLog({
                       ? "RX"
                       : "TX";
               return (
-                <div key={log.id} className="group border-b border-[var(--border)]/40 last:border-b-0" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1.5em" }}>
+                <div key={log.id} className="group border-b border-[var(--border)]/40 last:border-b-0">
                   <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-[10px] text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
                     <span className={`shrink-0 font-bold ${tagColor} ${isReceived ? "" : "opacity-60"}`}>
                       {tag}
@@ -561,7 +561,6 @@ export function ReceiveLog({
                 <div
                   key={group.key}
                   className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1"
-                  style={{ contentVisibility: "auto", containIntrinsicSize: "auto 2.5em" }}
                 >
                   <div className="mb-0.5 flex items-center gap-2 text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
                     <span
