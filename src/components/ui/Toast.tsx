@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 export type ToastType = "error" | "warn" | "success" | "info";
 
@@ -108,8 +108,9 @@ export function useToast() {
   function removeToast(id: string) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
+  const removeToastCb = useCallback(removeToast, []);
 
-  return { toasts, pushToast, removeToast };
+  return { toasts, pushToast, removeToast: removeToastCb };
 }
 
 export default ToastContainer;
