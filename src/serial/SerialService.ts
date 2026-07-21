@@ -222,7 +222,26 @@ export class TauriSerialService implements ISerialService {
 
 export async function listAvailablePorts(): Promise<PortSummary[]> {
   const result = await SerialPort.available_ports();
-  return Object.entries(result).map(([portName, port]) => {
+  const entries = Object.entries(result);
+  // Deduplicate: on macOS each physical port appears as both /dev/cu.* and /dev/tty.*
+  // Prefer cu.* (call-up) as it's the standard for serial communication
+  const seen = new Set<string>();
+  const deduped = entries.filter(([portName]) => {
+    const base = portName.replace(/^.*\//, ""); // last path component
+    // For macOS-style pairs, prefer cu.* over tty.*
+    if (base.startsWith("cu.")) {
+      const key = base.replace(/^cu\./, "");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }
+    if (base.startsWith("tty.")) {
+      return false; // Always drop tty.*
+    }
+    // Non-macOS port (e.g., COM ports on Windows), keep as-is
+    return true;
+  });
+  return deduped.map(([portName, port]) => {
     const detail = { ...port, path: portName };
     return {
       path: portName,

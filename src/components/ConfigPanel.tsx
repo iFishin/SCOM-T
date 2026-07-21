@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -72,6 +72,7 @@ export function ConfigPanel({
   onSetSignals,
 }: ConfigPanelProps) {
   const [advOpen, setAdvOpen] = useState(false);
+  const lastRefreshRef = useRef(0);
 
   const isSerialMode = config.connectionType === "serial";
   const isTcpClient = config.connectionType === "tcp-client";
@@ -128,7 +129,7 @@ export function ConfigPanel({
               className={`${sel} max-w-44 truncate`}
               title={config.path}
               value={config.path}
-              onFocus={() => void onRefresh()}
+              onMouseDown={() => { const now = Date.now(); if (now - lastRefreshRef.current > 2000) { lastRefreshRef.current = now; void onRefresh(); } }}
               onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
               disabled={isConnected || isBusy}
             >
@@ -276,7 +277,7 @@ export function ConfigPanel({
                 className={`${sel} max-w-44 truncate`}
                 title={config.path}
                 value={config.path}
-                onFocus={() => void onRefresh()}
+                onMouseDown={() => { const now = Date.now(); if (now - lastRefreshRef.current > 2000) { lastRefreshRef.current = now; void onRefresh(); } }}
                 onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
                 disabled={isConnected || isBusy}
               >
