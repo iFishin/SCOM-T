@@ -25,6 +25,7 @@ import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { LogEditor } from "./components/LogEditor.tsx";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useHotkeys } from "./hooks/useHotkeys.ts";
 import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
@@ -496,6 +497,9 @@ function App() {
   const winMinimize = useCallback(() => { getCurrentWindow().minimize().catch(console.error); }, []);
   const winToggleMaximize = useCallback(() => { getCurrentWindow().toggleMaximize().catch(console.error); }, []);
   const winClose = useCallback(() => { getCurrentWindow().close().catch(console.error); }, []);
+
+  // ── Hotkeys — must be at App level so they work regardless of SendPanel collapse ──
+  useHotkeys(settings.hotkeys, isConnected, handleHotkeySend);
 
   function renderGridLayout() {
     return (

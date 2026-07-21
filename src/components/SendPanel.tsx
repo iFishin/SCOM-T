@@ -10,7 +10,6 @@ import { parseHexString, bytesToHex, bytesToAscii } from "../utils/hexConverter.
 import type { ToastType } from "./ui/Toast.tsx";
 import type { ReceiveMode, SendMode } from "../hooks/useSerialPort.ts";
 import type { HotkeyConfig } from "../hooks/useSettings.ts";
-import { useHotkeys } from "../hooks/useHotkeys.ts";
 import { FileSend } from "./FileSend.tsx";
 import { HotkeysPanel } from "./HotkeysPanel.tsx";
 import { t } from "../i18n.ts";
@@ -90,8 +89,6 @@ export function SendPanel({
     if (!isConnected) { onPushToast(t("toast_not_connected", lang), "warn"); return; }
     void onSend();
   }
-  useHotkeys(hotkeys, isConnected, onHotkeySend);
-
   function handleTextareaKeyDown(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
     if (e.key !== "Enter") return;
 
