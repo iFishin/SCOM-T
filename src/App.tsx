@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Activity, BarChart3, HeartPulse, Timeline } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -94,6 +94,7 @@ function App() {
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [vizMenu, setVizMenu] = useState<{ x: number; y: number } | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>("ascii");
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>("ascii");
   const [appendNewline, setAppendNewline] = useState<"" | "\r\n" | "\r" | "\n">("\r\n");
@@ -692,40 +693,29 @@ function App() {
           <span className="w-px h-4 bg-[var(--border)] mx-1" />
           <Button
             type="button"
-            onClick={() => setSignalOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
-            title={t("signal_status", lang)}
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setVizMenu({ x: rect.left, y: rect.bottom + 4 });
+            }}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
-            <Activity size={13} />
+            <Eye size={14} />
+            {lang === "zh" ? "视图" : "View"}
           </Button>
-          <Button
-            type="button"
-            onClick={() => setTrafficOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
-            title={t("traffic_monitor", lang)}
-            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
-          >
-            <BarChart3 size={13} />
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setHealthOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
-            title={t("connection_health", lang)}
-            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
-          >
-            <HeartPulse size={13} />
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setTimelineOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
-            title={t("log_timeline", lang)}
-            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
-          >
-            <Timeline size={13} />
-          </Button>
+          {vizMenu && (
+            <ContextMenu
+              x={vizMenu.x}
+              y={vizMenu.y}
+              onClose={() => setVizMenu(null)}
+              items={[
+                { id: "signal", label: `${lang === "zh" ? "信号状态" : "Signal Status"}`, onClick: () => setSignalOpen(true) },
+                { id: "traffic", label: `${lang === "zh" ? "流量监控" : "Traffic"}`, onClick: () => setTrafficOpen(true) },
+                { id: "health", label: `${lang === "zh" ? "连接健康" : "Connection Health"}`, onClick: () => setHealthOpen(true) },
+                { id: "timeline", label: `${lang === "zh" ? "日志时间线" : "Log Timeline"}`, onClick: () => setTimelineOpen(true) },
+              ]}
+            />
+          )}
           <span className="w-px h-4 bg-[var(--border)] mx-1" />
           <Button
             type="button"
