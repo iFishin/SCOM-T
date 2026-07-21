@@ -161,23 +161,25 @@ export function WaveformDialog({ lang, isConnected, getSignalHistory, onClose }:
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-3">
-          {!isConnected ? (
-            <div className="flex items-center justify-center py-12 text-xs text-[var(--text-muted)]">
+        <div className="flex-1 overflow-y-auto p-3 relative">
+          {!isConnected && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--text-muted)] z-10">
               {lang === "zh" ? "请先打开串口连接" : "Open a serial port first"}
             </div>
-          ) : visible.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-xs text-[var(--text-muted)]">
+          )}
+          {isConnected && visible.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--text-muted)] z-10">
               {lang === "zh" ? "正在采集信号数据..." : "Collecting signal data..."}
             </div>
-          ) : (
-            <svg
-              ref={svgRef}
-              width="100%"
-              height={dim.h}
-              className="block"
-              style={{ minHeight: dim.h }}
-            >
+          )}
+          {/* Always render SVG so ResizeObserver works on mount */}
+          <svg
+            ref={svgRef}
+            width="100%"
+            height={dim.h}
+            className="block"
+            style={{ minHeight: dim.h, visibility: visible.length > 0 ? "visible" : "hidden" }}
+          >
               {/* Grid lines (horizontal, between lanes) */}
               {SIGNAL_NAMES.map((_, i) => (
                 <line
@@ -264,7 +266,6 @@ export function WaveformDialog({ lang, isConnected, getSignalHistory, onClose }:
                 );
               })}
             </svg>
-          )}
         </div>
 
         {/* Footer */}
