@@ -37,12 +37,12 @@ export function WaveformDialog({ lang, isConnected, getSignalHistory, onClose }:
   // Refresh history from the hook ref
   useEffect(() => {
     if (paused) return;
-    setHistory(getSignalHistory());
+    setHistory([...getSignalHistory()]);
     const timer = setInterval(() => {
-      setHistory(getSignalHistory());
+      setHistory([...getSignalHistory()]);
     }, 500);
     return () => clearInterval(timer);
-  }, [paused, getSignalHistory]);
+  }, [paused]);
 
   // Measure SVG width
   useEffect(() => {
