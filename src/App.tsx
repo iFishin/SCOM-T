@@ -24,6 +24,7 @@ import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { LogEditor } from "./components/LogEditor.tsx";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
@@ -79,6 +80,7 @@ function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
 
 function App() {
   const [page, setPage] = useState<"main" | "config">("main");
+  const [isMaximized, setIsMaximized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [logViewerOpen, setLogViewerOpen] = useState(false);
@@ -372,6 +374,35 @@ function App() {
     root.classList.toggle("density-compact", !!settings.compactMode);
   }, [settings.theme, settings.compactMode]);
 
+  // ── Track window maximize state for custom title bar ──
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let unlisten: () => void;
+
+    win.isMaximized().then(setIsMaximized);
+    win.onResized(async () => {
+      const m = await win.isMaximized();
+      setIsMaximized(m);
+    }).then((fn) => { unlisten = fn; });
+
+    return () => unlisten?.();
+  }, []);
+
+  // ── Random logo animation blip ──
+  const [logoBlip, setLogoBlip] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function schedule() {
+      timer = setTimeout(() => {
+        setLogoBlip(true);
+        requestAnimationFrame(() => { requestAnimationFrame(() => setLogoBlip(false)); });
+        schedule();
+      }, 3000 + Math.random() * 7000);
+    }
+    schedule();
+    return () => clearTimeout(timer);
+  }, []);
+
   const currentPortLabel = useMemo(() => {
     if (!isConnected || !connectedPort) return "Closed";
     return `${connectedPort.path} @ ${connectedPort.baudRate}`;
@@ -460,6 +491,11 @@ function App() {
 
     void sendData(hotkey.command, hotkey.sendMode, hotkey.appendNewline);
   }
+
+  // ── Window controls for custom title bar ──
+  const winMinimize = useCallback(() => { getCurrentWindow().minimize().catch(console.error); }, []);
+  const winToggleMaximize = useCallback(() => { getCurrentWindow().toggleMaximize().catch(console.error); }, []);
+  const winClose = useCallback(() => { getCurrentWindow().close().catch(console.error); }, []);
 
   function renderGridLayout() {
     return (
@@ -606,20 +642,29 @@ function App() {
           onBack={() => setPage("main")}
         />
       ) : (<>
-      <header className="flex h-10 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] px-3">
-        <div className="flex items-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg">
-            <img src="/favicon.png" alt="Logo" className="h-8 w-8" />
+      <header
+        className="flex h-11 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] pl-2 pr-0 select-none"
+        style={{ WebkitAppRegion: "drag", appRegion: "drag" } as React.CSSProperties}
+      >
+        {/* Logo */}
+        <div className="flex items-center shrink-0 pl-1 pr-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg">
+            <img
+              src="/favicon.png"
+              alt="Logo"
+              className={`h-8 w-8 animate-logo-float ${logoBlip ? "animate-logo-blip" : ""}`}
+            />
           </div>
         </div>
 
         {/* Menu bar */}
-        <nav className="flex items-center gap-0.5">
+        <nav className="flex items-center gap-0.5 flex-1 min-w-0">
           <Button
             type="button"
             id="tour-settings-btn"
             onClick={() => setSettingsOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <Settings size={14} />
             {t("settings_title", lang)}
@@ -628,6 +673,7 @@ function App() {
             type="button"
             onClick={() => setTourOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <span>{t("help", lang)}</span>
           </Button>
@@ -635,6 +681,7 @@ function App() {
             type="button"
             onClick={handleOpenLogViewer}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <span>{t("app_logs", lang)}</span>
           </Button>
@@ -644,6 +691,7 @@ function App() {
             onClick={() => setSignalOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             title={t("signal_status", lang)}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <Activity size={13} />
           </Button>
@@ -652,6 +700,7 @@ function App() {
             onClick={() => setTrafficOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             title={t("traffic_monitor", lang)}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <BarChart3 size={13} />
           </Button>
@@ -660,6 +709,7 @@ function App() {
             onClick={() => setHealthOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             title={t("connection_health", lang)}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <HeartPulse size={13} />
           </Button>
@@ -668,6 +718,7 @@ function App() {
             onClick={() => setTimelineOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             title={t("log_timeline", lang)}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <Timeline size={13} />
           </Button>
@@ -676,6 +727,7 @@ function App() {
             type="button"
             onClick={() => { setAboutOpen(true); setHasUnreadNotifications(false); }}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <span className="relative inline-flex items-center justify-center">
               <span>{t("about", lang)}</span>
@@ -686,6 +738,50 @@ function App() {
           </Button>
         </nav>
 
+        {/* Window controls — native Windows 11 style */}
+        <div className="flex h-full items-stretch">
+          <button
+            type="button"
+            onClick={winMinimize}
+            className="flex h-full w-[46px] items-center justify-center text-[var(--text-muted)] outline-none transition-colors duration-75 hover:bg-black/10 active:bg-black/15 dark:hover:bg-white/10 dark:active:bg-white/15"
+            title={lang === "zh" ? "最小化" : "Minimize"}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10">
+              <rect x="0" y="4.5" width="10" height="1" fill="currentColor" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={winToggleMaximize}
+            className="flex h-full w-[46px] items-center justify-center text-[var(--text-muted)] outline-none transition-colors duration-75 hover:bg-black/10 active:bg-black/15 dark:hover:bg-white/10 dark:active:bg-white/15"
+            title={isMaximized ? (lang === "zh" ? "还原" : "Restore") : (lang === "zh" ? "最大化" : "Maximize")}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
+          >
+            {isMaximized ? (
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <rect x="1.5" y="0" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
+                <rect x="0.5" y="2.5" width="7" height="7" rx="1" fill="var(--bg-surface)" stroke="currentColor" strokeWidth="1" />
+              </svg>
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <rect x="0.5" y="0.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
+              </svg>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={winClose}
+            className="flex h-full w-[46px] items-center justify-center text-[var(--text-muted)] outline-none transition-colors duration-75 hover:bg-[#e81123] hover:text-white active:bg-[#bf0f1d]"
+            title={lang === "zh" ? "关闭" : "Close"}
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10">
+              <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square" />
+              <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {aboutOpen && (

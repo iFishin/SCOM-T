@@ -402,3 +402,25 @@ textarea.font-mono.text-transparent::selection {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* ── Title bar logo animation ── */
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1px); }
+}
+
+@keyframes logo-blip {
+  0%   { transform: scale(1); }
+  15%  { transform: scale(1.12); }
+  30%  { transform: scale(0.95); }
+  45%  { transform: scale(1.05); }
+  60%  { transform: scale(1); }
+}
+
+.animate-logo-float {
+  animation: logo-float 3s ease-in-out infinite;
+}
+
+.animate-logo-blip {
+  animation: logo-blip 0.5s ease-out forwards;
+}

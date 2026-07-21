@@ -6,6 +6,9 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
     "opener:default",
     "serialplugin:allow-available-ports",
     "serialplugin:allow-available-ports-direct",
