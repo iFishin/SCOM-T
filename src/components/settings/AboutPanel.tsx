@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { ExternalLink, RefreshCw, Download, CheckCircle, AlertCircle } from "lucide-react";
+import { ExternalLink, RefreshCw, Download, CheckCircle, AlertCircle, Bell } from "lucide-react";
 import { Button } from "../ui/Button";
 import { t } from "../../i18n";
 import type { Lang } from "../../i18n";
+import { NotificationHistory } from "./NotificationHistory.tsx";
 
 const BUILD_TIME = __BUILD_TIME__;
 
@@ -43,33 +44,14 @@ type NotificationItem = {
   minVersion?: string;
   maxVersion?: string;
   display?: "once" | "always";
-};
-
-const SEVERITY_STYLES: Record<string, { dot: string; text: string; border: string; label: string }> = {
-  info: {
-    dot: "bg-blue-500",
-    text: "text-[var(--text-primary)]",
-    border: "border-[var(--border)]",
-    label: "Info",
-  },
-  warning: {
-    dot: "bg-amber-500",
-    text: "text-amber-600",
-    border: "border-amber-500/30",
-    label: "Warning",
-  },
-  important: {
-    dot: "bg-rose-500",
-    text: "text-rose-600",
-    border: "border-rose-500/30",
-    label: "Important",
-  },
+  mode?: "badge" | "card";
 };
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
 export function AboutPanel({ lang }: { lang: Lang }) {
   const [version, setVersion] = useState("0.1.0");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [clickCount, setClickCount] = useState(0);
   const [shakeKey, setShakeKey] = useState(0);
   const [glitching, setGlitching] = useState(false);
@@ -83,8 +65,6 @@ export function AboutPanel({ lang }: { lang: Lang }) {
   const [updateCheck, setUpdateCheck] = useState<CheckState>({ status: "idle" });
 
   const [rawItems, setRawItems] = useState<NotificationItem[]>([]);
-  const [notificationError, setNotificationError] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [seenIds, setSeenIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("scom_t_notification_seen");
@@ -105,27 +85,23 @@ export function AboutPanel({ lang }: { lang: Lang }) {
           const list: NotificationItem[] = Array.isArray(data) ? data : [data];
           const valid = list.filter((n) => n.title || n.body);
           setRawItems(valid);
-          setNotificationError(valid.length === 0);
         } else {
           setRawItems([]);
-          setNotificationError(true);
         }
       })
       .catch(() => {
-        if (!cancelled) setNotificationError(true);
+        if (!cancelled) setRawItems([]);
       });
     return () => { cancelled = true; };
   }, []);
 
   // Filter by version range, keep only the latest 3
   const displayItems = useMemo(() => {
-    return rawItems
-      .filter((item) => {
-        if (item.minVersion && compareVersion(version, item.minVersion) < 0) return false;
-        if (item.maxVersion && compareVersion(version, item.maxVersion) > 0) return false;
-        return true;
-      })
-      .slice(0, 3);
+    return rawItems.filter((item) => {
+      if (item.minVersion && compareVersion(version, item.minVersion) < 0) return false;
+      if (item.maxVersion && compareVersion(version, item.maxVersion) > 0) return false;
+      return true;
+    });
   }, [rawItems, version]);
 
   // Mark once-type notifications as seen when displayed
@@ -143,14 +119,6 @@ export function AboutPanel({ lang }: { lang: Lang }) {
         localStorage.setItem("scom_t_notification_seen", JSON.stringify([...newIds]));
       } catch { /* quota exceeded, ignore */ }
       setSeenIds(newIds);
-    }
-  }, [displayItems]);
-
-  // Expand first notification by default
-  useEffect(() => {
-    if (displayItems.length > 0) {
-      const firstKey = displayItems[0].id ?? "0";
-      setExpandedItems((prev) => prev.has(firstKey) ? prev : new Set([firstKey]));
     }
   }, [displayItems]);
 
@@ -311,106 +279,28 @@ export function AboutPanel({ lang }: { lang: Lang }) {
         {t("scom_t_view_on_github", lang)}
       </Button>
 
-      {/* ── Notification (from default URL) ── */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-3">
-          <div className="text-xs font-semibold text-[var(--text-primary)] mb-2">
-            {t("notification", lang)}
-          </div>
-          {notificationError && (
-            <div className="flex items-center gap-1.5 text-[11px] text-rose-500">
-              <AlertCircle size={12} />
-              {t("notification_fetch_error", lang)}
-            </div>
-          )}
-          {rawItems.length === 0 && !notificationError && (
-            <div className="text-[11px] text-[var(--text-muted)] animate-pulse">
-              {t("notification_loading", lang)}
-            </div>
-          )}
-          {displayItems.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {displayItems.map((n, i) => {
-                const s = SEVERITY_STYLES[n.severity ?? "info"];
-                const key = n.id ?? `${i}`;
-                const expanded = expandedItems.has(key);
-                return (
-                  <div
-                    key={key}
-                    className={`rounded-lg border overflow-hidden ${s.border} bg-[var(--bg-primary)]`}
-                  >
-                    {/* Header row — always visible, click to toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = new Set(expandedItems);
-                        if (expanded) next.delete(key); else next.add(key);
-                        setExpandedItems(next);
-                      }}
-                      className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-[var(--bg-input)]"
-                    >
-                      {/* Severity dot */}
-                      <span className={`inline-block w-2 h-2 shrink-0 rounded-full ${s.dot}`} />
-                      {/* Title */}
-                      <span className="flex-1 truncate text-xs font-medium text-[var(--text-primary)]">
-                        {n.title ?? "Untitled"}
-                      </span>
-                      {/* Date */}
-                      {n.date && (
-                        <span className="shrink-0 text-[10px] text-[var(--text-muted)]/60">{n.date}</span>
-                      )}
-                      {/* Expand arrow */}
-                      <svg
-                        className={`shrink-0 h-3 w-3 text-[var(--text-muted)] transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </button>
+      {/* ── Notification history button ── */}
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setHistoryOpen(true)}
+        className="w-full justify-center gap-2"
+        disabled={rawItems.length === 0}
+      >
+        <Bell size={14} />
+        {lang === "zh" ? "查看历史通知" : "Notification History"}
+        {rawItems.length > 0 && (
+          <span className="text-[10px] text-[var(--text-muted)]">({rawItems.length})</span>
+        )}
+      </Button>
 
-                    {/* Expanded content */}
-                    {expanded && (
-                      <div className="border-t border-[var(--border)] px-2.5 py-2 space-y-1.5">
-                        {n.severity && n.severity !== "info" && (
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-[10px] font-semibold ${s.text}`}>
-                              {lang === "zh"
-                                ? n.severity === "warning" ? "⚠ 警告" : "🔴 重要"
-                                : s.label}
-                            </span>
-                          </div>
-                        )}
-                        {n.body && (
-                          <div className="text-[11px] text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap">
-                            {n.body}
-                          </div>
-                        )}
-                        {n.link && (
-                          <a
-                            href={n.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-[var(--accent)] hover:underline"
-                          >
-                            <ExternalLink size={11} />
-                            {t("notification_link", lang)}
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {rawItems.length > 0 && displayItems.length === 0 && !notificationError && (
-            <div className="text-[11px] text-[var(--text-muted)]">
-              {lang === "zh" ? "暂无通知" : "No notifications"}
-            </div>
-          )}
-        </div>
+      {historyOpen && (
+        <NotificationHistory
+          lang={lang}
+          items={displayItems}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
 
       {/* ── Update check ── */}
       <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-3">

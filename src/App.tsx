@@ -89,6 +89,7 @@ function App() {
   const [tourOpen, setTourOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [cardNotifications, setCardNotifications] = useState<any[]>([]);
   const [appVersion, setAppVersion] = useState("0.0.0");
   const [signalOpen, setSignalOpen] = useState(false);
   const [trafficOpen, setTrafficOpen] = useState(false);
@@ -325,32 +326,69 @@ function App() {
         if (cancelled) return;
 
         // Normalize to array
-        const list: { id?: string; title?: string; body?: string; minVersion?: string; maxVersion?: string; display?: string }[] = Array.isArray(data) ? data : [data];
+        const list: { id?: string; title?: string; body?: string; minVersion?: string; maxVersion?: string; display?: string; mode?: string; severity?: string; link?: string; date?: string }[] = Array.isArray(data) ? data : [data];
         const valid = list.filter((n) => n.title || n.body);
         if (valid.length === 0) return;
 
-        // Filter by version + display:once tracking
-        const filtered = valid.filter((n) => {
+        // Filter by version range
+        const versionFiltered = valid.filter((n) => {
           if (n.minVersion && compareVersion(ver, n.minVersion) < 0) return false;
           if (n.maxVersion && compareVersion(ver, n.maxVersion) > 0) return false;
-          if (n.display === "once" && n.id) {
-            try {
-              const raw = localStorage.getItem("scom_t_notification_seen");
-              const seen = new Set<string>(raw ? JSON.parse(raw) : []);
-              if (seen.has(n.id)) return false;
-            } catch { /* ignore */ }
-          }
           return true;
         });
+        if (versionFiltered.length === 0) return;
 
-        if (filtered.length > 0) {
+        // Load seen IDs from localStorage
+        let seenIds = new Set<string>();
+        try {
+          const raw = localStorage.getItem("scom_t_notification_seen");
+          if (raw) seenIds = new Set<string>(JSON.parse(raw));
+        } catch { /* ignore */ }
+
+        // Separate card-mode from badge-mode notifications, apply seen tracking
+        let newSeenIds = new Set(seenIds);
+        const cardNotifications: typeof versionFiltered = [];
+        const badgeNotifications: typeof versionFiltered = [];
+
+        for (const n of versionFiltered) {
+          const isAlways = n.display === "always";
+          const isSeen = n.id && seenIds.has(n.id);
+
+          if (isAlways || !isSeen) {
+            // This notification should be shown
+            if (n.mode === "card") {
+              cardNotifications.push(n);
+            } else {
+              badgeNotifications.push(n);
+            }
+            // Mark as seen unless display:always
+            if (!isAlways && n.id) {
+              newSeenIds.add(n.id);
+            }
+          }
+        }
+
+        // Persist updated seen IDs
+        if (newSeenIds.size !== seenIds.size) {
+          try {
+            localStorage.setItem("scom_t_notification_seen", JSON.stringify([...newSeenIds]));
+          } catch { /* ignore */ }
+        }
+
+        // Show badge for badge-mode notifications
+        if (badgeNotifications.length > 0) {
           setHasUnreadNotifications(true);
           pushToast(
             lang === "zh"
-              ? `有 ${filtered.length} 条新通知，请查看「关于」`
-              : `${filtered.length} new notification${filtered.length > 1 ? "s" : ""} — check About`,
+              ? `有 ${badgeNotifications.length} 条新通知，请查看「关于」`
+              : `${badgeNotifications.length} new notification${badgeNotifications.length > 1 ? "s" : ""} — check About`,
             "info",
           );
+        }
+
+        // Show card modal for card-mode notifications
+        if (cardNotifications.length > 0) {
+          setCardNotifications(cardNotifications);
         }
       } catch { /* fetch failed, skip silently */ }
     })();
@@ -1101,6 +1139,68 @@ function App() {
         onLayoutModeChange={updateLayoutMode}
         onGridLayoutChange={updateGridLayout}
       />
+      {/* ── Notification card modal ── */}
+      {cardNotifications.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="flex w-[460px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl">
+            {cardNotifications.map((n, i) => {
+              const severity = n.severity === "warning" ? "amber" : n.severity === "important" ? "rose" : "sky";
+              return (
+                <div key={n.id ?? i}>
+                  {i > 0 && <div className="mx-4 border-t border-[var(--border)]" />}
+                  <div className="px-4 py-3">
+                    {/* Severity header */}
+                    {n.severity && n.severity !== "info" && (
+                      <div className={`flex items-center gap-1.5 mb-2 text-${severity}-600`}>
+                        <span className={`inline-block w-2 h-2 rounded-full bg-${severity}-500`} />
+                        <span className="text-[11px] font-semibold">
+                          {lang === "zh"
+                            ? n.severity === "warning" ? "通知" : "重要通知"
+                            : n.severity === "warning" ? "Notice" : "Important"}
+                        </span>
+                      </div>
+                    )}
+                    {n.date && (
+                      <div className="text-[10px] text-[var(--text-muted)]/60 mb-1">{n.date}</div>
+                    )}
+                    {n.title && (
+                      <div className="text-sm font-semibold text-[var(--text-primary)] mb-2">{n.title}</div>
+                    )}
+                    {n.body && (
+                      <div className="text-xs text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap mb-3">
+                        {n.body}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      {n.link && (
+                        <button
+                          type="button"
+                          onClick={() => window.open(n.link, "_blank")}
+                          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--accent)] hover:bg-[var(--bg-input)] transition-colors"
+                        >
+                          {lang === "zh" ? "查看详情" : "View Details"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCardNotifications([]);
+                          // Also clear the badge since user saw the card
+                          setHasUnreadNotifications(false);
+                        }}
+                        className="ml-auto rounded-lg bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                      >
+                        {lang === "zh" ? "我知道了" : "Got it"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <ToastContainer toasts={toasts} onClose={removeToast} />
 
       {/* ── Custom context menu ── */}

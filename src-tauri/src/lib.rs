@@ -52,6 +52,8 @@ fn set_allow_multi_instance(state: tauri::State<AppSettings>, allow: bool) {
 /// another instance is running.
 #[tauri::command]
 fn try_claim_instance(state: tauri::State<AppSettings>) -> bool {
+    #[cfg(not(windows))]
+    let _ = state;
     #[cfg(windows)]
     {
         use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
