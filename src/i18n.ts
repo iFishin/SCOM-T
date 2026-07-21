@@ -222,7 +222,7 @@ const ZH: Dict = {
   health_latency: "延迟",
   health_avg: "平均",
   health_max: "最大",
-  log_timeline: "日志时间线",
+  signal_waveform: "信号波形",
   dialog_close: "关闭",
 };
 
@@ -448,7 +448,7 @@ const EN: Dict = {
   health_latency: "Latency",
   health_avg: "Avg",
   health_max: "Max",
-  log_timeline: "Log Timeline",
+  signal_waveform: "Signal Waveform",
   dialog_close: "Close",
 };
 

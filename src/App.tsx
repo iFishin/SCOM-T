@@ -9,7 +9,7 @@ import { AboutPanel } from "./components/settings/AboutPanel.tsx";
 import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
-import { TimelineDialog } from "./components/signal/TimelineDialog.tsx";
+import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { ConfigPage } from "./components/ConfigPage.tsx";
 import { FileSend } from "./components/FileSend.tsx";
@@ -93,7 +93,7 @@ function App() {
   const [signalOpen, setSignalOpen] = useState(false);
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
-  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [waveformOpen, setWaveformOpen] = useState(false);
   const [vizMenu, setVizMenu] = useState<{ x: number; y: number } | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>("ascii");
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>("ascii");
@@ -127,7 +127,7 @@ function App() {
     error, fileSendProgress, logCapWarning,
     refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
     tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals,
-    txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates,
+    txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates, getSignalHistory,
   } = useSerialPort({ config, receiveMode });
 
   const logFile = useLogFile();
@@ -712,7 +712,7 @@ function App() {
                 { id: "signal", label: `${lang === "zh" ? "信号状态" : "Signal Status"}`, onClick: () => setSignalOpen(true) },
                 { id: "traffic", label: `${lang === "zh" ? "流量监控" : "Traffic"}`, onClick: () => setTrafficOpen(true) },
                 { id: "health", label: `${lang === "zh" ? "连接健康" : "Connection Health"}`, onClick: () => setHealthOpen(true) },
-                { id: "timeline", label: `${lang === "zh" ? "日志时间线" : "Log Timeline"}`, onClick: () => setTimelineOpen(true) },
+                { id: "waveform", label: `${lang === "zh" ? "信号波形" : "Signal Waveform"}`, onClick: () => setWaveformOpen(true) },
               ]}
             />
           )}
@@ -828,11 +828,12 @@ function App() {
           onClose={() => setHealthOpen(false)}
         />
       )}
-      {timelineOpen && (
-        <TimelineDialog
+      {waveformOpen && (
+        <WaveformDialog
           lang={lang}
-          logs={logs}
-          onClose={() => setTimelineOpen(false)}
+          isConnected={isConnected}
+          getSignalHistory={getSignalHistory}
+          onClose={() => setWaveformOpen(false)}
         />
       )}
 

@@ -117,6 +117,8 @@ export function useSerialPort({
     cd: false,
     ri: false,
   });
+  const signalHistoryRef = useRef<{ time: number; rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[]>([]);
+  const MAX_SIGNAL_HISTORY = 300;
 
   // TCP-specific state
   const [tcpConnectionStatus, setTcpConnectionStatus] = useState<TcpConnectionStatus>("disconnected");
@@ -151,10 +153,21 @@ export function useSerialPort({
       if (svc) {
         const states = await svc.readSignals();
         setSignalStates(states);
+        // Record history snapshot with RTS/DTR from current config
+        const cfg = configRef.current;
+        signalHistoryRef.current.push({
+          time: Date.now(),
+          rts: cfg.rts,
+          dtr: cfg.dtr,
+          ...states,
+        });
+        if (signalHistoryRef.current.length > MAX_SIGNAL_HISTORY) {
+          signalHistoryRef.current = signalHistoryRef.current.slice(-MAX_SIGNAL_HISTORY);
+        }
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [isConnected, config.connectionType]);
+  }, [isConnected, config.connectionType, config.rts, config.dtr]);
 
   // ── Latency history (keep last 60 values) ──
   useEffect(() => {
@@ -877,5 +890,6 @@ export function useSerialPort({
     rxRate,
     latencyHistory,
     signalStates,
+    getSignalHistory: () => signalHistoryRef.current,
   };
 }
