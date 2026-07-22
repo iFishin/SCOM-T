@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -26,6 +26,7 @@ import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { LogEditor } from "./components/LogEditor.tsx";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useHotkeys } from "./hooks/useHotkeys.ts";
+import { setTimestampFormat } from "./utils/hexConverter.ts";
 import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
@@ -36,8 +37,6 @@ import {
   PARITY_OPTIONS,
   STOP_BITS_OPTIONS,
   useSerialPort,
-  type ReceiveMode,
-  type SendMode,
   type SerialConfig,
 } from "./hooks/useSerialPort.ts";
 
@@ -96,9 +95,7 @@ function App() {
   const [healthOpen, setHealthOpen] = useState(false);
   const [waveformOpen, setWaveformOpen] = useState(false);
   const [vizMenu, setVizMenu] = useState<{ x: number; y: number } | null>(null);
-  const [sendMode, setSendMode] = useState<SendMode>("ascii");
-  const [receiveMode, setReceiveMode] = useState<ReceiveMode>("ascii");
-  const [appendNewline, setAppendNewline] = useState<"" | "\r\n" | "\r" | "\n">("\r\n");
+  const [toolMenu, setToolMenu] = useState<{ x: number; y: number } | null>(null);
   const [message, setMessage] = useState("");
   const [filePath, setFilePath] = useState("");
   const [config, setConfig] = useState<SerialConfig>({
@@ -117,8 +114,11 @@ function App() {
   });
 
   const { toasts, pushToast, removeToast } = useToast();
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline } = useSettings();
   const lang = settings.lang ?? "zh";
+  const sendMode = settings.sendMode ?? "ascii";
+  const receiveMode = settings.receiveMode ?? "ascii";
+  const appendNewline = settings.appendNewline ?? "\r\n";
 
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
     typeof window !== "undefined" ? Math.floor(window.innerWidth / 2) : 480,
@@ -134,6 +134,11 @@ function App() {
   const logFile = useLogFile();
   // Sync logs to log file hook via ref (no re-render trigger)
   useEffect(() => { logFile.syncLogs(logs); }, [logs]);
+
+  // ── Sync timestamp format setting ──
+  useEffect(() => {
+    setTimestampFormat(settings.timestampFormat ?? "time");
+  }, [settings.timestampFormat]);
 
   // ── App logger initialisation ──
   useEffect(() => {
@@ -621,9 +626,9 @@ function App() {
                 lang={lang}
                 mode="input-only"
                 onChange={setMessage}
-                onSendModeChange={setSendMode}
-                onReceiveModeChange={setReceiveMode}
-                onAppendNewlineChange={setAppendNewline}
+                onSendModeChange={updateSendMode}
+                onReceiveModeChange={updateReceiveMode}
+                onAppendNewlineChange={updateAppendNewline}
                 onSend={() => sendData(message, sendMode, appendNewline)}
                 onClearSent={() => clearLogs("sent")}
                 onFileSelect={handleFileSelect}
@@ -660,6 +665,8 @@ function App() {
                 onClearAll={() => clearLogs("all")}
                 onClearReceived={() => clearLogs("received")}
                 onClearSent={() => clearLogs("sent")}
+                displayMode={settings.displayMode ?? "card"}
+                onDisplayModeChange={updateDisplayMode}
                 onSelectLogFile={logFile.selectLogFile}
                 onToggleRealTime={() => logFile.setRealTime((v) => !v)}
                 onFlushLogs={() => logFile.flushAll(logs)}
@@ -747,8 +754,30 @@ function App() {
               y={vizMenu.y}
               onClose={() => setVizMenu(null)}
               items={[
+                { id: "waveform", label: `${lang === "zh" ? "信号波形" : "Signal Waveform"}`, onClick: () => setWaveformOpen(true) },
+              ]}
+            />
+          )}
+          <Button
+            type="button"
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setToolMenu({ x: rect.left, y: rect.bottom + 4 });
+            }}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
+          >
+            <Wrench size={14} />
+            {lang === "zh" ? "工具" : "Tools"}
+          </Button>
+          {toolMenu && (
+            <ContextMenu
+              x={toolMenu.x}
+              y={toolMenu.y}
+              onClose={() => setToolMenu(null)}
+              items={[
                 { id: "signal", label: `${lang === "zh" ? "信号状态" : "Signal Status"}`, onClick: () => setSignalOpen(true) },
-                { id: "traffic", label: `${lang === "zh" ? "流量监控" : "Traffic"}`, onClick: () => setTrafficOpen(true) },
+                { id: "traffic", label: `${lang === "zh" ? "流量监控" : "Traffic Monitor"}`, onClick: () => setTrafficOpen(true) },
                 { id: "health", label: `${lang === "zh" ? "连接健康" : "Connection Health"}`, onClick: () => setHealthOpen(true) },
                 { id: "waveform", label: `${lang === "zh" ? "信号波形" : "Signal Waveform"}`, onClick: () => setWaveformOpen(true) },
               ]}
@@ -985,6 +1014,8 @@ function App() {
                   onClearAll={() => clearLogs("all")}
                   onClearReceived={() => clearLogs("received")}
                   onClearSent={() => clearLogs("sent")}
+                  displayMode={settings.displayMode ?? "card"}
+                  onDisplayModeChange={updateDisplayMode}
                   onSelectLogFile={logFile.selectLogFile}
                   onToggleRealTime={() => logFile.setRealTime((v) => !v)}
                   onFlushLogs={() => logFile.flushAll(logs)}
@@ -1053,9 +1084,9 @@ function App() {
                       lang={lang}
                       mode="combined"
                       onChange={setMessage}
-                      onSendModeChange={setSendMode}
-                      onReceiveModeChange={setReceiveMode}
-                      onAppendNewlineChange={setAppendNewline}
+                      onSendModeChange={updateSendMode}
+                      onReceiveModeChange={updateReceiveMode}
+                      onAppendNewlineChange={updateAppendNewline}
                       onSend={() => sendData(message, sendMode, appendNewline)}
                       onClearSent={() => clearLogs("sent")}
                       onFileSelect={handleFileSelect}
@@ -1126,6 +1157,7 @@ function App() {
         compactMode={settings.compactMode}
         closeToTray={settings.closeToTray}
         allowMultiInstance={settings.allowMultiInstance}
+        timestampFormat={settings.timestampFormat}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         onClose={() => setSettingsOpen(false)}
@@ -1138,6 +1170,7 @@ function App() {
         onAllowMultiInstanceChange={updateAllowMultiInstance}
         onLayoutModeChange={updateLayoutMode}
         onGridLayoutChange={updateGridLayout}
+        onTimestampFormatChange={updateTimestampFormat}
       />
       {/* ── Notification card modal ── */}
       {cardNotifications.length > 0 && (

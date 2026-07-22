@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { SendMode } from "./useSerialPort.ts";
+import type { SendMode, ReceiveMode, LogDisplayMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
 
 export type AppendNewline = "" | "\r\n" | "\r" | "\n";
@@ -51,6 +51,11 @@ export type AppSettings = {
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   notificationUrl?: string;
+  timestampFormat?: "time" | "datetime";
+  sendMode?: SendMode;
+  receiveMode?: ReceiveMode;
+  displayMode?: LogDisplayMode;
+  appendNewline?: "" | "\r\n" | "\r" | "\n";
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -131,6 +136,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   layoutMode: "classic",
   gridLayout: DEFAULT_GRID_LAYOUT,
   notificationUrl: "",
+  displayMode: "card",
+  timestampFormat: "datetime",
+  sendMode: "ascii",
+  receiveMode: "ascii",
+  appendNewline: "\r\n",
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -164,6 +174,14 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
         }))
       : DEFAULT_GRID_LAYOUT,
     notificationUrl: typeof raw.notificationUrl === "string" ? raw.notificationUrl : "",
+    timestampFormat: raw.timestampFormat === "time" || raw.timestampFormat === "datetime"
+      ? raw.timestampFormat : undefined,
+    sendMode: raw.sendMode === "hex" ? "hex" : "ascii",
+    receiveMode: raw.receiveMode === "hex" ? "hex" : "ascii",
+    displayMode: raw.displayMode === "text" || raw.displayMode === "hex"
+      ? raw.displayMode : "card",
+    appendNewline: raw.appendNewline === "\r\n" || raw.appendNewline === "\n" || raw.appendNewline === "\r" || raw.appendNewline === ""
+      ? raw.appendNewline : "\r\n",
   };
 }
 
@@ -310,8 +328,28 @@ export function useSettings() {
     setSettings((current) => ({ ...current, notificationUrl: url }));
   }
 
+  function updateTimestampFormat(format: "time" | "datetime") {
+    setSettings((current) => ({ ...current, timestampFormat: format }));
+  }
+
   function updateGridLayout(layout: GridItemLayout[]) {
     setSettings((current) => ({ ...current, gridLayout: layout }));
+  }
+
+  function updateSendMode(mode: SendMode) {
+    setSettings((current) => ({ ...current, sendMode: mode }));
+  }
+
+  function updateReceiveMode(mode: ReceiveMode) {
+    setSettings((current) => ({ ...current, receiveMode: mode }));
+  }
+
+  function updateDisplayMode(mode: LogDisplayMode) {
+    setSettings((current) => ({ ...current, displayMode: mode }));
+  }
+
+  function updateAppendNewline(v: "" | "\r\n" | "\r" | "\n") {
+    setSettings((current) => ({ ...current, appendNewline: v }));
   }
 
   function resetTheme(mode = settings.theme.mode) {
@@ -343,5 +381,10 @@ export function useSettings() {
     updateLayoutMode,
     updateGridLayout,
     updateNotificationUrl,
+    updateTimestampFormat,
+    updateSendMode,
+    updateReceiveMode,
+    updateDisplayMode,
+    updateAppendNewline,
   };
 }

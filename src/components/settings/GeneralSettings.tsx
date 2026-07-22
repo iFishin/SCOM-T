@@ -1,4 +1,3 @@
-
 import { Maximize2, Minimize2, Moon, Sun } from "lucide-react";
 import { Button } from "../ui/Button";
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from "../../hooks/useSettings.ts";

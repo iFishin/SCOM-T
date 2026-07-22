@@ -27,6 +27,8 @@ type ReceiveLogProps = {
   /** Log file saving */
   savePath?: string | null;
   realTimeLog?: boolean;
+  displayMode?: LogDisplayMode;
+  onDisplayModeChange?: (mode: LogDisplayMode) => void;
   onSelectLogFile?: () => void;
   onToggleRealTime?: () => void;
   onFlushLogs?: () => void;
@@ -99,7 +101,7 @@ function formatLogsAsText(logs: SerialLogEntry[]): string {
               : "TX";
       const ts = log.timestamp.replace(/^\[|\]$/g, "");
       // Trim trailing \r\n from payload to prevent extra blank lines
-      const cleanPayload = log.payload.replace(/[\r\n]+$/, "");
+      const cleanPayload = log.payload.replace(/[\r\n]+$/, "").trimStart();
       return `[${tag}] [${ts}] ${cleanPayload}`;
     })
     .join("\n");
@@ -114,6 +116,8 @@ export function ReceiveLog({
   onClearSent,
   savePath,
   realTimeLog,
+  displayMode: displayModeProp,
+  onDisplayModeChange,
   onSelectLogFile,
   onToggleRealTime,
   onFlushLogs,
@@ -121,7 +125,7 @@ export function ReceiveLog({
 }: ReceiveLogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
-  const [displayMode, setDisplayMode] = useState<LogDisplayMode>("card");
+  const displayMode = displayModeProp ?? "card";
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOptions, setSearchOptions] = useState<SearchOptions>({
@@ -296,7 +300,7 @@ export function ReceiveLog({
 
         <Select
           value={displayMode}
-          onChange={(e) => setDisplayMode(e.currentTarget.value as LogDisplayMode)}
+          onChange={(e) => onDisplayModeChange?.(e.currentTarget.value as LogDisplayMode)}
           className="ml-auto w-auto"
         >
           <option value="card">{t("display_card", lang)}</option>
@@ -476,7 +480,7 @@ export function ReceiveLog({
                       ? "RX"
                       : "TX";
               return (
-                <div key={log.id} className="flex items-baseline gap-1 px-1 py-px text-xs leading-relaxed">
+                <div key={log.id} className="flex items-baseline gap-1 px-1 py-px leading-relaxed">
                   <span className={`shrink-0 font-bold ${tagColor}`}>
                     {tag}
                   </span>
@@ -484,7 +488,7 @@ export function ReceiveLog({
                     {ts}
                   </span>
                   <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
-                    {log.payload}
+                    {log.payload.trimStart()}
                   </span>
                 </div>
               );
@@ -537,7 +541,7 @@ export function ReceiveLog({
                   ) : (
                     <div className="px-1 pb-1">
                       {dumpLines.map((line, li) => (
-                        <div key={li} className="flex text-xs leading-relaxed font-mono whitespace-nowrap">
+                        <div key={li} className="flex leading-relaxed font-mono whitespace-nowrap">
                           <span className="shrink-0 text-[var(--text-primary)]">
                             {line.hex}
                           </span>
@@ -602,7 +606,7 @@ export function ReceiveLog({
                             <span key={si}>{seg.text}</span>
                           ),
                         )
-                      : group.mergedPayload}
+                      : group.mergedPayload.trimStart()}
                   </div>
                 </div>
               );

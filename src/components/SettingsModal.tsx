@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Clock, X } from "lucide-react";
 import { Button } from "./ui/Button";
 import type { HotkeyConfig, ThemeSettings, GridItemLayout } from "../hooks/useSettings.ts";
 import { DEFAULT_GRID_LAYOUT } from "../hooks/useSettings.ts";
@@ -21,6 +21,7 @@ type SettingsModalProps = {
   compactMode?: boolean;
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
+  timestampFormat?: "time" | "datetime";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   onClose: () => void;
@@ -33,6 +34,7 @@ type SettingsModalProps = {
   onAllowMultiInstanceChange?: (v: boolean) => void;
   onLayoutModeChange?: (mode: "classic" | "grid") => void;
   onGridLayoutChange?: (layout: GridItemLayout[]) => void;
+  onTimestampFormatChange?: (format: "time" | "datetime") => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -45,6 +47,7 @@ export function SettingsModal({
   compactMode,
   closeToTray,
   allowMultiInstance,
+  timestampFormat,
   layoutMode,
   gridLayout,
   onClose,
@@ -57,10 +60,12 @@ export function SettingsModal({
   onAllowMultiInstanceChange,
   onLayoutModeChange,
   onGridLayoutChange,
+  onTimestampFormatChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
     t("settings_general", lang),
+    t("settings_log", lang),
     t("settings_hotkeys", lang),
     t("settings_theme", lang),
     t("settings_layout", lang),
@@ -111,6 +116,38 @@ export function SettingsModal({
             )}
 
             {activeTab === 1 && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+                  <div className="mb-2 text-sm font-semibold flex items-center gap-1.5">
+                    <Clock size={14} />
+                    {lang === "zh" ? "日志时间戳" : "Log Timestamp"}
+                  </div>
+                  <div className="text-xs text-[var(--text-muted)] mb-3">
+                    {lang === "zh" ? "选择日志接收中时间戳的显示格式" : "Choose the timestamp format in log display"}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => onTimestampFormatChange?.("time")}
+                      className={`rounded-lg border px-3 py-2 text-xs ${(timestampFormat ?? "datetime") === "time" ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] text-[var(--text-muted)]"}`}
+                    >
+                      {lang === "zh" ? "仅时间" : "Time Only"}
+                      <span className="ml-1.5 opacity-70">HH:mm:ss.mmm</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => onTimestampFormatChange?.("datetime")}
+                      className={`rounded-lg border px-3 py-2 text-xs ${(timestampFormat ?? "datetime") === "datetime" ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] text-[var(--text-muted)]"}`}
+                    >
+                      {lang === "zh" ? "日期+时间" : "Date & Time"}
+                      <span className="ml-1.5 opacity-70">YYYY-MM-DD HH:mm:ss.mmm</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 2 && (
               <HotkeysEditor hotkeys={hotkeys} onHotkeysChange={onHotkeysChange} lang={lang} />
             )}
 

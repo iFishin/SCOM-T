@@ -54,12 +54,24 @@ export function normalizePluginPayload(payload: unknown): number[] {
   return [];
 }
 
+let _timestampFormat: "time" | "datetime" = "datetime";
+
+export function setTimestampFormat(format: "time" | "datetime") {
+  _timestampFormat = format;
+}
+
 export function formatTimestamp(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
   const hours = `${date.getHours()}`.padStart(2, "0");
   const minutes = `${date.getMinutes()}`.padStart(2, "0");
   const seconds = `${date.getSeconds()}`.padStart(2, "0");
   const milliseconds = `${date.getMilliseconds()}`.padStart(3, "0");
 
+  if (_timestampFormat === "datetime") {
+    return `[${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}]`;
+  }
   return `[${hours}:${minutes}:${seconds}.${milliseconds}]`;
 }
 
