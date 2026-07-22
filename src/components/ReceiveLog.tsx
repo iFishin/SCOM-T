@@ -198,13 +198,16 @@ export function ReceiveLog({
   }, [logText]);
 
   const handleNavigate = useCallback((idx: number) => {
-    setSearchIndex(Math.max(0, Math.min(idx, searchMatches.length - 1)));
-    // Scroll to the nth <mark> element in the container
-    const marks = containerRef.current?.querySelectorAll("mark.hl-search-match");
-    if (marks && marks[idx]) {
-      marks[idx].scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [searchMatches.length]);
+    const clamped = Math.max(0, Math.min(idx, searchMatches.length - 1));
+    setSearchIndex(clamped);
+    if (!containerRef.current || !searchMatches.length) return;
+    const match = searchMatches[clamped];
+    // Calculate the line in logText and scroll to approximate position
+    const lineOfs = logText.substring(0, match.start).split("\n").length - 1;
+    // Each entry in text mode is ~22px; in card mode, estimate ~30px per entry
+    const LINE_H = displayMode === "text" ? 22 : 30;
+    containerRef.current.scrollTop = Math.max(0, lineOfs * LINE_H - 60);
+  }, [searchMatches, logText, displayMode]);
 
   // ── Copy log ──
   const handleCopyLog = useCallback(async () => {
