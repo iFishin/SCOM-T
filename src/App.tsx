@@ -12,6 +12,8 @@ import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { ConfigPage } from "./components/ConfigPage.tsx";
+import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
+import { CodecDialog } from "./components/tools/CodecDialog.tsx";
 import { FileSend } from "./components/FileSend.tsx";
 import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { PromptPanel } from "./components/PromptPanel.tsx";
@@ -97,6 +99,9 @@ function App() {
   const [waveformOpen, setWaveformOpen] = useState(false);
   const [vizMenu, setVizMenu] = useState<{ x: number; y: number } | null>(null);
   const [toolMenu, setToolMenu] = useState<{ x: number; y: number } | null>(null);
+  const [stringGenOpen, setStringGenOpen] = useState(false);
+  const [stringCheckOpen, setStringCheckOpen] = useState(false);
+  const [codecOpen, setCodecOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [filePath, setFilePath] = useState("");
   const [config, setConfig] = useState<SerialConfig>({
@@ -756,6 +761,9 @@ function App() {
               y={vizMenu.y}
               onClose={() => setVizMenu(null)}
               items={[
+                { id: "signal", label: `${lang === "zh" ? "信号状态" : "Signal Status"}`, onClick: () => setSignalOpen(true) },
+                { id: "traffic", label: `${lang === "zh" ? "流量监控" : "Traffic Monitor"}`, onClick: () => setTrafficOpen(true) },
+                { id: "health", label: `${lang === "zh" ? "连接健康" : "Connection Health"}`, onClick: () => setHealthOpen(true) },
                 { id: "waveform", label: `${lang === "zh" ? "信号波形" : "Signal Waveform"}`, onClick: () => setWaveformOpen(true) },
               ]}
             />
@@ -778,10 +786,9 @@ function App() {
               y={toolMenu.y}
               onClose={() => setToolMenu(null)}
               items={[
-                { id: "signal", label: `${lang === "zh" ? "信号状态" : "Signal Status"}`, onClick: () => setSignalOpen(true) },
-                { id: "traffic", label: `${lang === "zh" ? "流量监控" : "Traffic Monitor"}`, onClick: () => setTrafficOpen(true) },
-                { id: "health", label: `${lang === "zh" ? "连接健康" : "Connection Health"}`, onClick: () => setHealthOpen(true) },
-                { id: "waveform", label: `${lang === "zh" ? "信号波形" : "Signal Waveform"}`, onClick: () => setWaveformOpen(true) },
+                { id: "string-gen", label: `${lang === "zh" ? "字符串生成" : "String Generator"}`, onClick: () => setStringGenOpen(true) },
+                { id: "string-check", label: `${lang === "zh" ? "字符串检查" : "String Checker"}`, onClick: () => setStringCheckOpen(true) },
+                { id: "codec", label: `${lang === "zh" ? "编码转换" : "Codec"}`, onClick: () => setCodecOpen(true) },
               ]}
             />
           )}
@@ -904,6 +911,15 @@ function App() {
           getSignalHistory={getSignalHistory}
           onClose={() => setWaveformOpen(false)}
         />
+      )}
+      {stringGenOpen && (
+        <StringGeneratorDialog lang={lang} onClose={() => setStringGenOpen(false)} />
+      )}
+      {stringCheckOpen && (
+        <StringCheckerDialog lang={lang} onClose={() => setStringCheckOpen(false)} />
+      )}
+      {codecOpen && (
+        <CodecDialog lang={lang} onClose={() => setCodecOpen(false)} />
       )}
 
       {/* ── Log viewer modal ── */}
