@@ -155,11 +155,11 @@ export function SettingsModal({
               <HotkeysEditor hotkeys={hotkeys} onHotkeysChange={onHotkeysChange} lang={lang} />
             )}
 
-            {activeTab === 2 && (
+            {activeTab === 3 && (
               <ThemeEditor theme={theme} lang={lang} onThemeChange={onThemeChange} onThemeReset={onThemeReset} />
             )}
 
-            {activeTab === 3 && (
+            {activeTab === 4 && (
               <div className="space-y-4">
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
                   <div className="mb-3 text-sm font-semibold">{t("layout_mode", lang)}</div>

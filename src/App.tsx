@@ -25,7 +25,7 @@ import { SettingsModal } from "./components/SettingsModal.tsx";
 import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
-import { LogEditor } from "./components/LogEditor.tsx";
+import { LogViewer } from "./components/LogViewer.tsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.tsx";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useHotkeys } from "./hooks/useHotkeys.ts";
@@ -88,6 +88,8 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [logViewerOpen, setLogViewerOpen] = useState(false);
   const [logViewerContent, setLogViewerContent] = useState("");
+  const [logFiles, setLogFiles] = useState<string[]>([]);
+  const [logViewerSelectedFile, setLogViewerSelectedFile] = useState<string | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
@@ -120,7 +122,7 @@ function App() {
   });
 
   const { toasts, pushToast, removeToast } = useToast();
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -150,8 +152,11 @@ function App() {
   useEffect(() => {
     appLogger.init().then(() => {
       appLogger.info("App", "SCOM-T started");
+      // Clean up old log files based on retention setting
+      const days = settings.logRetentionDays ?? 30;
+      appLogger.cleanupOldFiles(days);
     });
-  }, []);
+  }, [settings.logRetentionDays]);
 
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
@@ -160,22 +165,43 @@ function App() {
       setLogViewerOpen(true);
       return;
     }
-    try {
-      const path = await appLogger.getTodayPath();
-      if (!path) {
-        setLogViewerContent("Unable to determine log path.");
-        setLogViewerOpen(true);
-        return;
-      }
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      const content = await readTextFile(path).catch(() => "");
+    // Load the file list
+    const files = await appLogger.listFiles();
+    setLogFiles(files);
+    const target = files[0] ?? null;
+    setLogViewerSelectedFile(target);
+    if (target) {
+      const content = await appLogger.readFile(target);
       setLogViewerContent(content || "No log entries yet.");
-      setLogViewerOpen(true);
-    } catch {
-      setLogViewerContent("Failed to read log file.");
-      setLogViewerOpen(true);
+    } else {
+      setLogViewerContent("No log files available.");
     }
+    setLogViewerOpen(true);
   }, []);
+
+  const handleLoadLogFile = useCallback(async (name: string) => {
+    setLogViewerSelectedFile(name);
+    const content = await appLogger.readFile(name);
+    setLogViewerContent(content || "No log entries yet.");
+  }, []);
+
+  const handleDeleteLogFile = useCallback(async (name: string) => {
+    const ok = window.confirm(lang === "zh" ? `确认删除日志文件 "${name}"？` : `Delete log file "${name}"?`);
+    if (!ok) return;
+    await appLogger.deleteFile(name);
+    pushToast(lang === "zh" ? `已删除 ${name}` : `Deleted ${name}`, "success");
+    // Refresh list and select another file
+    const files = await appLogger.listFiles();
+    setLogFiles(files);
+    const target = files[0] ?? null;
+    setLogViewerSelectedFile(target);
+    if (target) {
+      const content = await appLogger.readFile(target);
+      setLogViewerContent(content);
+    } else {
+      setLogViewerContent("No log files available.");
+    }
+  }, [lang, pushToast]);
 
   const handleNavigateToConfig = useCallback(() => setPage("config"), []);
 
@@ -930,9 +956,13 @@ function App() {
             if (e.target === e.currentTarget) setLogViewerOpen(false);
           }}
         >
-          <LogEditor
-            initialContent={logViewerContent}
+          <LogViewer
             lang={lang}
+            logFiles={logFiles}
+            selectedFile={logViewerSelectedFile}
+            content={logViewerContent}
+            onSelectFile={handleLoadLogFile}
+            onDeleteFile={handleDeleteLogFile}
             onClose={() => setLogViewerOpen(false)}
           />
         </div>
@@ -1176,6 +1206,7 @@ function App() {
         closeToTray={settings.closeToTray}
         allowMultiInstance={settings.allowMultiInstance}
         timestampFormat={settings.timestampFormat}
+        logRetentionDays={settings.logRetentionDays}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         onClose={() => setSettingsOpen(false)}
@@ -1189,6 +1220,7 @@ function App() {
         onLayoutModeChange={updateLayoutMode}
         onGridLayoutChange={updateGridLayout}
         onTimestampFormatChange={updateTimestampFormat}
+        onLogRetentionDaysChange={updateLogRetentionDays}
       />
       {/* ── Notification card modal ── */}
       {cardNotifications.length > 0 && (
