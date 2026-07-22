@@ -21,6 +21,7 @@ type SettingsModalProps = {
   compactMode?: boolean;
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
+  logRetentionDays?: number;
   timestampFormat?: "time" | "datetime";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
@@ -35,6 +36,7 @@ type SettingsModalProps = {
   onLayoutModeChange?: (mode: "classic" | "grid") => void;
   onGridLayoutChange?: (layout: GridItemLayout[]) => void;
   onTimestampFormatChange?: (format: "time" | "datetime") => void;
+  onLogRetentionDaysChange?: (days: number) => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -47,6 +49,7 @@ export function SettingsModal({
   compactMode,
   closeToTray,
   allowMultiInstance,
+  logRetentionDays,
   timestampFormat,
   layoutMode,
   gridLayout,
@@ -61,6 +64,7 @@ export function SettingsModal({
   onLayoutModeChange,
   onGridLayoutChange,
   onTimestampFormatChange,
+  onLogRetentionDaysChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -112,7 +116,7 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} />
+              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} />
             )}
 
             {activeTab === 1 && (

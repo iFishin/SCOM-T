@@ -112,11 +112,14 @@ pub fn run() {
             use tauri::tray::TrayIconBuilder;
 
             let show_i = MenuItemBuilder::with_id("show", "显示 SCOM-T").build(app)?;
+            let reload_i = MenuItemBuilder::with_id("reload", "重新加载").build(app)?;
             let about_i = MenuItemBuilder::with_id("about", "关于").build(app)?;
             let quit_i = MenuItemBuilder::with_id("quit", "退出").build(app)?;
 
             let menu = MenuBuilder::new(app)
                 .item(&show_i)
+                .item(&reload_i)
+                .separator()
                 .item(&about_i)
                 .separator()
                 .item(&quit_i)
@@ -131,6 +134,11 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.set_focus();
+                        }
+                    }
+                    "reload" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.eval("location.reload()");
                         }
                     }
                     "about" => {

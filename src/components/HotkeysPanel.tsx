@@ -7,28 +7,31 @@ type Props = {
   hotkeys: HotkeyConfig[];
   onHotkeySend: (hotkey: HotkeyConfig) => void;
   lang: Lang;
+  borderless?: boolean;
 };
 
-export function HotkeysPanel({ hotkeys, onHotkeySend, lang }: Props) {
+export function HotkeysPanel({ hotkeys, onHotkeySend, lang, borderless }: Props) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-        {t("hotkeys_title", lang)}
-      </div>
+    <div className={`bg-[var(--bg-surface)] ${borderless ? "p-2" : "rounded-lg border border-[var(--border)] p-2"}`}>
+      {/* Hide internal title when borderless — parent already shows it */}
+      {!borderless && (
+        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+          {t("hotkeys_title", lang)}
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-1.5">
         {hotkeys.map((hotkey) => (
           <Button
             key={hotkey.id}
             type="button"
             onClick={() => onHotkeySend(hotkey)}
-            className="group relative overflow-hidden px-2 py-2 text-left text-xs font-medium"
-            title={hotkey.label}
+            className="flex flex-col items-start gap-0.5 overflow-hidden px-2 py-1.5 text-xs"
           >
-            <div className="truncate">{hotkey.label}</div>
+            <span className="truncate font-medium">{hotkey.label}</span>
             {hotkey.shortcut && (
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-black/40 px-1.5 py-0.5 text-[9px] opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="rounded bg-[var(--bg-input)] px-1 py-[1px] text-[9px] text-[var(--text-muted)] leading-tight">
                 {hotkey.shortcut}
-              </div>
+              </span>
             )}
           </Button>
         ))}

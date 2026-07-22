@@ -1,10 +1,8 @@
 import React from "react";
 // Hotkeys/Files refactor applied: layout extracted to separate components
-import { Send, Maximize2, Minimize2, ChevronDown, ChevronUp, File } from "lucide-react";
+import { Send, ChevronDown, ChevronUp, File, Keyboard } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
-import { Input } from "./ui/Input";
-import { Panel } from "./ui/Panel";
 import { Select } from "./ui/Select";
 import { parseHexString, bytesToHex, bytesToAscii } from "../utils/hexConverter.ts";
 import type { ToastType } from "./ui/Toast.tsx";
@@ -132,127 +130,118 @@ export function SendPanel({
 
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      {/* Send command */}
-      <Panel className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-        <div className="p-2">
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+      {/* Send command — collapsible */}
+      <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+        <div
+          className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+          onClick={toggleExpanded}
+        >
+          <span className="flex items-center gap-1">
+            <Send size={11} />
             {t("send", lang)}
-          </div>
-          <div className="flex gap-1.5">
-            <div className="flex-1">
-            {expanded ? (
-              <textarea
-                ref={(el) => { inputRef.current = el; }}
-                value={value}
-                onChange={(e) => onChange(e.currentTarget.value)}
-                onKeyDown={handleTextareaKeyDown}
-                placeholder={sendMode === "hex" ? t("send_hex_placeholder", lang) : t("send_placeholder", lang)}
-                rows={4}
-                className={`w-full resize-y rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
-              />
-            ) : (
-              <Input
-                ref={(el: HTMLInputElement) => { inputRef.current = el; }}
-                value={value}
-                onChange={(e) => onChange(e.currentTarget.value)}
-                onKeyDown={handleTextareaKeyDown}
-                placeholder={sendMode === "hex" ? t("send_hex_placeholder", lang) : t("send_placeholder", lang)}
-                className={`w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
-              />
-            )}
-                <div className="mt-2 flex items-center gap-2">
-              <div className="flex gap-1 items-center">
-                <Button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      const bytes = new TextEncoder().encode(value || "");
-                      onChange(bytesToHex(bytes));
-                    } catch (err: any) {
-                      onPushToast?.(err?.message || String(err), "warn");
-                    }
-                  }}
-                  className="px-2 py-1 text-xs"
-                >
-                  {t("ascii2hex", lang)}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      const bytes = parseHexString(value || "");
-                      onChange(bytesToAscii(bytes));
-                    } catch (err: any) {
-                      onPushToast?.(err?.message || String(err), "warn");
-                    }
-                  }}
-                  className="px-2 py-1 text-xs"
-                >
-                  {t("hex2ascii", lang)}
-                </Button>
-              </div>
-              <div className=" text-[11px] text-[var(--text-muted)]">
-                {(() => {
-                  try {
-                    const count = sendMode === "hex" ? parseHexString(value || "").length : new TextEncoder().encode(value || "").length;
-                    return lang === "zh" ? `${count} 字节` : `${count} bytes`;
-                  } catch {
-                    return lang === "zh" ? `0 字节` : `0 bytes`;
-                  }
-                })()}
-              </div>
-              <div className="ml-auto">
-                <Button
-                  type="button"
-                  onClick={toggleExpanded}
-                  className="px-2 py-1 text-xs"
-                  title={expanded ? (t("collapse", lang)) : (t("expand", lang))}
-                >
-                  {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                </Button>
-              </div>
-            </div>
-          </div>
-          <div className="flex w-36 flex-col gap-2">
-            <div className="flex gap-1">
-              <Checkbox
-                checked={sendMode === "hex"}
-                onChange={(e) => onSendModeChange(e.currentTarget.checked ? "hex" : "ascii")}
-                label="HEX"
-              />
-              <Select
-                value={appendNewline}
-                onChange={(e) => onAppendNewlineChange(e.currentTarget.value as AppendNewline)}
-                title={t("ender_crlf", lang)}
-              >
-                {enderOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </Select>
-            </div>
-            <div className="mt-auto">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleSend}
-                disabled={isBusy}
-                className="w-full flex items-center justify-center gap-1"
-              >
-                <Send size={12} />
-                {t("send", lang)}
-              </Button>
-            </div>
-          </div>
+          </span>
+          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </div>
-        </div>
-      </Panel>
+        {expanded && (
+          <>
+            <div className="border-t border-[var(--border)]" />
+            <div className="bg-[var(--bg-surface)] p-2">
+              <div className="flex gap-1.5">
+                <div className="flex-1">
+                  <textarea
+                    ref={(el) => { inputRef.current = el; }}
+                    value={value}
+                    onChange={(e) => onChange(e.currentTarget.value)}
+                    onKeyDown={handleTextareaKeyDown}
+                    placeholder={sendMode === "hex" ? t("send_hex_placeholder", lang) : t("send_placeholder", lang)}
+                    rows={4}
+                    className={`w-full resize-y rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex gap-1 items-center">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            const bytes = new TextEncoder().encode(value || "");
+                            onChange(bytesToHex(bytes));
+                          } catch (err: any) {
+                            onPushToast?.(err?.message || String(err), "warn");
+                          }
+                        }}
+                        className="px-2 py-1 text-xs"
+                      >
+                        {t("ascii2hex", lang)}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            const bytes = parseHexString(value || "");
+                            onChange(bytesToAscii(bytes));
+                          } catch (err: any) {
+                            onPushToast?.(err?.message || String(err), "warn");
+                          }
+                        }}
+                        className="px-2 py-1 text-xs"
+                      >
+                        {t("hex2ascii", lang)}
+                      </Button>
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)]">
+                      {(() => {
+                        try {
+                          const count = sendMode === "hex" ? parseHexString(value || "").length : new TextEncoder().encode(value || "").length;
+                          return lang === "zh" ? `${count} 字节` : `${count} bytes`;
+                        } catch {
+                          return lang === "zh" ? `0 字节` : `0 bytes`;
+                        }
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex w-36 flex-col gap-2">
+                  <div className="flex gap-1">
+                    <Checkbox
+                      checked={sendMode === "hex"}
+                      onChange={(e) => onSendModeChange(e.currentTarget.checked ? "hex" : "ascii")}
+                      label="HEX"
+                    />
+                    <Select
+                      value={appendNewline}
+                      onChange={(e) => onAppendNewlineChange(e.currentTarget.value as AppendNewline)}
+                      title={t("ender_crlf", lang)}
+                    >
+                      {enderOptions.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="mt-auto">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={handleSend}
+                      disabled={isBusy}
+                      className="w-full flex items-center justify-center gap-1"
+                    >
+                      <Send size={12} />
+                      {t("send", lang)}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {mode === "combined" && (
         <>
           {/* File send — collapsible */}
-          <div>
+          <div className="overflow-hidden rounded-lg border border-[var(--border)]">
             <div
-              className="flex cursor-pointer items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+              className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
               onClick={() => setFileSendCollapsed((v) => !v)}
             >
               <span className="flex items-center gap-1">
@@ -262,30 +251,40 @@ export function SendPanel({
               {fileSendCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
             </div>
             {!fileSendCollapsed && (
-              <FileSend
-                filePath={filePath}
-                fileSendProgress={fileSendProgress}
-                isBusy={isBusy}
-                lang={lang}
-                isConnected={isConnected}
-                onFileSelect={onFileSelect}
-                onFileSend={onFileSend}
-                onPushToast={onPushToast}
-              />
+              <>
+                <div className="border-t border-[var(--border)]" />
+                <FileSend
+                  filePath={filePath}
+                  fileSendProgress={fileSendProgress}
+                  isBusy={isBusy}
+                  lang={lang}
+                  isConnected={isConnected}
+                  onFileSelect={onFileSelect}
+                  onFileSend={onFileSend}
+                  onPushToast={onPushToast}
+                  borderless
+                />
+              </>
             )}
           </div>
 
           {/* Hotkeys — collapsible */}
-          <div>
+          <div className="overflow-hidden rounded-lg border border-[var(--border)]">
             <div
-              className="flex cursor-pointer items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+              className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
               onClick={() => setHotkeysCollapsed((v) => !v)}
             >
-              <span>{t("hotkeys_title", lang)}</span>
+              <span className="flex items-center gap-1">
+                <Keyboard size={11} />
+                {t("hotkeys_title", lang)}
+              </span>
               {hotkeysCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
             </div>
             {!hotkeysCollapsed && (
-              <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} />
+              <>
+                <div className="border-t border-[var(--border)]" />
+                <HotkeysPanel hotkeys={hotkeys} onHotkeySend={onHotkeySend} lang={lang} borderless />
+              </>
             )}
           </div>
         </>

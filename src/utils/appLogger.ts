@@ -117,6 +117,45 @@ class AppLogger {
     }
   }
 
+
+  /** Delete a log file by name */
+  async deleteFile(name: string): Promise<void> {
+    if (!this._logDir) return;
+    const { join } = await import("@tauri-apps/api/path");
+    const { remove } = await import("@tauri-apps/plugin-fs");
+    const path = await join(this._logDir, name);
+    await remove(path);
+  }
+
+  /**
+   * Remove log files older than `days` days.
+   * Call once at startup after init().
+   */
+  async cleanupOldFiles(days: number): Promise<void> {
+    if (!this._logDir || days < 1) return;
+    try {
+      const { readDir, remove } = await import("@tauri-apps/plugin-fs");
+      const { join } = await import("@tauri-apps/api/path");
+      const entries = await readDir(this._logDir);
+      const now = Date.now();
+      const cutoff = days * 24 * 60 * 60 * 1000;
+
+      for (const entry of entries) {
+        if (!entry.name?.startsWith("app-") || !entry.name.endsWith(".log")) continue;
+        // Parse date from filename: app-2026-07-22.log
+        const datePart = entry.name.replace("app-", "").replace(".log", "");
+        const ts = new Date(datePart).getTime();
+        if (isNaN(ts)) continue;
+        if (now - ts > cutoff) {
+          const path = await join(this._logDir, entry.name);
+          await remove(path).catch(() => {});
+        }
+      }
+    } catch {
+      // Silently ignore cleanup failures
+    }
+  }
+
   // ── Internal ──
 
   private _write(level: LogLevel, source: string, message: string): void {

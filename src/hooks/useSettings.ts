@@ -56,6 +56,7 @@ export type AppSettings = {
   receiveMode?: ReceiveMode;
   displayMode?: LogDisplayMode;
   appendNewline?: "" | "\r\n" | "\r" | "\n";
+  logRetentionDays?: number;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -141,6 +142,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   sendMode: "ascii",
   receiveMode: "ascii",
   appendNewline: "\r\n",
+  logRetentionDays: 30,
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -182,6 +184,8 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       ? raw.displayMode : "card",
     appendNewline: raw.appendNewline === "\r\n" || raw.appendNewline === "\n" || raw.appendNewline === "\r" || raw.appendNewline === ""
       ? raw.appendNewline : "\r\n",
+    logRetentionDays: typeof raw.logRetentionDays === "number" && raw.logRetentionDays >= 1
+      ? Math.floor(raw.logRetentionDays) : 30,
   };
 }
 
@@ -352,6 +356,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, appendNewline: v }));
   }
 
+  function updateLogRetentionDays(days: number) {
+    setSettings((current) => ({ ...current, logRetentionDays: Math.max(1, Math.floor(days)) }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -386,5 +394,6 @@ export function useSettings() {
     updateReceiveMode,
     updateDisplayMode,
     updateAppendNewline,
+    updateLogRetentionDays,
   };
 }

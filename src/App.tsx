@@ -24,6 +24,7 @@ import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
 import { LogEditor } from "./components/LogEditor.tsx";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary.tsx";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useHotkeys } from "./hooks/useHotkeys.ts";
 import { setTimestampFormat } from "./utils/hexConverter.ts";
@@ -684,6 +685,7 @@ function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {page === "config" ? (
         <ConfigPage
@@ -1264,6 +1266,7 @@ function App() {
       )}
       </>)}
     </div>
+    </ErrorBoundary>
   );
 }
 

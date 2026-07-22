@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { bytesToAscii, bytesToHex, formatTimestamp, parseHexString } from "../utils/hexConverter.ts";
+import { appLogger } from "../utils/appLogger.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
 import { TauriSerialService, listAvailablePorts } from "../serial/SerialService.ts";
@@ -400,6 +401,7 @@ export function useSerialPort({
       return result.length;
     } catch (refreshError) {
       setError(`扫描串口失败：${toMessage(refreshError)}`);
+      appLogger.error("Serial", `Port scan failed: ${toMessage(refreshError)}`);
       return 0;
     }
   }

@@ -1,21 +1,24 @@
-import { Maximize2, Minimize2, Moon, Sun } from "lucide-react";
+import { Clock, Maximize2, Minimize2, Moon, Sun } from "lucide-react";
 import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from "../../hooks/useSettings.ts";
 import { t } from "../../i18n.ts";
 import type { Lang } from "../../i18n.ts";
 import type { ThemeSettings } from "../../hooks/useSettings.ts";
 
-export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange }: {
+export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, logRetentionDays, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange, onLogRetentionDaysChange }: {
   theme: ThemeSettings;
   lang: Lang;
   compactMode?: boolean;
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
+  logRetentionDays?: number;
   onThemeChange: (t: ThemeSettings) => void;
   onLangChange: (l: Lang) => void;
   onCompactModeChange?: (v: boolean) => void;
   onCloseBehaviorChange?: (v: boolean) => void;
   onAllowMultiInstanceChange?: (v: boolean) => void;
+  onLogRetentionDaysChange?: (days: number) => void;
 }) {
   function handleModeChange(mode: ThemeSettings["mode"]) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
@@ -116,6 +119,35 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
           >
             {lang === "zh" ? "退出程序" : "Exit"}
           </Button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+        <div className="mb-2 text-sm font-semibold flex items-center gap-1.5">
+          <Clock size={14} />
+          {lang === "zh" ? "日志保留时间" : "Log Retention"}
+        </div>
+        <div className="text-xs text-[var(--text-muted)] mb-3">
+          {lang === "zh" ? "自动清理超过指定天数的程序日志文件" : "Auto-delete app log files older than specified days"}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={1}
+            max={365}
+            value={String(logRetentionDays ?? 30)}
+            onChange={(e) => {
+              const v = parseInt(e.currentTarget.value, 10);
+              if (v > 0) onLogRetentionDaysChange?.(v);
+            }}
+            className="w-20 text-center"
+          />
+          <span className="text-xs text-[var(--text-muted)]">
+            {lang === "zh" ? "天" : "days"}
+          </span>
+          <span className="ml-2 text-[10px] text-[var(--text-muted)] opacity-60">
+            {lang === "zh" ? "启动时自动清理" : "Cleanup on startup"}
+          </span>
         </div>
       </div>
 

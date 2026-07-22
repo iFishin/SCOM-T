@@ -13,6 +13,7 @@ type Props = {
   onFileSelect: () => void;
   onFileSend: () => Promise<void>;
   onPushToast: (text: string, type?: ToastType) => void;
+  borderless?: boolean;
 };
 
 export function FileSend({
@@ -24,6 +25,7 @@ export function FileSend({
   onFileSelect,
   onFileSend,
   onPushToast,
+  borderless,
 }: Props) {
   const isSendingFile = fileSendProgress !== null;
 
@@ -34,11 +36,13 @@ export function FileSend({
   }
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2">
-      <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-        <File size={11} />
-        {t("file", lang)}
-      </div>
+    <div className={`bg-[var(--bg-surface)] p-2 ${borderless ? "" : "rounded-lg border border-[var(--border)]"}`}>
+      {!borderless && (
+        <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+          <File size={11} />
+          {t("file", lang)}
+        </div>
+      )}
       <div className="flex gap-1.5">
         <div className="flex flex-1 items-center gap-1 overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5">
           <span className="truncate text-xs text-[var(--text-muted)]">{filePath || t("no_file", lang)}</span>
