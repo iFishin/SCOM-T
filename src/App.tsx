@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -766,6 +766,7 @@ function App() {
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
+            <HelpCircle size={14} />
             <span>{t("help", lang)}</span>
           </Button>
           <Button
@@ -774,6 +775,7 @@ function App() {
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
+            <FileText size={14} />
             <span>{t("app_logs", lang)}</span>
           </Button>
           <span className="w-px h-4 bg-[var(--border)] mx-1" />
@@ -833,7 +835,8 @@ function App() {
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
-            <span className="relative inline-flex items-center justify-center">
+            <span className="relative inline-flex items-center justify-center gap-1.5">
+              <Info size={14} />
               <span>{t("about", lang)}</span>
               {hasUnreadNotifications && (
                 <span className="absolute -right-2 -top-1 inline-block h-2 w-2 rounded-full bg-rose-500 ring-1 ring-[var(--bg-surface)]" />
