@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
+import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
 import { Button } from "./ui/Button.tsx";
 import { Checkbox } from "./ui/Checkbox.tsx";
 import { Input } from "./ui/Input.tsx";
@@ -64,6 +65,7 @@ export function PromptPanel({
   const [yamlText, setYamlText] = useState("");
   const [batchText, setBatchText] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
+  const [regexCleanOpen, setRegexCleanOpen] = useState(false);
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [configAction, setConfigAction] = useState<null | "save" | "load">(null);
   const [configName, setConfigName] = useState("");
@@ -373,16 +375,16 @@ export function PromptPanel({
   );
 
   const tabBar = (
-    <div className="flex items-center gap-1">
-      <button type="button" onClick={() => handlePromptTabChange("grid")} className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
-      <button type="button" onClick={() => onNavigateToConfig?.()} className="rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
-      <button type="button" onClick={() => handlePromptTabChange("batch")} className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
+    <div className="flex items-center rounded-md border border-[var(--border)] overflow-hidden">
+      <button type="button" onClick={() => handlePromptTabChange("grid")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
+      <button type="button" onClick={() => onNavigateToConfig?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
+      <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
       {activePromptTab === "config" && (
         <>
-          <span className="mx-1 text-[var(--border)]">|</span>
-          <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
-          <button type="button" onClick={handleShowLoadList} className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
-          <button type="button" onClick={handleOpenConfigDir} className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
+          <span className="mx-2 text-[var(--border)]">|</span>
+          <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
+          <button type="button" onClick={handleShowLoadList} className="rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
+          <button type="button" onClick={handleOpenConfigDir} className="rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
         </>
       )}
     </div>
@@ -399,19 +401,37 @@ export function PromptPanel({
     </div>
   );
 
-  const tabBarWithCount = (
-    <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-      {tabBar}
-      {activePromptTab === "grid" && (
-        <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
-          {t("prompt_rows", lang)}
-          <Input type="number" min={1} max={500} value={rowCountInput}
-                 onChange={(e) => setRowCountInput(e.currentTarget.value)}
-                 onBlur={(e) => handleRowCountApply(Number(e.currentTarget.value))}
-                 onKeyDown={(e) => { if (e.key === 'Enter') handleRowCountApply(Number(rowCountInput)); }}
-                 className="w-14 text-center" />
-        </label>
-      )}
+    const tabBarWithCount = (
+    <div className="mb-2 flex items-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+      <div className="flex items-center gap-2">
+        {tabBar}
+        <span className="w-px h-5 bg-[var(--border)]" />
+        {activePromptTab === "grid" && (
+          <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
+            {t("prompt_rows", lang)}
+            <Input type="number" min={1} max={500} value={rowCountInput}
+                   onChange={(e) => setRowCountInput(e.currentTarget.value)}
+                   onBlur={(e) => handleRowCountApply(Number(e.currentTarget.value))}
+                   onKeyDown={(e) => { if (e.key === 'Enter') handleRowCountApply(Number(rowCountInput)); }}
+                   className="w-14 text-center" />
+          </label>
+        )}
+        {activePromptTab === "batch" && (
+          <button type="button" onClick={() => setRegexCleanOpen(true)}
+            className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+          >
+            <Search size={13} />
+            {lang === "zh" ? "正则清洗" : "Regex Clean"}
+          </button>
+        )}
+        {activePromptTab === "config" && (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
+            <button type="button" onClick={handleShowLoadList} className="rounded px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
+            <button type="button" onClick={handleOpenConfigDir} className="rounded px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -485,5 +505,17 @@ export function PromptPanel({
     </>
   );
 
-  return variant === "grid" ? gridVariant : panelVariant;
+  return (
+    <>
+      {variant === "grid" ? gridVariant : panelVariant}
+      {regexCleanOpen && (
+        <RegexCleanDialog
+          text={batchText}
+          lang={lang}
+          onApply={(result) => { setBatchText(result); setRegexCleanOpen(false); }}
+          onClose={() => setRegexCleanOpen(false)}
+        />
+      )}
+    </>
+  );
 }
