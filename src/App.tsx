@@ -130,7 +130,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -244,9 +244,9 @@ function App() {
     prevSvrStatus.current = tcpServerStatus;
   }, [tcpServerStatus, config.tcpPort]);
 
-  const [topCollapsed, setTopCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [rightSendCollapsed, setRightSendCollapsed] = useState(true);
+  const topCollapsed = settings.topCollapsed ?? false;
+  const rightCollapsed = settings.rightCollapsed ?? false;
+  const rightSendCollapsed = settings.rightSendCollapsed ?? true;
   const [gridEditing, setGridEditing] = useState(false);
   const gridWidthRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(800);
@@ -675,6 +675,12 @@ function App() {
                 onFileSend={() => sendFile(filePath)}
                 onHotkeySend={handleHotkeySend}
                 onPushToast={pushToast}
+                sendPanelExpanded={settings.sendPanelExpanded}
+                sendPanelFileCollapsed={settings.sendPanelFileCollapsed}
+                sendPanelHotkeysCollapsed={settings.sendPanelHotkeysCollapsed}
+                onSendPanelExpandedChange={updateSendPanelExpanded}
+                onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
+                onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
               />
             </div>
 
@@ -1003,7 +1009,7 @@ function App() {
               {/* Config card — collapsed or expanded */}
               {topCollapsed ? (
                 <div
-                  onClick={() => setTopCollapsed(false)}
+                  onClick={() => updateTopCollapsed(false)}
                   className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 transition-colors hover:bg-[var(--bg-input)]"
                 >
                   <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
@@ -1050,7 +1056,7 @@ function App() {
                   <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       type="button"
-                      onClick={() => setTopCollapsed(true)}
+                      onClick={() => updateTopCollapsed(true)}
                       className="flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)]"
                       style={{ writingMode: "vertical-lr" }}
                     >
@@ -1104,7 +1110,7 @@ function App() {
               {rightCollapsed ? (
                 <button
                   type="button"
-                  onClick={() => setRightCollapsed(false)}
+                  onClick={() => updateRightCollapsed(false)}
                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)] whitespace-nowrap"
                   style={{ writingMode: "vertical-lr" }}
                 >
@@ -1114,7 +1120,7 @@ function App() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => setRightCollapsed(true)}
+                  onClick={() => updateRightCollapsed(true)}
                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shadow-sm ring-1 ring-[var(--border)] hover:text-[var(--text-primary)] whitespace-nowrap"
                   style={{ writingMode: "vertical-lr" }}
                 >
@@ -1152,6 +1158,12 @@ function App() {
                       onFileSend={() => sendFile(filePath)}
                       onHotkeySend={handleHotkeySend}
                       onPushToast={pushToast}
+                      sendPanelExpanded={settings.sendPanelExpanded}
+                      sendPanelFileCollapsed={settings.sendPanelFileCollapsed}
+                      sendPanelHotkeysCollapsed={settings.sendPanelHotkeysCollapsed}
+                      onSendPanelExpandedChange={updateSendPanelExpanded}
+                      onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
+                      onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
                     />
                   )}
                 </div>
@@ -1159,7 +1171,7 @@ function App() {
                 {/* Collapse divider for send card */}
                 {rightSendCollapsed ? (
                   <div
-                    onClick={() => setRightSendCollapsed(false)}
+                    onClick={() => updateRightSendCollapsed(false)}
                     className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 transition-colors hover:bg-[var(--bg-input)]"
                   >
                     <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--text-muted)]">
@@ -1174,7 +1186,7 @@ function App() {
                     <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
-                        onClick={() => setRightSendCollapsed(true)}
+                        onClick={() => updateRightSendCollapsed(true)}
                         className="flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)]"
                         style={{ writingMode: "vertical-lr" }}
                       >

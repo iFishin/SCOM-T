@@ -57,6 +57,12 @@ export type AppSettings = {
   displayMode?: LogDisplayMode;
   appendNewline?: "" | "\r\n" | "\r" | "\n";
   logRetentionDays?: number;
+  topCollapsed?: boolean;
+  rightCollapsed?: boolean;
+  rightSendCollapsed?: boolean;
+  sendPanelExpanded?: boolean;
+  sendPanelFileCollapsed?: boolean;
+  sendPanelHotkeysCollapsed?: boolean;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -143,6 +149,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   receiveMode: "ascii",
   appendNewline: "\r\n",
   logRetentionDays: 30,
+  topCollapsed: false,
+  rightCollapsed: false,
+  rightSendCollapsed: true,
+  sendPanelExpanded: false,
+  sendPanelFileCollapsed: true,
+  sendPanelHotkeysCollapsed: true,
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -186,6 +198,12 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       ? raw.appendNewline : "\r\n",
     logRetentionDays: typeof raw.logRetentionDays === "number" && raw.logRetentionDays >= 1
       ? Math.floor(raw.logRetentionDays) : 30,
+    topCollapsed: raw.topCollapsed === true,
+    rightCollapsed: raw.rightCollapsed === true,
+    rightSendCollapsed: raw.rightSendCollapsed === false ? false : true,
+    sendPanelExpanded: raw.sendPanelExpanded === true,
+    sendPanelFileCollapsed: raw.sendPanelFileCollapsed === false ? false : true,
+    sendPanelHotkeysCollapsed: raw.sendPanelHotkeysCollapsed === false ? false : true,
   };
 }
 
@@ -360,6 +378,30 @@ export function useSettings() {
     setSettings((current) => ({ ...current, logRetentionDays: Math.max(1, Math.floor(days)) }));
   }
 
+  function updateTopCollapsed(v: boolean) {
+    setSettings((current) => ({ ...current, topCollapsed: v }));
+  }
+
+  function updateRightCollapsed(v: boolean) {
+    setSettings((current) => ({ ...current, rightCollapsed: v }));
+  }
+
+  function updateRightSendCollapsed(v: boolean) {
+    setSettings((current) => ({ ...current, rightSendCollapsed: v }));
+  }
+
+  function updateSendPanelExpanded(v: boolean) {
+    setSettings((current) => ({ ...current, sendPanelExpanded: v }));
+  }
+
+  function updateSendPanelFileCollapsed(v: boolean) {
+    setSettings((current) => ({ ...current, sendPanelFileCollapsed: v }));
+  }
+
+  function updateSendPanelHotkeysCollapsed(v: boolean) {
+    setSettings((current) => ({ ...current, sendPanelHotkeysCollapsed: v }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -395,5 +437,11 @@ export function useSettings() {
     updateDisplayMode,
     updateAppendNewline,
     updateLogRetentionDays,
+    updateTopCollapsed,
+    updateRightCollapsed,
+    updateRightSendCollapsed,
+    updateSendPanelExpanded,
+    updateSendPanelFileCollapsed,
+    updateSendPanelHotkeysCollapsed,
   };
 }

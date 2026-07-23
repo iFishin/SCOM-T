@@ -339,10 +339,10 @@ export function PromptPanel({
               <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)}>{t("prompt_sender", lang)}</Button>
               <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent" />
               <div className="flex justify-center"><Checkbox checked={row.isHex} onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })} /></div>
-              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })}>
+              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })} className="text-[11px]">
                 <option value="\r\n">{t("ender_crlf", lang)}</option><option value="">{t("ender_none", lang)}</option><option value="\n">{t("ender_lf", lang)}</option><option value="\r">{t("ender_cr", lang)}</option>
               </Select>
-              <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-xs" />
+              <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px]" />
               <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
                 <button onClick={() => deleteRow(row.id)}
                         className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-xs leading-none transition-colors">

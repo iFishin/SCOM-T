@@ -205,9 +205,9 @@ export function StringGeneratorDialog({ lang, onClose }: { lang: Lang; onClose: 
               <span>{new TextEncoder().encode(result).length} {lang === "zh" ? "字节" : "bytes"}</span>
             </div>
             <div className="flex items-start gap-2">
-              <code className="flex-1 break-all whitespace-pre-wrap rounded-lg bg-[var(--bg-surface)] px-3 py-2 text-sm font-mono text-[var(--text-primary)] leading-relaxed border border-[var(--border)] select-all">
+              <div className="flex-1 max-h-32 overflow-y-auto rounded-lg bg-[var(--bg-surface)] px-3 py-2 border border-[var(--border)]"><code className="break-all whitespace-pre-wrap text-sm font-mono text-[var(--text-primary)] leading-relaxed select-all">
                 {result}
-              </code>
+              </code></div>
               <button
                 type="button"
                 onClick={handleCopy}

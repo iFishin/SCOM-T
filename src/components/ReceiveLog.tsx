@@ -304,7 +304,7 @@ export function ReceiveLog({
         <Select
           value={displayMode}
           onChange={(e) => onDisplayModeChange?.(e.currentTarget.value as LogDisplayMode)}
-          className="ml-auto w-auto"
+          className="ml-auto w-auto text-xs"
         >
           <option value="card">{t("display_card", lang)}</option>
           <option value="text">{t("display_text", lang)}</option>

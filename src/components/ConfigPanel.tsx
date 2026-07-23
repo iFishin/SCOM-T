@@ -50,7 +50,7 @@ const PROTOCOL_OPTIONS: { label: string; value: TcpProtocol }[] = [
 ];
 
 const sel =
-  "w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)] disabled:opacity-40";
+  "w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)] disabled:opacity-40";
 
 export function ConfigPanel({
   ports,
@@ -89,7 +89,7 @@ export function ConfigPanel({
 
   return (
     <aside className="shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="space-y-3 p-3">
+      <div className="space-y-2 p-2">
         {/* ── Connection type selector ── */}
         <div className="flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-0.5">
           {CONNECTION_TYPES.map((ct) => (
@@ -98,7 +98,7 @@ export function ConfigPanel({
               type="button"
               onClick={() => setConnectionType(ct)}
               disabled={isConnected || isBusy}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all ${
+              className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-all ${
                 config.connectionType === ct
                   ? "bg-[var(--accent)] text-white shadow-sm"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -120,41 +120,43 @@ export function ConfigPanel({
 
         {/* ── Serial mode ── */}
         {isSerialMode && (
-          <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
-            <div></div>
-
-            <select
-              className={`${sel} max-w-44 truncate`}
-              title={config.path}
-              value={config.path}
-              onMouseDown={() => { const now = Date.now(); if (now - lastRefreshRef.current > 2000) { lastRefreshRef.current = now; void onRefresh(); } }}
-              onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
-              disabled={isConnected || isBusy}
-            >
-              <option value="">{t("select_port", lang)}</option>
-              {ports.map((p) => (
-                <option key={p.path} value={p.path}>{p.label}</option>
-              ))}
-            </select>
-            <select
-              className={sel}
-              value={config.baudRate}
-              onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
-              disabled={isConnected || isBusy}
-            >
-              {baudRates.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-end gap-2 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
+              <select
+                className={`${sel} mt-0.5 truncate`}
+                title={config.path}
+                value={config.path}
+                onMouseDown={() => { const now = Date.now(); if (now - lastRefreshRef.current > 2000) { lastRefreshRef.current = now; void onRefresh(); } }}
+                onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
+                disabled={isConnected || isBusy}
+              >
+                <option value="">{t("select_port", lang)}</option>
+                {ports.map((p) => (
+                  <option key={p.path} value={p.path}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-28 shrink-0">
+              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
+              <select
+                className={sel}
+                value={config.baudRate}
+                onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
+                disabled={isConnected || isBusy}
+              >
+                {baudRates.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1 pb-0.5 shrink-0">
               {!isConnected ? (
                 <Button
                   type="button"
                   onClick={() => void onOpen()}
                   disabled={isBusy || !config.path}
-                  className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
+                  className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-2 py-0.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
                 >
                   <PlugZap size={13} />
                   {t("open_port", lang)}
@@ -164,22 +166,22 @@ export function ConfigPanel({
                   type="button"
                   onClick={() => void onClose()}
                   disabled={isBusy}
-                  className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
+                  className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
                 >
                   <Plug size={13} />
                   {t("close_port", lang)}
                 </Button>
               )}
               <span
-                className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
                   isConnected
-                    ? "bg-emerald-50 text-emerald-600"
-                    : "bg-[var(--bg-input)] text-[var(--text-muted)]"
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                    : "bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]"
                 }`}
               >
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    isConnected ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    isConnected ? "bg-[var(--accent)] shadow-[0_0_8px_#10b981]" : "bg-[var(--text-muted)]"
                   }`}
                 />
                 {isConnected ? t("opened", lang) : t("closed", lang)}
@@ -231,7 +233,7 @@ export function ConfigPanel({
                   type="button"
                   onClick={() => void onOpen()}
                   disabled={isBusy || isTcpConnecting || !config.tcpHost || !config.tcpPort}
-                  className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
+                  className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-2 py-0.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
                 >
                   <Globe size={13} />
                   {isTcpConnecting ? t("tcp_connecting", lang) : t("tcp_connect", lang)}
@@ -241,22 +243,22 @@ export function ConfigPanel({
                   type="button"
                   onClick={() => void onClose()}
                   disabled={isBusy}
-                  className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
+                  className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
                 >
                   <Plug size={13} />
                   {t("tcp_disconnect", lang)}
                 </Button>
               )}
               <span
-                className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
                   isConnected
-                    ? "bg-emerald-50 text-emerald-600"
-                    : "bg-[var(--bg-input)] text-[var(--text-muted)]"
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                    : "bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]"
                 }`}
               >
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    isConnected ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    isConnected ? "bg-[var(--accent)] shadow-[0_0_8px_#10b981]" : "bg-[var(--text-muted)]"
                   }`}
                 />
                 {isConnected ? t("tcp_connected_status", lang) : t("tcp_disconnected_status", lang)}
@@ -268,7 +270,7 @@ export function ConfigPanel({
         {/* ── TCP Server mode ── */}
         {isTcpServer && (
           <>
-            <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-1">
+            <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-2 gap-y-0.5">
               <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
               <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
               <div></div>
@@ -302,7 +304,7 @@ export function ConfigPanel({
                     type="button"
                     onClick={() => void onOpen()}
                     disabled={isBusy || isServerStarting || !config.path}
-                    className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
+                    className="flex items-center justify-center gap-1 rounded bg-[var(--accent)] px-2 py-0.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
                   >
                     <Server size={13} />
                     {isServerStarting ? t("tcp_server_starting", lang) : t("tcp_server_start", lang)}
@@ -312,22 +314,22 @@ export function ConfigPanel({
                     type="button"
                     onClick={() => void onClose()}
                     disabled={isBusy}
-                    className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
+                    className="flex items-center justify-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-input)] disabled:opacity-40"
                   >
                     <Server size={13} />
                     {t("tcp_server_stop", lang)}
                   </Button>
                 )}
                 <span
-                  className={`flex items-center gap-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
                     isServerRunning
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-[var(--bg-input)] text-[var(--text-muted)]"
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                      : "bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]"
                   }`}
                 >
                   <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isServerRunning ? "bg-[var(--accent)] shadow-[0_0_6px_#10b981]" : "bg-[var(--text-muted)]"
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isServerRunning ? "bg-[var(--accent)] shadow-[0_0_8px_#10b981]" : "bg-[var(--text-muted)]"
                     }`}
                   />
                   {isServerRunning ? t("tcp_server_running", lang) : t("tcp_server_stopped_status", lang)}
@@ -335,11 +337,11 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-28">
+            <div className="flex items-center gap-2">
+              <div className="w-24">
                 <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_server_listen_port", lang)}</label>
                 <input
-                  className={`${sel} mt-1`}
+                  className={`${sel} mt-0.5`}
                   type="number"
                   min={1}
                   max={65535}
@@ -348,11 +350,11 @@ export function ConfigPanel({
                   disabled={isServerRunning || isBusy}
                 />
               </div>
-              <div className="pt-5 text-[10px] text-[var(--text-muted)] leading-tight">
+              <div className="pt-4 text-[10px] text-[var(--text-muted)] leading-tight">
                 {t("tcp_server_hint", lang)}
               </div>
 
-              <div className="ml-auto pt-5">
+              <div className="ml-auto pt-4">
                 <label className="text-[11px] font-medium text-[var(--text-muted)]">
                   {t("tcp_server_clients", lang)} ({tcpServerClients.length})
                 </label>
@@ -381,7 +383,7 @@ export function ConfigPanel({
       <Button
         type="button"
         onClick={() => setAdvOpen((v) => !v)}
-        className="flex w-full items-center gap-1 border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+        className="flex w-full items-center gap-1 border-t border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
       >
         {advOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className="font-semibold uppercase tracking-widest">
@@ -397,10 +399,10 @@ export function ConfigPanel({
       </Button>
 
       {advOpen && (
-        <div className="space-y-3 p-3 pt-0">
-          <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-2 p-2 pt-0">
+          <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("data_bits", lang)}</div>
+              <div className="mb-0.5 text-[10px] text-[var(--text-muted)]">{t("data_bits", lang)}</div>
               <select
                 className={sel}
                 value={config.dataBits}
@@ -446,7 +448,7 @@ export function ConfigPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             <div>
               <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("flow_control", lang)}</div>
               <select
