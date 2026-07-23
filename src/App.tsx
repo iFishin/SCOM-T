@@ -121,7 +121,15 @@ function App() {
     tcpProtocol: "rfc2217",
   });
 
-  const { toasts, pushToast, removeToast } = useToast();
+  const { toasts, pushToast: rawPushToast, removeToast } = useToast();
+
+  // ── Wrap pushToast to log errors to appLogger ──
+  const pushToast = useCallback((msg: string, type?: import("./components/ui/Toast.tsx").ToastType) => {
+    if (type === "error") {
+      appLogger.error("UI", msg);
+    }
+    rawPushToast(msg, type);
+  }, [rawPushToast]);
   const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
