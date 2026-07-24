@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
@@ -730,7 +730,6 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {page === "config" ? (
         <ConfigPage
@@ -738,7 +737,7 @@ function App() {
           pushToast={pushToast}
           onBack={() => setPage("main")}
         />
-      ) : (<>
+      ) : (<React.Fragment>
       <header
         className="flex h-11 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] pl-2 pr-0 select-none"
         style={{ WebkitAppRegion: "drag", appRegion: "drag" } as React.CSSProperties}
@@ -760,7 +759,7 @@ function App() {
             type="button"
             id="tour-settings-btn"
             onClick={() => setSettingsOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <Settings size={14} />
@@ -769,7 +768,7 @@ function App() {
           <Button
             type="button"
             onClick={() => setTourOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <HelpCircle size={14} />
@@ -778,7 +777,7 @@ function App() {
           <Button
             type="button"
             onClick={handleOpenLogViewer}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <FileText size={14} />
@@ -791,7 +790,7 @@ function App() {
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
               setVizMenu({ x: rect.left, y: rect.bottom + 4 });
             }}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <Eye size={14} />
@@ -816,7 +815,7 @@ function App() {
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
               setToolMenu({ x: rect.left, y: rect.bottom + 4 });
             }}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <Wrench size={14} />
@@ -838,7 +837,7 @@ function App() {
           <Button
             type="button"
             onClick={() => { setAboutOpen(true); setHasUnreadNotifications(false); }}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <span className="relative inline-flex items-center justify-center gap-1.5">
@@ -896,6 +895,8 @@ function App() {
           </button>
         </div>
       </header>
+
+      <ErrorBoundary>
 
       {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -1024,7 +1025,7 @@ function App() {
                   </div>
                 </div>
               ) : (
-                <div id="tour-config" className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
+                <div id="tour-config" className="shrink-0 rounded-lg bg-[var(--bg-surface)]">
                   <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
                     {lang === "zh" ? "配置" : "Config"}
                   </div>
@@ -1335,9 +1336,9 @@ function App() {
           onClose={() => setCtxMenu(null)}
         />
       )}
-      </>)}
+      </ErrorBoundary>
+      </React.Fragment>)}
     </div>
-    </ErrorBoundary>
   );
 }
 

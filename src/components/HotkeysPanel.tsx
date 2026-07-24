@@ -19,13 +19,13 @@ export function HotkeysPanel({ hotkeys, onHotkeySend, lang, borderless }: Props)
           {t("hotkeys_title", lang)}
         </div>
       )}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-4 gap-1">
         {hotkeys.map((hotkey) => (
           <Button
             key={hotkey.id}
             type="button"
             onClick={() => onHotkeySend(hotkey)}
-            className="flex flex-col items-start gap-0.5 overflow-hidden px-2 py-1.5 text-xs"
+            className="flex flex-col items-start gap-0.5 overflow-hidden px-2 py-1 text-[11px]"
           >
             <span className="truncate font-medium">{hotkey.label}</span>
             {hotkey.shortcut && (

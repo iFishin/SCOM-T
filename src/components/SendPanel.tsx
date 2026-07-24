@@ -1,6 +1,6 @@
 import React from "react";
 // Hotkeys/Files refactor applied: layout extracted to separate components
-import { Send, ChevronDown, ChevronUp, File, Keyboard } from "lucide-react";
+import { Send, ChevronDown, ChevronUp, File, Keyboard, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Select } from "./ui/Select";
@@ -75,6 +75,7 @@ export function SendPanel({
   onSendPanelHotkeysCollapsedChange,
 }: SendPanelProps) {
   const expanded = sendPanelExpanded ?? false;
+  const [textareaMinimized, setTextareaMinimized] = React.useState(true);
   const fileSendCollapsed = sendPanelFileCollapsed ?? true;
   const hotkeysCollapsed = sendPanelHotkeysCollapsed ?? true;
   const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -166,11 +167,19 @@ export function SendPanel({
                     onChange={(e) => onChange(e.currentTarget.value)}
                     onKeyDown={handleTextareaKeyDown}
                     placeholder={sendMode === "hex" ? t("send_hex_placeholder", lang) : t("send_placeholder", lang)}
-                    rows={3}
-                    className={`w-full resize-y rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
+                    rows={textareaMinimized ? 1 : 3}
+                    className={`w-full resize-none rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]`}
                   />
                   <div className="mt-1 flex items-center gap-1">
                     <div className="flex gap-1 items-center">
+                      <button
+                        type="button"
+                        onClick={() => setTextareaMinimized((v) => !v)}
+                        className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                        title={textareaMinimized ? (lang === "zh" ? "展开输入框" : "Expand") : (lang === "zh" ? "收起输入框" : "Collapse")}
+                      >
+                        {textareaMinimized ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+                      </button>
                       <Button
                         type="button"
                         onClick={() => {

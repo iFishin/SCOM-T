@@ -270,35 +270,47 @@ export function ConfigPanel({
         {/* ── TCP Server mode ── */}
         {isTcpServer && (
           <>
-            <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-2 gap-y-0.5">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
-              <div></div>
-
-              <select
-                className={`${sel} max-w-44 truncate`}
-                title={config.path}
-                value={config.path}
-                onMouseDown={() => { const now = Date.now(); if (now - lastRefreshRef.current > 2000) { lastRefreshRef.current = now; void onRefresh(); } }}
-                onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
-                disabled={isConnected || isBusy}
-              >
-                <option value="">{t("select_port", lang)}</option>
-                {ports.map((p) => (
-                  <option key={p.path} value={p.path}>{p.label}</option>
-                ))}
-              </select>
-              <select
-                className={sel}
-                value={config.baudRate}
-                onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
-                disabled={isConnected || isBusy}
-              >
-                {baudRates.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-end gap-2">
+              <div className="flex-1 min-w-0">
+                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
+                <select
+                  className={`${sel} w-full mt-0.5`}
+                  title={config.path}
+                  value={config.path}
+                  onMouseDown={() => { const now = Date.now(); if (now - lastRefreshRef.current > 2000) { lastRefreshRef.current = now; void onRefresh(); } }}
+                  onChange={(e) => onConfigChange({ ...config, path: e.currentTarget.value })}
+                  disabled={isConnected || isBusy}
+                >
+                  <option value="">{t("select_port", lang)}</option>
+                  {ports.map((p) => (
+                    <option key={p.path} value={p.path}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-20">
+                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
+                <select
+                  className={`${sel} w-full mt-0.5`}
+                  value={config.baudRate}
+                  onChange={(e) => onConfigChange({ ...config, baudRate: Number(e.currentTarget.value) })}
+                  disabled={isConnected || isBusy}
+                >
+                  {baudRates.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-20">
+                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_server_listen_port", lang)}</label>
+                <input
+                  className={`${sel} w-full mt-0.5`}
+                  type="number" min={1} max={65535}
+                  value={config.tcpPort}
+                  onChange={(e) => onConfigChange({ ...config, tcpPort: Number(e.currentTarget.value) })}
+                  disabled={isServerRunning || isBusy}
+                />
+              </div>
+              <div className="flex items-center gap-1.5 pb-[2px]">
                 {!isServerRunning ? (
                   <Button
                     type="button"
@@ -337,42 +349,26 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="w-24">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_server_listen_port", lang)}</label>
-                <input
-                  className={`${sel} mt-0.5`}
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={config.tcpPort}
-                  onChange={(e) => onConfigChange({ ...config, tcpPort: Number(e.currentTarget.value) })}
-                  disabled={isServerRunning || isBusy}
-                />
-              </div>
-              <div className="pt-4 text-[10px] text-[var(--text-muted)] leading-tight">
-                {t("tcp_server_hint", lang)}
-              </div>
+            <p className="text-[10px] text-[var(--text-muted)] leading-tight mt-1">
+              {t("tcp_server_hint", lang)}
+            </p>
 
-              <div className="ml-auto pt-4">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">
-                  {t("tcp_server_clients", lang)} ({tcpServerClients.length})
-                </label>
-              </div>
-            </div>
-
-            {/* Connected clients list */}
             {tcpServerClients.length > 0 && (
-              <div className="max-h-20 overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg-input)] p-1">
-                {tcpServerClients.map((client) => (
-                  <div
-                    key={client.id}
-                    className="flex items-center gap-2 rounded px-2 py-0.5 text-[10px] text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
-                  >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                    <span className="truncate">{client.address}</span>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-medium text-[var(--text-muted)]">
+                  {t("tcp_server_clients", lang)} ({tcpServerClients.length})
+                </span>
+                <div className="flex-1 max-h-16 overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg-input)] p-1">
+                  {tcpServerClients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="flex items-center gap-2 rounded px-2 py-0.5 text-[10px] text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                      <span className="truncate">{client.address}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>
