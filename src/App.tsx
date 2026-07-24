@@ -609,8 +609,14 @@ function App() {
         case "clear_sent":
           clearLogs("sent");
           return;
+        case "clear_received":
+          clearLogs("received");
+          return;
         case "refresh_ports":
           void refreshPorts().then((count) => pushToast(t("status_find_ports", lang, count), "success"));
+          return;
+        case "close_port":
+          if (isConnected) closePort();
           return;
         default:
           pushToast(`${hotkey.label}: ${t("hotkey_no_action", lang)}`, "warn");

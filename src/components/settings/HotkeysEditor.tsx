@@ -16,7 +16,10 @@ const ENDER_OPTIONS: { label: string; value: AppendNewline }[] = [
 const BUILTIN_ACTIONS = [
   { label: "清除日志", value: "clear_log" },
   { label: "清除已发送", value: "clear_sent" },
+  { label: "清除已接收", value: "clear_received" },
   { label: "刷新设备列表", value: "refresh_ports" },
+  { label: "关闭端口", value: "close_port" },
+  { label: "切换HEX模式", value: "toggle_hex" },
 ];
 
 function newHotkey(): HotkeyConfig {
@@ -55,8 +58,8 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[var(--border)]">
-        <div className="grid grid-cols-[42px_110px_minmax(160px,1fr)_72px_72px_72px_120px_56px] gap-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-2 text-center text-[11px] font-semibold text-[var(--text-muted)]">
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+        <div className="grid grid-cols-[32px_90px_minmax(140px,1fr)_68px_60px_60px_100px_52px] gap-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-2 text-center text-[11px] font-semibold text-[var(--text-muted)]">
           <div>#</div>
           <div>标签</div>
           <div>串口指令 / 内置</div>
@@ -67,19 +70,19 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
           <div>操作</div>
         </div>
         {hotkeys.map((hotkey, index) => (
-            <div key={hotkey.id} className="grid grid-cols-[42px_110px_minmax(160px,1fr)_72px_72px_72px_120px_56px] items-center gap-1 border-b border-[var(--border)] px-2 py-1.5 last:border-b-0">
+            <div key={hotkey.id} className="grid grid-cols-[32px_90px_minmax(140px,1fr)_68px_60px_60px_100px_52px] items-center gap-1 border-b border-[var(--border)] px-2 py-1.5 last:border-b-0">
             <div className="text-center text-xs text-[var(--text-muted)]">{index + 1}</div>
             <input
               value={hotkey.label}
               onChange={(event) => updateHotkey(hotkey.id, { label: event.currentTarget.value })}
-              className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs outline-none focus:border-[var(--accent)]"
+              className="w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs outline-none focus:border-[var(--accent)]"
             />
-              <div>
+              <div className="w-full">
                 {hotkey.actionType === "builtin" ? (
                   <select
                     value={hotkey.builtinAction || ""}
                     onChange={(event) => updateHotkey(hotkey.id, { builtinAction: event.currentTarget.value })}
-                    className="min-w-[160px] rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs outline-none focus:border-[var(--accent)]"
+                    className="w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-xs outline-none focus:border-[var(--accent)]"
                   >
                     <option value="">选择内置</option>
                     {BUILTIN_ACTIONS.map((b) => (
@@ -91,7 +94,7 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
                     value={hotkey.command}
                     onChange={(event) => updateHotkey(hotkey.id, { command: event.currentTarget.value })}
                     placeholder="例如 AT 或 A0 B1"
-                    className="min-w-[160px] rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 font-mono text-xs outline-none focus:border-[var(--accent)]"
+                    className="w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 font-mono text-xs outline-none focus:border-[var(--accent)]"
                   />
                 )}
               </div>
@@ -150,10 +153,10 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
                   onHotkeysChange(hotkeys.filter((item) => item.id !== hotkey.id));
                 }
               }}
-              className="mx-auto flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] hover:bg-rose-500 hover:text-white"
+              className="mx-auto flex h-8 w-8 items-center justify-center rounded text-[var(--text-muted)] hover:bg-rose-500 hover:text-white"
               title="删除"
             >
-              <Trash2 size={13} />
+              <Trash2 size={16} />
             </Button>
           </div>
         ))}
