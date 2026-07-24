@@ -15,15 +15,17 @@ type Preset = {
   name: string;
   pattern: string;
   replacement: string;
+  mode?: "replace" | "keep" | "drop";
+  pinned?: boolean;
 };
 
 const PRESETS_PATH = "SCOM-T/regex-presets.json";
 
 const DEFAULT_PRESETS: Preset[] = [
-  { name: "清除时间戳", pattern: "\\[\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\]", replacement: "" },
-  { name: "清除日志级别", pattern: "\\[ERROR\\]|\\[WARN\\]|\\[INFO\\]|\\[DEBUG\\]", replacement: "" },
-  { name: "保留AT指令", pattern: ".*(?=AT\\+).*", replacement: "$&" },
-  { name: "删除空行", pattern: "^\\s*\\n", replacement: "" },
+  { name: "消除时间戳", pattern: "\\[20(.*?)\\]", replacement: "", pinned: true },
+  { name: "只保留AT指令", pattern: "AT\\+", replacement: "", mode: "keep", pinned: true },
+  { name: "删除空行", pattern: "(?m)^\\s*\\n", replacement: "", pinned: true },
+  { name: "删除前后空白", pattern: "^\\s+|\\s+$", replacement: "", pinned: true },
 ];
 
 export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
@@ -34,6 +36,7 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [saving, setSaving] = useState(false);
   const [presetName, setPresetName] = useState("");
+  const [mode, setMode] = useState<"replace" | "keep" | "drop">("replace");
   const loaded = useRef(false);
 
   // Load presets on mount
@@ -64,7 +67,7 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
     } catch { /* ignore */ }
   }, []);
 
-  const applyRegex = useCallback((pat: string, repl: string) => {
+  const applyRegex = useCallback((pat: string, repl: string, m?: "replace" | "keep" | "drop") => {
     setError(null);
     try {
       let flags = "g";
@@ -78,7 +81,19 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
         cleanPattern = cleanPattern.slice(inlineFlags[0].length);
       }
       const re = new RegExp(cleanPattern, flags);
-      const result = text.replace(re, repl);
+      const modeFn = m ?? mode;
+      let result: string;
+      if (modeFn === "replace") {
+        result = text.replace(re, repl);
+      } else if (modeFn === "keep") {
+        // Keep only lines that match the pattern
+        const lines = text.split("\n");
+        result = lines.filter((l) => re.test(l)).join("\n");
+      } else {
+        // Drop lines that match the pattern
+        const lines = text.split("\n");
+        result = lines.filter((l) => !re.test(l)).join("\n");
+      }
       setPreview(result);
       return result;
     } catch (e) {
@@ -86,11 +101,11 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
       setPreview(null);
       return null;
     }
-  }, [text]);
+  }, [text, mode]);
 
   const handlePreview = useCallback(() => {
-    applyRegex(pattern, replacement);
-  }, [applyRegex, pattern, replacement]);
+    applyRegex(pattern, replacement, mode);
+  }, [applyRegex, pattern, replacement, mode]);
 
   const handleApply = useCallback(() => {
     if (preview !== null) onApply(preview);
@@ -99,9 +114,11 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
   const handlePresetClick = useCallback((preset: Preset) => {
     setPattern(preset.pattern);
     setReplacement(preset.replacement);
-    const result = applyRegex(preset.pattern, preset.replacement);
-    if (result !== null) onApply(result);
-  }, [applyRegex, onApply]);
+    const m = preset.mode ?? "replace";
+    setMode(m);
+    // Apply to preview only (don't auto-apply to text)
+    applyRegex(preset.pattern, preset.replacement, m);
+  }, [applyRegex]);
 
   const handleDeletePreset = useCallback(async (e: React.MouseEvent, idx: number) => {
     e.stopPropagation();
@@ -112,11 +129,16 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
   const handleSavePreset = useCallback(async () => {
     const name = presetName.trim();
     if (!name || !pattern) return;
-    const list = [...presets, { name, pattern, replacement }];
+    const entry: Preset = { name, pattern, replacement, mode, pinned: true };
+    // Update if name already exists, otherwise append
+    const idx = presets.findIndex((p) => p.name === name);
+    const list = idx >= 0
+      ? presets.map((p, i) => i === idx ? entry : p)
+      : [...presets, entry];
     await savePresets(list);
     setPresetName("");
     setSaving(false);
-  }, [presetName, pattern, replacement, presets, savePresets]);
+  }, [presetName, pattern, replacement, mode, presets, savePresets]);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
@@ -166,14 +188,23 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
             )}
             <div className="flex flex-wrap gap-1.5">
               {presets.map((p, i) => (
-                <div key={i} className="group relative">
+                <div key={i} className="group relative flex items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-input)] pl-1.5 pr-1 py-1 text-[11px] transition-colors hover:border-[var(--accent)]">
+                  <button type="button" onClick={() => {
+                    const list = presets.map((pp, ii) => ii === i ? { ...pp, pinned: !pp.pinned } : pp);
+                    savePresets(list);
+                  }}
+                    className={`text-[9px] font-mono transition-colors w-3.5 text-center ${p.pinned ? "text-[var(--accent)]" : "text-[var(--text-muted)] opacity-30 hover:opacity-100"}`}
+                    title={p.pinned ? (lang === "zh" ? "取消固定" : "Unpin") : (lang === "zh" ? "固定到侧边栏" : "Pin to sidebar")}
+                  >
+                    {p.pinned ? "P" : "-"}
+                  </button>
                   <button type="button" onClick={() => handlePresetClick(p)}
-                    className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2.5 py-1 text-[11px] text-[var(--text-primary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
+                    className="text-[var(--text-primary)] transition-colors hover:text-[var(--accent)]"
                   >
                     {p.name}
                   </button>
                   <button type="button" onClick={(e) => handleDeletePreset(e, i)}
-                    className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-500"
+                    className="flex h-3.5 w-3.5 items-center justify-center text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-500"
                   >
                     <Trash2 size={8} />
                   </button>
@@ -202,6 +233,23 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
               placeholder={lang === "zh" ? "替换文本（留空则删除匹配）" : "Replacement text (empty = remove match)"}
               className="w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
             />
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[11px] font-semibold text-[var(--text-muted)]">
+              {lang === "zh" ? "模式" : "Mode"}
+            </span>
+            {(["replace", "keep", "drop"] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setMode(m)}
+                className={`rounded px-2.5 py-1 text-[11px] transition-colors ${
+                  mode === m
+                    ? "bg-[var(--accent)] text-white"
+                    : "border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                }`}
+              >
+                {m === "replace" ? (lang === "zh" ? "替换匹配" : "Replace") : m === "keep" ? (lang === "zh" ? "保留匹配行" : "Keep Lines") : (lang === "zh" ? "删除匹配行" : "Remove Lines")}
+              </button>
+            ))}
           </div>
 
           {error && (

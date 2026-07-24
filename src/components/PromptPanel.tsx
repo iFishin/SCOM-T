@@ -71,6 +71,34 @@ export function PromptPanel({
   const [batchText, setBatchText] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
   const [regexCleanOpen, setRegexCleanOpen] = useState(false);
+  const [quickPresets, setQuickPresets] = useState<{ name: string; pattern: string; replacement: string; mode?: string; pinned?: boolean }[]>([]);
+  const presetsLoaded = useRef(false);
+
+  // Load quick presets from the same file used by RegexCleanDialog
+  useEffect(() => {
+    if (presetsLoaded.current) return;
+    presetsLoaded.current = true;
+    loadQuickPresets();
+  }, []);
+
+  // Reload presets when dialog closes (user may have changed pins)
+  useEffect(() => {
+    if (!regexCleanOpen) loadQuickPresets();
+  }, [regexCleanOpen]);
+
+  async function loadQuickPresets() {
+    try {
+      const { join, homeDir } = await import("@tauri-apps/api/path");
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const path = await join(await homeDir(), "SCOM-T", "regex-presets.json");
+      setQuickPresets(JSON.parse(await readTextFile(path)));
+    } catch {
+      setQuickPresets([
+        { name: "消除时间戳", pattern: "\\[20(.*?)\\]", replacement: "", mode: "replace", pinned: true },
+        { name: "只保留AT指令", pattern: "AT\\+", replacement: "", mode: "keep", pinned: true },
+      ]);
+    }
+  }
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [configAction, setConfigAction] = useState<null | "save" | "load">(null);
   const [configName, setConfigName] = useState("");
@@ -383,12 +411,52 @@ export function PromptPanel({
   );
 
   const batchContent = (
-    <BatchEditor
-      value={batchText}
-      onChange={handleBatchTextChange}
-      placeholder={lang === "zh" ? "每行一条指令，粘贴后自动填充到指令网格" : "One command per line — pasted content auto-fills the command grid"}
-      lang={lang}
-    />
+    <div className="flex flex-col md:flex-row flex-1 min-h-0 gap-1">
+      <div className="flex-1 min-h-0 min-w-0">
+        <BatchEditor
+          value={batchText}
+          onChange={handleBatchTextChange}
+          placeholder={lang === "zh" ? "每行一条指令，粘贴后自动填充到指令网格" : "One command per line — pasted content auto-fills the command grid"}
+          lang={lang}
+        />
+      </div>
+      <div className="flex flex-row md:flex-col gap-1 shrink-0">
+        {quickPresets.filter((p) => p.pinned !== false).map((p, i) => (
+          <button key={i} type="button" onClick={() => {
+            const text = batchText;
+            try {
+              let flags = "g";
+              let pat = p.pattern;
+              const m = pat.match(/^\(\?([imsx-]+)\)/);
+              if (m) { flags += m[1]; pat = pat.slice(m[0].length); }
+              const re = new RegExp(pat, flags);
+              const mod = (p as any).mode;
+              let result: string;
+              if (mod === "keep") {
+                result = text.split("\n").filter((l) => re.test(l)).join("\n");
+              } else if (mod === "drop") {
+                result = text.split("\n").filter((l) => !re.test(l)).join("\n");
+              } else {
+                result = text.replace(re, p.replacement);
+              }
+              handleBatchTextChange(result);
+              pushToast(lang === "zh" ? `已应用: ${p.name}` : `Applied: ${p.name}`, "success");
+            } catch {
+              pushToast(lang === "zh" ? `预设执行失败: ${p.name}` : `Failed: ${p.name}`, "error");
+            }
+          }}
+            className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-[10px] text-[var(--text-muted)] text-center transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
+          >
+            {p.name}
+          </button>
+        ))}
+        <button type="button" onClick={() => setRegexCleanOpen(true)}
+          className="rounded border border-dashed border-[var(--border)] bg-transparent px-2 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
+        >
+          + {lang === "zh" ? "更多" : "More"}
+        </button>
+      </div>
+    </div>
   );
 
   const tabBar = (
@@ -463,7 +531,7 @@ export function PromptPanel({
             className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
           >
             <Search size={13} />
-            {lang === "zh" ? "正则清洗" : "Regex Clean"}
+            {lang === "zh" ? "正则清洗" : "Regex"}
           </button>
         )}
         {activePromptTab === "config" && (
@@ -516,7 +584,7 @@ export function PromptPanel({
     <div className="overflow-hidden rounded-lg flex flex-col bg-[var(--bg-surface)] border border-[var(--border)] p-2">
       {tabBarWithCount}
       {activePromptTab === "grid" && buttonBar}
-      <div className="min-h-0 flex-1">
+      <div className="flex flex-col min-h-0 flex-1">
         {activePromptTab === "grid" ? gridContent : activePromptTab === "batch" ? batchContent : configContent}
       </div>
     </div>
@@ -535,7 +603,7 @@ export function PromptPanel({
           {gridContent}
         </div>
       ) : activePromptTab === "batch" ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
           {batchContent}
         </div>
       ) : (
