@@ -18,7 +18,7 @@ import { FileSend } from "./components/FileSend.tsx";
 import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { PromptPanel } from "./components/PromptPanel.tsx";
 import { SendPanel } from "./components/SendPanel.tsx";
-import { ReceiveLog } from "./components/ReceiveLog.tsx";
+import { ReceiveLog, formatLogsAsText } from "./components/ReceiveLog.tsx";
 import { StatusBar } from "./components/ui/StatusBar.tsx";
 import { Button } from "./components/ui/Button.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
@@ -143,7 +143,7 @@ function App() {
     ports, logs, isConnected, isBusy, statusText, connectedPort,
     error, fileSendProgress, logCapWarning,
     refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
-    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals,
+    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals, tcpServerBroadcast,
     txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates, getSignalHistory,
   } = useSerialPort({ config, receiveMode });
 
@@ -213,6 +213,21 @@ function App() {
 
   const handleNavigateToConfig = useCallback(() => setPage("config"), []);
 
+  const handleAddToPrompts = useCallback((payload: string) => {
+    // Clean: trim whitespace, split by newlines, filter empties
+    const lines = payload.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      pushToast(lang === "zh" ? "没有可添加的指令" : "No commands to add", "warn");
+      return;
+    }
+    pushToast(
+      lang === "zh"
+        ? `已获取 ${lines.length} 条指令: ${lines[0].slice(0, 30)}${lines.length > 1 ? `...` : ""}`
+        : `Got ${lines.length} command(s): ${lines[0].slice(0, 30)}${lines.length > 1 ? `...` : ""}`,
+      "success",
+    );
+  }, [lang, pushToast]);
+
   // ── Log key events ──
   const prevConnectedRef = useRef(isConnected);
   useEffect(() => {
@@ -243,6 +258,27 @@ function App() {
     }
     prevSvrStatus.current = tcpServerStatus;
   }, [tcpServerStatus, config.tcpPort]);
+
+  // ── TCP Server: new client → offer to sync logs ──
+  const prevClientCountRef = useRef(0);
+  useEffect(() => {
+    const count = tcpServerClients.length;
+    if (count > prevClientCountRef.current && prevClientCountRef.current > 0) {
+      // New client connected
+      const ok = window.confirm(
+        lang === "zh"
+          ? `新的 TCP 客户端已连接 (${tcpServerClients[count - 1]?.address ?? "unknown"})，是否将当前日志发送给所有客户端？`
+          : `New TCP client connected (${tcpServerClients[count - 1]?.address ?? "unknown"}). Send current logs to all clients?`
+      );
+      if (ok && tcpServerBroadcast) {
+        const text = formatLogsAsText(logs);
+        const bytes = Array.from(new TextEncoder().encode(text));
+        tcpServerBroadcast(bytes);
+        pushToast(lang === "zh" ? `已同步 ${logs.length} 条日志` : `Synced ${logs.length} logs`, "success");
+      }
+    }
+    prevClientCountRef.current = count;
+  }, [tcpServerClients, tcpServerBroadcast, logs, lang, pushToast]);
 
   const topCollapsed = settings.topCollapsed ?? false;
   const rightCollapsed = settings.rightCollapsed ?? false;
@@ -681,6 +717,11 @@ function App() {
                 onSendPanelExpandedChange={updateSendPanelExpanded}
                 onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
                 onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
+                tcpClientCount={tcpServerClients.length}
+                onBroadcastToClients={(text) => {
+                  const bytes = Array.from(new TextEncoder().encode(text));
+                  tcpServerBroadcast?.(bytes);
+                }}
               />
             </div>
 
@@ -717,11 +758,12 @@ function App() {
                 onToggleRealTime={() => logFile.setRealTime((v) => !v)}
                 onFlushLogs={() => logFile.flushAll(logs)}
                 onCloseLogFile={logFile.closeLogFile}
+                onAddToPrompts={handleAddToPrompts}
               />
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -1165,6 +1207,11 @@ function App() {
                       onSendPanelExpandedChange={updateSendPanelExpanded}
                       onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
                       onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
+                      tcpClientCount={tcpServerClients.length}
+                      onBroadcastToClients={(text) => {
+                        const bytes = Array.from(new TextEncoder().encode(text));
+                        tcpServerBroadcast?.(bytes);
+                      }}
                     />
                   )}
                 </div>
@@ -1201,7 +1248,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
                 </div>
               </div>
             )}

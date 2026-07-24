@@ -1,6 +1,6 @@
 import React from "react";
 // Hotkeys/Files refactor applied: layout extracted to separate components
-import { Send, ChevronDown, ChevronUp, File, Keyboard, Maximize2, Minimize2 } from "lucide-react";
+import { Send, Globe, ChevronDown, ChevronUp, File, Keyboard, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Select } from "./ui/Select";
@@ -43,6 +43,9 @@ type SendPanelProps = {
   onSendPanelExpandedChange?: (v: boolean) => void;
   onSendPanelFileCollapsedChange?: (v: boolean) => void;
   onSendPanelHotkeysCollapsedChange?: (v: boolean) => void;
+  /** TCP Server broadcast — sends current message to all connected TCP clients */
+  onBroadcastToClients?: (text: string) => void;
+  tcpClientCount?: number;
 };
 
 
@@ -73,6 +76,8 @@ export function SendPanel({
   onSendPanelExpandedChange,
   onSendPanelFileCollapsedChange,
   onSendPanelHotkeysCollapsedChange,
+  onBroadcastToClients,
+  tcpClientCount,
 }: SendPanelProps) {
   const expanded = sendPanelExpanded ?? false;
   const [textareaMinimized, setTextareaMinimized] = React.useState(true);
@@ -249,6 +254,18 @@ export function SendPanel({
                     <Send size={12} />
                     {t("send", lang)}
                   </Button>
+                  {tcpClientCount !== undefined && tcpClientCount > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => onBroadcastToClients?.(value)}
+                      className="w-full flex items-center justify-center gap-1 py-1 text-xs text-[var(--text-muted)]"
+                      title={lang === "zh" ? `广播到 ${tcpClientCount} 个客户端` : `Broadcast to ${tcpClientCount} client(s)`}
+                    >
+                      <Globe size={12} />
+                      {lang === "zh" ? "广播" : "Broadcast"}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

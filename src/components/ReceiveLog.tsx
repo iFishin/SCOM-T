@@ -33,6 +33,8 @@ type ReceiveLogProps = {
   onToggleRealTime?: () => void;
   onFlushLogs?: () => void;
   onCloseLogFile?: () => void;
+  /** Add a log entry's payload to the prompt commands grid */
+  onAddToPrompts?: (payload: string) => void;
 };
 
 const SCROLL_THRESHOLD = 32;
@@ -86,7 +88,7 @@ function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
 }
 
 /** Format logs as text-view style string for copy / editing */
-function formatLogsAsText(logs: SerialLogEntry[]): string {
+export function formatLogsAsText(logs: SerialLogEntry[]): string {
   return logs
     .filter((log) => log.payload.trim().length > 0)
     .map((log) => {
@@ -122,6 +124,7 @@ export function ReceiveLog({
   onToggleRealTime,
   onFlushLogs,
   onCloseLogFile,
+  onAddToPrompts,
 }: ReceiveLogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
@@ -230,11 +233,20 @@ export function ReceiveLog({
       e.preventDefault();
       e.stopPropagation();
       setContextMenuPos({ x: e.clientX, y: e.clientY });
+      // Find the closest log entry div to determine which payload to use for "add to prompts"
+      let target = e.target as HTMLElement | null;
+      while (target && target !== el) {
+        if (target.dataset?.payload) break;
+        target = target.parentElement;
+      }
+      menuLogPayloadRef.current = target?.dataset?.payload ?? null;
     };
 
     el.addEventListener("contextmenu", handler);
     return () => el.removeEventListener("contextmenu", handler);
   }, []);
+
+  const menuLogPayloadRef = useRef<string | null>(null);
 
   const handleOpenEditor = useCallback(() => {
     setLogEditorContent(formatLogsAsText(logs));
@@ -255,6 +267,12 @@ export function ReceiveLog({
 
   const contextMenuItems: ContextMenuItem[] = useMemo(
     () => [
+      ...(onAddToPrompts && menuLogPayloadRef.current
+        ? [{
+          id: "add-to-prompt",
+          label: lang === "zh" ? "添加到指令行" : "Add to Commands",
+          onClick: () => { if (menuLogPayloadRef.current) onAddToPrompts(menuLogPayloadRef.current); },
+        }] : []),
       {
         id: "open-editor",
         label: t("open_in_editor", lang),
@@ -474,14 +492,7 @@ export function ReceiveLog({
                     : isReceived
                       ? "text-emerald-600"
                       : "text-sky-600";
-              const tag =
-                log.source === "tcp-server"
-                  ? "S→T"
-                  : log.source === "tcp-client"
-                    ? "RXT"
-                    : isReceived
-                      ? "RX"
-                      : "TX";
+              const tag = isReceived ? "RX" : "TX";
               return (
                 <div key={log.id} className="flex items-baseline gap-1 px-1 py-px leading-relaxed">
                   <span className={`shrink-0 font-bold ${tagColor}`}>
@@ -512,14 +523,7 @@ export function ReceiveLog({
                     : isReceived
                       ? "text-emerald-600"
                       : "text-sky-600";
-              const tag =
-                log.source === "tcp-server"
-                  ? "S→T"
-                  : log.source === "tcp-client"
-                    ? "RXT"
-                    : isReceived
-                      ? "RX"
-                      : "TX";
+              const tag = isReceived ? "RX" : "TX";
               return (
                 <div key={log.id} className="group border-b border-[var(--border)]/40 last:border-b-0">
                   <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-[10px] text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
@@ -581,13 +585,7 @@ export function ReceiveLog({
                               : "bg-sky-100 text-sky-600"
                       }`}
                     >
-                      {first.source === "tcp-server"
-                        ? "SERIAL→TCP"
-                        : first.source === "tcp-client"
-                          ? "RX TCP"
-                          : first.direction === "received"
-                            ? "RX"
-                            : "TX"}
+                      {first.direction === "received" ? "RX" : "TX"}
                     </span>
                     <span>{displayTimestamp(first.timestamp)}</span>
                     {first.serverTs && (

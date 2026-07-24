@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Globe } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -33,6 +33,9 @@ type PromptPanelProps = {
   updatePromptRowCount: (count: number) => void;
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
   onNavigateToConfig?: () => void;
+  /** TCP Server broadcast — sends data to all connected TCP clients */
+  tcpServerBroadcast?: (data: number[]) => Promise<void>;
+  tcpClientCount?: number;
 };
 
 export function PromptPanel({
@@ -44,6 +47,8 @@ export function PromptPanel({
   updatePromptRowCount,
   pushToast,
   onNavigateToConfig,
+  tcpServerBroadcast,
+  tcpClientCount,
 }: PromptPanelProps) {
   const promptConfig = usePromptConfig();
 
@@ -412,6 +417,27 @@ export function PromptPanel({
         {lang === "zh" ? "总次数" : "Total"}: 0
       </span>
       <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "停止" : "Stop"}</Button>
+      {tcpClientCount !== undefined && tcpClientCount > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            const selected = promptRows.filter((r) => r.selected && r.command.trim());
+            if (selected.length === 0) {
+              pushToast(lang === "zh" ? "请先选择要广播的指令" : "Select commands to broadcast", "warn");
+              return;
+            }
+            const text = selected.map((r) => r.command).join("\n");
+            const bytes = Array.from(new TextEncoder().encode(text));
+            tcpServerBroadcast?.(bytes);
+            pushToast(lang === "zh" ? `已广播 ${selected.length} 条指令` : `Broadcast ${selected.length} commands`, "success");
+          }}
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)]"
+        >
+          <Globe size={12} />
+          {lang === "zh" ? "广播选中" : "Broadcast"}
+        </Button>
+      )}
     </div>
   );
 
