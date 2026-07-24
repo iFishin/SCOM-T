@@ -71,6 +71,11 @@ export function PromptPanel({
   const [configName, setConfigName] = useState("");
   const [savedConfigs, setSavedConfigs] = useState<string[]>([]);
 
+  const allSelected = promptRows.length > 0 && promptRows.every((r) => r.selected);
+  function toggleSelectAll() {
+    setPromptRows((current) => current.map((row) => ({ ...row, selected: !allSelected })));
+  }
+
   // ── Auto-save ──
 
   const promptSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -166,6 +171,8 @@ export function PromptPanel({
   async function handleSendPromptRow(row: PromptRow) {
     if (!isConnected) { pushToast(t("toast_not_connected", lang), "warn"); return; }
     if (!row.command) { pushToast(`${t("prompt_sender", lang)} ${row.id}: ${t("toast_command_empty", lang)}`, "warn"); return; }
+    // Mark this row as selected
+    updatePromptRow(row.id, { selected: true });
     const mode = row.isHex ? "hex" : "ascii";
     await sendData(row.command, mode as SendMode, row.ender);
   }
@@ -316,36 +323,38 @@ export function PromptPanel({
 
   const gridContent = (
     <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px_24px] items-center gap-x-1.5 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-        <div /><div /><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
+      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
+        <div /><div className="flex justify-center">
+          <Checkbox checked={allSelected} onChange={() => toggleSelectAll()} />
+        </div><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
       </div>
       <div className="h-[calc(100%-30px)] overflow-y-auto">
         {promptRows.map((row, index) => (
           <div key={row.id}>
             {/* Insert strip above this row */}
-            <div className="group/insert relative h-3 z-10">
+            <div className="group/insert relative h-2 z-10">
               <div className="absolute inset-x-0 top-1/2 border-t border-[var(--border)]" />
               <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-1/2 z-10 opacity-0 group-hover/insert:opacity-100 transition-opacity">
                 <button onClick={() => insertRow(index)}
-                        className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] shadow-sm transition-colors">
-                  <Plus size={10} />
+                        className="flex h-3 w-3 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] shadow-sm transition-colors">
+                  <Plus size={8} />
                 </button>
               </div>
             </div>
             {/* Row */}
-            <div className="grid grid-cols-[28px_28px_60px_minmax(100px,1fr)_36px_56px_54px_24px] items-center gap-x-1.5 border-b border-[var(--border)] px-2 py-1 last:border-0 hover:bg-[var(--bg-hover)] group/row">
-              <div className="flex justify-center"><span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] text-[10px] text-[var(--text-muted)]">{row.id}</span></div>
+            <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] px-1.5 py-0.5 last:border-0 hover:bg-[var(--bg-hover)] group/row">
+              <div className="flex justify-center"><span className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] text-[9px] text-[var(--text-muted)]">{row.id}</span></div>
               <div className="flex justify-center"><Checkbox checked={row.selected} onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })} /></div>
-              <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)}>{t("prompt_sender", lang)}</Button>
-              <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent" />
+              <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)} className="text-[10px] px-1.5 py-0.5">{t("prompt_sender", lang)}</Button>
+              <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-[11px]" />
               <div className="flex justify-center"><Checkbox checked={row.isHex} onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })} /></div>
-              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })} className="text-[11px]">
+              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })} className="text-[11px]" style={{ paddingLeft: "4px" } as React.CSSProperties}>
                 <option value="\r\n">{t("ender_crlf", lang)}</option><option value="">{t("ender_none", lang)}</option><option value="\n">{t("ender_lf", lang)}</option><option value="\r">{t("ender_cr", lang)}</option>
               </Select>
-              <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px]" />
+              <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px] placeholder:text-[11px]" />
               <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
                 <button onClick={() => deleteRow(row.id)}
-                        className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-xs leading-none transition-colors">
+                        className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-[10px] leading-none transition-colors">
                   ×
                 </button>
               </div>
@@ -391,21 +400,25 @@ export function PromptPanel({
   );
 
   const buttonBar = (
-    <div className="flex gap-1.5 pb-2">
-      <input readOnly value={lang === "zh" ? "指令：点击左侧行按钮发送…" : "COMMAND: click a row button to send…"} className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none" />
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">{lang === "zh" ? "预设" : "Prompt"}</Button>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">Idx</Button>
-      <Button className="rounded bg-[var(--accent)] px-3 py-1.5 text-white">{lang === "zh" ? "开始" : "Start"}</Button>
-      <input readOnly value={lang === "zh" ? "总次数" : "Total Times"} className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1.5 text-[var(--text-muted)] outline-none" />
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-input)]">{lang === "zh" ? "停止" : "Stop"}</Button>
+    <div className="flex items-center gap-1 text-xs">
+      <span className="shrink-0 text-[var(--text-muted)] mr-1">{lang === "zh" ? "指令" : "CMD"}</span>
+      <span className="flex-1 truncate rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] text-[11px]">
+        {lang === "zh" ? "点击左侧行按钮发送…" : "Click row button to send"}
+      </span>
+      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "预设" : "Prompt"}</Button>
+      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">Idx</Button>
+      <Button className="rounded bg-[var(--accent)] px-3 py-1 text-white text-xs">{lang === "zh" ? "开始" : "Start"}</Button>
+      <span className="shrink-0 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] text-[11px]">
+        {lang === "zh" ? "总次数" : "Total"}: 0
+      </span>
+      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "停止" : "Stop"}</Button>
     </div>
   );
 
     const tabBarWithCount = (
-    <div className="mb-2 flex items-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-      <div className="flex items-center gap-2">
-        {tabBar}
-        <span className="w-px h-5 bg-[var(--border)]" />
+    <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+      {tabBar}
+      <span className="w-px h-4 bg-[var(--border)] ml-2" />
         {activePromptTab === "grid" && (
           <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
             {t("prompt_rows", lang)}
@@ -432,7 +445,6 @@ export function PromptPanel({
           </div>
         )}
       </div>
-    </div>
   );
 
   // ── Config mode content ──

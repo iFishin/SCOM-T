@@ -51,7 +51,7 @@ export type AppSettings = {
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   notificationUrl?: string;
-  timestampFormat?: "time" | "datetime";
+  timestampFormat?: "time" | "datetime" | "none";
   sendMode?: SendMode;
   receiveMode?: ReceiveMode;
   displayMode?: LogDisplayMode;
@@ -188,7 +188,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
         }))
       : DEFAULT_GRID_LAYOUT,
     notificationUrl: typeof raw.notificationUrl === "string" ? raw.notificationUrl : "",
-    timestampFormat: raw.timestampFormat === "time" || raw.timestampFormat === "datetime"
+    timestampFormat: raw.timestampFormat === "time" || raw.timestampFormat === "datetime" || raw.timestampFormat === "none"
       ? raw.timestampFormat : undefined,
     sendMode: raw.sendMode === "hex" ? "hex" : "ascii",
     receiveMode: raw.receiveMode === "hex" ? "hex" : "ascii",
@@ -350,7 +350,7 @@ export function useSettings() {
     setSettings((current) => ({ ...current, notificationUrl: url }));
   }
 
-  function updateTimestampFormat(format: "time" | "datetime") {
+  function updateTimestampFormat(format: "time" | "datetime" | "none") {
     setSettings((current) => ({ ...current, timestampFormat: format }));
   }
 

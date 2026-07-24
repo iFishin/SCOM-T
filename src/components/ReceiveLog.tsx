@@ -11,7 +11,7 @@ import {
   type MatchRange,
 } from "../hooks/useSearch.ts";
 import type { LogDisplayMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
-import { payloadToBytes, formatHexDump } from "../utils/hexConverter.ts";
+import { payloadToBytes, formatHexDump, displayTimestamp } from "../utils/hexConverter.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
@@ -99,7 +99,7 @@ function formatLogsAsText(logs: SerialLogEntry[]): string {
             : isReceived
               ? "RX"
               : "TX";
-      const ts = log.timestamp.replace(/^\[|\]$/g, "");
+      const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
       // Trim trailing \r\n from payload to prevent extra blank lines
       const cleanPayload = log.payload.replace(/[\r\n]+$/, "").trimStart();
       return `[${tag}] [${ts}] ${cleanPayload}`;
@@ -465,7 +465,7 @@ export function ReceiveLog({
           <div className="space-y-0">
             {logs.map((log) => {
               const isReceived = log.direction === "received";
-              const ts = log.timestamp.replace(/^\[|\]$/g, "");
+              const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
               const tagColor =
                 log.source === "tcp-server"
                   ? "text-amber-600"
@@ -501,7 +501,7 @@ export function ReceiveLog({
           <div className="space-y-0">
             {logs.map((log) => {
               const isReceived = log.direction === "received";
-              const ts = log.timestamp.replace(/^\[|\]$/g, "");
+              const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
               const bytes = payloadToBytes(log.payload, log.mode);
               const dumpLines = formatHexDump(bytes);
               const tagColor =
@@ -589,7 +589,7 @@ export function ReceiveLog({
                             ? "RX"
                             : "TX"}
                     </span>
-                    <span>{first.timestamp}</span>
+                    <span>{displayTimestamp(first.timestamp)}</span>
                     {first.serverTs && (
                       <span className="text-[var(--text-muted)] opacity-70">svr:{first.serverTs}</span>
                     )}

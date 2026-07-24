@@ -54,12 +54,13 @@ export function normalizePluginPayload(payload: unknown): number[] {
   return [];
 }
 
-let _timestampFormat: "time" | "datetime" = "datetime";
+let _timestampFormat: "time" | "datetime" | "none" = "datetime";
 
-export function setTimestampFormat(format: "time" | "datetime") {
+export function setTimestampFormat(format: "time" | "datetime" | "none") {
   _timestampFormat = format;
 }
 
+/** Always store the full datetime in log entries. */
 export function formatTimestamp(date = new Date()): string {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -69,10 +70,22 @@ export function formatTimestamp(date = new Date()): string {
   const seconds = `${date.getSeconds()}`.padStart(2, "0");
   const milliseconds = `${date.getMilliseconds()}`.padStart(3, "0");
 
-  if (_timestampFormat === "datetime") {
-    return `[${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}]`;
+  return `[${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}]`;
+}
+
+/**
+ * Format a stored timestamp for display based on the current setting.
+ * The stored timestamp is always `[YYYY-MM-DD HH:mm:ss.mmm]`.
+ * If format is "time", only the time part is shown.
+ * If format is "none", an empty string is returned.
+ */
+export function displayTimestamp(raw: string): string {
+  if (_timestampFormat === "none") return "";
+  if (_timestampFormat === "time") {
+    // Strip the date part: `[YYYY-MM-DD HH:mm:ss.mmm]` → `[HH:mm:ss.mmm]`
+    return raw.replace(/^\[\d{4}-\d{2}-\d{2}\s+/, "[");
   }
-  return `[${hours}:${minutes}:${seconds}.${milliseconds}]`;
+  return raw;
 }
 
 /** Convert a string payload (ascii or hex-mode) back to bytes */

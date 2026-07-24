@@ -22,7 +22,7 @@ type SettingsModalProps = {
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
   logRetentionDays?: number;
-  timestampFormat?: "time" | "datetime";
+  timestampFormat?: "time" | "datetime" | "none";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   onClose: () => void;
@@ -35,7 +35,7 @@ type SettingsModalProps = {
   onAllowMultiInstanceChange?: (v: boolean) => void;
   onLayoutModeChange?: (mode: "classic" | "grid") => void;
   onGridLayoutChange?: (layout: GridItemLayout[]) => void;
-  onTimestampFormatChange?: (format: "time" | "datetime") => void;
+  onTimestampFormatChange?: (format: "time" | "datetime" | "none") => void;
   onLogRetentionDaysChange?: (days: number) => void;
 };
 
@@ -145,6 +145,13 @@ export function SettingsModal({
                     >
                       {lang === "zh" ? "日期+时间" : "Date & Time"}
                       <span className="ml-1.5 opacity-70">YYYY-MM-DD HH:mm:ss.mmm</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => onTimestampFormatChange?.("none")}
+                      className={`rounded-lg border px-3 py-2 text-xs ${(timestampFormat ?? "datetime") === "none" ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] text-[var(--text-muted)]"}`}
+                    >
+                      {lang === "zh" ? "无" : "None"}
                     </Button>
                   </div>
                 </div>
