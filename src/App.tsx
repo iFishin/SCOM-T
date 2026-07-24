@@ -45,10 +45,15 @@ import {
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
-function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
-  const [leftWidth, setLeftWidth] = useState(initialPx);
+function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
+  const [tick, setTick] = useState(0);
+  const [leftRatio, setLeftRatio] = useState(defRatio);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+
+  const leftWidth = (containerRef.current
+    ? Math.round(containerRef.current.clientWidth * leftRatio)
+    : Math.round(typeof window !== "undefined" ? window.innerWidth * leftRatio : 800)) + (tick * 0);
 
   const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -57,12 +62,20 @@ function useHSplit(initialPx: number, minLeft = 220, minRight = 280) {
     document.body.style.userSelect = "none";
   }, []);
 
+  // Re-calculate on window resize
+  useEffect(() => {
+    const onResize = () => setTick((t) => t + 1);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   useEffect(() => {
     function onMove(e: MouseEvent) {
       if (!dragging.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const next = e.clientX - rect.left;
-      setLeftWidth(Math.max(minLeft, Math.min(next, rect.width - minRight)));
+      const ratio = Math.max(minLeft / rect.width, Math.min(next / rect.width, 1 - minRight / rect.width));
+      setLeftRatio(ratio);
     }
     function onUp() {
       if (!dragging.current) return;
@@ -137,7 +150,7 @@ function App() {
   const appendNewline = settings.appendNewline ?? "\r\n";
 
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
-    typeof window !== "undefined" ? Math.floor(window.innerWidth / 2) : 480,
+    0.5,
   );
   const {
     ports, logs, isConnected, isBusy, statusText, connectedPort,

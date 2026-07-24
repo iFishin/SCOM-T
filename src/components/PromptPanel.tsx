@@ -207,7 +207,10 @@ export function PromptPanel({
       setYamlError(null);
     }
     if (tab === "batch") {
-      setBatchText(promptRows.map((r) => r.command).join("\n"));
+      // Find the index of the last non-empty command
+      let lastIdx = promptRows.length - 1;
+      while (lastIdx >= 0 && !promptRows[lastIdx].command.trim()) lastIdx--;
+      setBatchText(promptRows.slice(0, lastIdx + 1).map((r) => r.command).join("\n"));
     }
     setActivePromptTab(tab);
   }
@@ -444,7 +447,7 @@ export function PromptPanel({
     const tabBarWithCount = (
     <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
       {tabBar}
-      <span className="w-px h-4 bg-[var(--border)] ml-2" />
+      <span className="w-px h-4 bg-[var(--border)] mx-2" />
         {activePromptTab === "grid" && (
           <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
             {t("prompt_rows", lang)}
