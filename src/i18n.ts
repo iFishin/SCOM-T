@@ -71,7 +71,7 @@ const ZH: Dict = {
   collapse: "折叠",
   expand: "展开",
   advanced: "高级",
-  advanced_note: "注：不支持 1.5 停止位；占用设备将尝试强制释放。",
+  advanced_note: "底部串口库不支持 1.5 停止位；若串口被其他程序占用，打开端口时会尝试强制释放。",
   flow_control: "流控",
   flow_control_none: "无",
   flow_control_software: "软件 (XON/XOFF)",
@@ -301,7 +301,7 @@ const EN: Dict = {
   expand: "Expand",
   advanced: "Advanced",
   advanced_note:
-    "Note: 1.5 stop bits not supported; occupied devices will be force-released.",
+    "The underlying serial library does not support 1.5 stop bits. If the port is occupied by another application, opening it will attempt to force-release the port.",
   flow_control: "Flow Control",
   flow_control_none: "None",
   flow_control_software: "Software (XON/XOFF)",

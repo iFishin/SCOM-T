@@ -158,7 +158,9 @@ export function SendPanel({
             <Send size={11} />
             {t("send", lang)}
           </span>
-          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
+            {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+          </span>
         </div>
         {expanded && (
           <>
@@ -285,7 +287,9 @@ export function SendPanel({
                 <File size={11} />
                 {t("file", lang)}
               </span>
-              {fileSendCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
+                {fileSendCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+              </span>
             </div>
             {!fileSendCollapsed && (
               <>
@@ -315,7 +319,9 @@ export function SendPanel({
                 <Keyboard size={11} />
                 {t("hotkeys_title", lang)}
               </span>
-              {hotkeysCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
+                {hotkeysCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+              </span>
             </div>
             {!hotkeysCollapsed && (
               <>

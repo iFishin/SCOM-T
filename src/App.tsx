@@ -1095,19 +1095,16 @@ function App() {
 
               {/* Collapse divider for config card — only when expanded */}
               {!topCollapsed && (
-                <div className="group relative my-0.5 flex h-3 shrink-0 cursor-pointer items-center justify-center">
-                  <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => updateTopCollapsed(true)}
-                      className="flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)]"
-                      style={{ writingMode: "vertical-lr" }}
-                    >
-                      <ChevronUp size={10} className="mb-1" />
-                      {t("collapse", lang)}
-                    </button>
-                  </div>
-                  <div className="h-px w-full rounded-full bg-[var(--border)]" />
+                <div className="group relative flex h-4 shrink-0 items-center justify-center">
+                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-[var(--border)]" />
+                  <button
+                    type="button"
+                    onClick={() => updateTopCollapsed(true)}
+                    className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    title={lang === "zh" ? "折叠配置" : "Collapse Config"}
+                  >
+                    <ChevronUp size={10} />
+                  </button>
                 </div>
               )}
 
@@ -1133,7 +1130,7 @@ function App() {
             </div>
 
             {/* Drag handle + collapse button for right column */}
-            <div className="group relative mx-1 flex w-2 shrink-0 items-center justify-center">
+            <div className="group relative mx-1 flex w-3 shrink-0 items-center justify-center">
               {/* Resize drag area */}
               {!rightCollapsed && (
                 <div
@@ -1154,21 +1151,17 @@ function App() {
                 <button
                   type="button"
                   onClick={() => updateRightCollapsed(false)}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)] whitespace-nowrap"
-                  style={{ writingMode: "vertical-lr" }}
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 >
-                  <ChevronLeft size={10} className="mb-1" />
-                  {t("expand", lang)}
+                  <ChevronLeft size={10} />
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => updateRightCollapsed(true)}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shadow-sm ring-1 ring-[var(--border)] hover:text-[var(--text-primary)] whitespace-nowrap"
-                  style={{ writingMode: "vertical-lr" }}
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 >
-                  <ChevronRight size={10} className="mb-1" />
-                  {t("collapse", lang)}
+                  <ChevronRight size={10} />
                 </button>
               )}
             </div>
@@ -1223,26 +1216,25 @@ function App() {
                     className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 transition-colors hover:bg-[var(--bg-input)]"
                   >
                     <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--text-muted)]">
-                      <ChevronDown size={12} />
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
+                        <ChevronDown size={10} />
+                      </span>
                       <span className="font-semibold uppercase tracking-widest">
                         {t("send", lang)}
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="group relative my-0.5 flex h-3 shrink-0 cursor-pointer items-center justify-center">
-                    <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={() => updateRightSendCollapsed(true)}
-                        className="flex items-center justify-center rounded bg-[var(--bg-surface)] px-1 py-3 text-[10px] text-[var(--text-muted)] shadow-sm ring-1 ring-[var(--border)] transition-colors hover:text-[var(--text-primary)]"
-                        style={{ writingMode: "vertical-lr" }}
-                      >
-                        <ChevronUp size={10} className="mb-1" />
-                        {t("collapse", lang)}
-                      </button>
-                    </div>
-                    <div className="h-px w-full rounded-full bg-[var(--border)]" />
+                  <div className="group relative flex h-4 shrink-0 items-center justify-center">
+                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-[var(--border)]" />
+                    <button
+                      type="button"
+                      onClick={() => updateRightSendCollapsed(true)}
+                      className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                      title={lang === "zh" ? "折叠发送" : "Collapse Send"}
+                    >
+                      <ChevronUp size={10} />
+                    </button>
                   </div>
                 )}
 

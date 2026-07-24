@@ -312,13 +312,6 @@ export function ReceiveLog({
           {t("received", lang)}
         </span>
 
-        {!pinned && (
-          <Button variant="primary" size="sm" onClick={jumpToBottom} title={t("jump_to_bottom", lang)} className="flex items-center gap-1 px-1.5">
-            <ArrowDownToLine size={14} />
-            {t("scroll_follow", lang)}
-          </Button>
-        )}
-
         <Select
           value={displayMode}
           onChange={(e) => onDisplayModeChange?.(e.currentTarget.value as LogDisplayMode)}
@@ -328,6 +321,15 @@ export function ReceiveLog({
           <option value="text">{t("display_text", lang)}</option>
           <option value="hex">{t("display_hex", lang)}</option>
         </Select>
+
+        {!pinned && (
+          <button type="button" onClick={jumpToBottom} title={t("jump_to_bottom", lang)}
+            className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
+          >
+            <ArrowDownToLine size={12} />
+            {t("scroll_follow", lang)}
+          </button>
+        )}
 
         {/* ── Right-side icon group ── */}
 
@@ -493,8 +495,12 @@ export function ReceiveLog({
                       ? "text-emerald-600"
                       : "text-sky-600";
               const tag = isReceived ? "RX" : "TX";
+              /** TX rows get a tinted background */
+              const rowBg = !isReceived
+                ? "bg-sky-50/40 dark:bg-sky-950/15"
+                : "";
               return (
-                <div key={log.id} className="flex items-baseline gap-1 px-1 py-px leading-relaxed">
+                <div key={log.id} className={"flex items-baseline gap-1 px-1 py-px leading-relaxed " + rowBg}>
                   <span className={`shrink-0 font-bold ${tagColor}`}>
                     {tag}
                   </span>
