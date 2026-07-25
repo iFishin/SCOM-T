@@ -261,7 +261,7 @@ export async function listAvailablePorts(filterMode: "default" | "all" = "defaul
     return true;
   });
 
-  return deduped.map(([portName, port]) => {
+  const ports: PortSummary[] = deduped.map(([portName, port]) => {
     const detail = { ...port, path: portName };
     return {
       path: portName,
@@ -269,8 +269,138 @@ export async function listAvailablePorts(filterMode: "default" | "all" = "defaul
       detail,
     };
   });
+
+  // Add mock serial port for testing
+  ports.unshift({
+    path: MOCK_PORT_PATH,
+    label: "[MOCK] 模拟串口 (AT指令测试)",
+    detail: {
+      path: MOCK_PORT_PATH,
+      manufacturer: "SCOM-T",
+      product: "Mock Serial",
+      pid: "Unknown",
+      serial_number: "Unknown",
+      type: "Unknown",
+      vid: "Unknown",
+    },
+  });
+
+  return ports;
 }
 
 export async function forceClosePort(path: string): Promise<void> {
   await SerialPort.forceClose(path).catch(() => undefined);
+}
+
+// ── Mock Serial Service for testing ──
+
+const MOCK_PORT_PATH = "__MOCK_SERIAL__";
+
+// Common AT command responses for mock serial
+const MOCK_AT_RESPONSES: Record<string, string> = {
+  "AT": "OK",
+  "ATE0": "OK",
+  "ATE1": "OK",
+  "AT+CPIN?": "+CPIN: READY\n\nOK",
+  "AT+CSQ": "+CSQ: 25,0\n\nOK",
+  "AT+CEREG?": "+CEREG: 0,1\n\nOK",
+  "AT+CREG?": "+CREG: 0,1\n\nOK",
+  "AT+CGREG?": "+CGREG: 0,1\n\nOK",
+  "AT+CGMI": "+CGMI: SIMCOM\n\nOK",
+  "AT+CGMM": "+CGMM: SIM800C\n\nOK",
+  "AT+CGMR": "+CGMR: 1308B05SIM800C\n\nOK",
+  "AT+CGSN": "+CGSN: 861234567890123\n\nOK",
+  "AT+COPS?": '+COPS: 0,0,"China Mobile"\n\nOK',
+  "AT+CGATT?": "+CGATT: 1\n\nOK",
+  "AT+CFUN?": "+CFUN: 1\n\nOK",
+  "AT+CCLK?": `+CCLK: "${new Date().toISOString().slice(2, 10)},${new Date().toTimeString().slice(0, 8)}+32"\n\nOK`,
+  "AT+CMGF=1": "OK",
+  "AT+HTTPINIT": "OK",
+  "AT+HTTPTERM": "OK",
+};
+
+export class MockSerialService implements ISerialService {
+  private _isOpen = false;
+  private _path: string | null = null;
+  private dataCallback: ((data: Uint8Array) => void) | null = null;
+  private disconnectCallback: (() => void) | null = null;
+  private responseDelay = 100; // ms
+
+  get isOpen(): boolean {
+    return this._isOpen;
+  }
+
+  get path(): string | null {
+    return this._path;
+  }
+
+  onData(cb: ((data: Uint8Array) => void) | null): void {
+    this.dataCallback = cb;
+  }
+
+  onDisconnect(cb: (() => void) | null): void {
+    this.disconnectCallback = cb;
+  }
+
+  async open(config: SerialConfig): Promise<void> {
+    this._isOpen = true;
+    this._path = config.path;
+  }
+
+  async close(): Promise<void> {
+    const wasOpen = this._isOpen;
+    this._isOpen = false;
+    this._path = null;
+    if (wasOpen && this.disconnectCallback) {
+      this.disconnectCallback();
+    }
+  }
+
+  async sendBinary(data: number[]): Promise<void> {
+    if (!this._isOpen) return;
+
+    const text = new TextDecoder().decode(new Uint8Array(data));
+    const cmd = text.trim().replace(/\r?\n$/, "");
+
+    // Find matching response
+    let response = "OK";
+    for (const [key, val] of Object.entries(MOCK_AT_RESPONSES)) {
+      if (cmd.toUpperCase().startsWith(key)) {
+        response = val;
+        break;
+      }
+    }
+
+    // Simulate delay and send response
+    setTimeout(() => {
+      if (this.dataCallback && this._isOpen) {
+        const responseBytes = new TextEncoder().encode(response + "\r\n");
+        this.dataCallback(responseBytes);
+      }
+    }, this.responseDelay);
+  }
+
+  async sendText(text: string): Promise<void> {
+    await this.sendBinary(Array.from(new TextEncoder().encode(text)));
+  }
+
+  async setSignals(_rts: boolean, _dtr: boolean): Promise<void> {
+    // No-op for mock
+  }
+
+  async readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }> {
+    return { cts: true, dsr: true, cd: true, ri: false };
+  }
+
+  async dispose(): Promise<void> {
+    await this.close();
+  }
+}
+
+export function isMockPort(path: string): boolean {
+  return path === MOCK_PORT_PATH;
+}
+
+export function getMockPortPath(): string {
+  return MOCK_PORT_PATH;
 }

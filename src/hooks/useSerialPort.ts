@@ -4,7 +4,7 @@ import { bytesToAscii, bytesToHex, formatTimestamp, parseHexString } from "../ut
 import { appLogger } from "../utils/appLogger.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
-import { TauriSerialService, listAvailablePorts } from "../serial/SerialService.ts";
+import { TauriSerialService, MockSerialService, isMockPort, listAvailablePorts } from "../serial/SerialService.ts";
 import type { ITcpClientService } from "../tcp/TcpClientService.ts";
 import { TauriTcpClientService } from "../tcp/TcpClientService.ts";
 import type { ITcpServerService } from "../tcp/TcpServerService.ts";
@@ -188,8 +188,60 @@ export function useSerialPort({
 
   // ── Service helpers ──
 
-  function getSerial(): ISerialService {
-    if (!serialRef.current) {
+  function getSerial(portPath?: string): ISerialService {
+    // If portPath is provided and it's a mock port, use MockSerialService
+    if (portPath && isMockPort(portPath)) {
+      if (!serialRef.current || !(serialRef.current instanceof MockSerialService)) {
+        // Dispose existing service if any
+        if (serialRef.current) {
+          serialRef.current.dispose().catch(() => undefined);
+        }
+        serialRef.current = new MockSerialService();
+        // Wire up serial data callback
+        serialRef.current.onData((data: Uint8Array) => {
+          const bytes = Array.from(data);
+          rxBytesRef.current += bytes.length;
+
+          // Line-buffer ASCII data
+          if (receiveModeRef.current === "ascii") {
+            for (const b of bytes) {
+              lineBufferRef.current.push(b);
+              if (b === 0x0A) {
+                const payload = bytesToAscii(lineBufferRef.current);
+                lineBufferRef.current = [];
+                if (payload) {
+                  appendLog({ direction: "received", mode: "ascii", payload });
+                }
+              }
+            }
+            resetLineFlushTimer();
+          } else {
+            appendLog({
+              direction: "received",
+              mode: "hex",
+              payload: bytesToHex(bytes),
+            });
+          }
+        });
+
+        // Wire up serial disconnect callback
+        serialRef.current.onDisconnect(() => {
+          flushLineBuffer();
+          serialRef.current = null;
+          setIsConnected(false);
+          setConnectedPort(null);
+          setStatusText("模拟串口已断开");
+          setError(null);
+        });
+      }
+      return serialRef.current;
+    }
+
+    if (!serialRef.current || (serialRef.current instanceof MockSerialService)) {
+      // Dispose mock service if switching to real serial
+      if (serialRef.current) {
+        serialRef.current.dispose().catch(() => undefined);
+      }
       serialRef.current = new TauriSerialService();
       // Wire up serial data callback
       serialRef.current.onData((data: Uint8Array) => {
@@ -504,7 +556,7 @@ export function useSerialPort({
       setIsBusy(true);
       setError(null);
       try {
-        await getSerial().open({
+        await getSerial(config.path).open({
           path: config.path,
           baudRate: config.baudRate,
           dataBits: config.dataBits,
@@ -533,7 +585,7 @@ export function useSerialPort({
         throw new Error("请先选择串口。");
       }
 
-      await getSerial().open({
+      await getSerial(config.path).open({
         path: config.path,
         baudRate: config.baudRate,
         dataBits: config.dataBits,
