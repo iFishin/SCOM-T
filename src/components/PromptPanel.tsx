@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -834,17 +834,79 @@ export function PromptPanel({
                     </div>
                   )}
                 </div>
-                <textarea
-                  value={(row.expectedResponses || []).join("\n")}
-                  onChange={(e) => {
-                    const lines = e.target.value.split("\n");
-                    const filtered = lines.filter((l) => l.trim() !== "");
-                    updatePromptRow(row.id, { expectedResponses: filtered.length > 0 ? filtered : undefined });
-                  }}
-                  placeholder={lang === "zh" ? "每行一个预期结果..." : "One expected response per line..."}
-                  className="w-full min-h-[60px] max-h-[120px] text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)]"
-                  rows={3}
-                />
+                <div className="space-y-1.5">
+                  {(row.expectedResponses || []).map((resp, j) => {
+                    const isRegex = row.expectedResponseRegex?.[j] ?? false;
+                    return (
+                      <div key={j} className="flex items-start gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const regex = row.expectedResponseRegex
+                              ? [...row.expectedResponseRegex]
+                              : (row.expectedResponses || []).map(() => false);
+                            regex[j] = !regex[j];
+                            updatePromptRow(row.id, { expectedResponseRegex: regex });
+                          }}
+                          className={`shrink-0 mt-1 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
+                            isRegex
+                              ? "bg-amber-100 border-amber-300 text-amber-700"
+                              : "bg-[var(--bg-primary)] border-[var(--border)] text-[var(--text-muted)]"
+                          }`}
+                          title={isRegex
+                            ? (lang === "zh" ? "正则模式" : "Regex mode")
+                            : (lang === "zh" ? "文本模式" : "Text mode")
+                          }
+                        >
+                          {isRegex ? ".*" : "Abc"}
+                        </button>
+                        <textarea
+                          value={resp}
+                          onChange={(e) => {
+                            const responses = [...(row.expectedResponses || [])];
+                            responses[j] = e.target.value;
+                            const filtered = responses.filter((r) => r.trim() !== "");
+                            updatePromptRow(row.id, { expectedResponses: filtered.length > 0 ? filtered : undefined });
+                          }}
+                          placeholder={isRegex
+                            ? (lang === "zh" ? "正则表达式" : "Regex pattern")
+                            : (lang === "zh" ? "期望响应内容" : "Expected response")
+                          }
+                          className="flex-1 text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)] min-h-[24px]"
+                          rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const responses = (row.expectedResponses || []).filter((_, k) => k !== j);
+                            const regex = row.expectedResponseRegex?.filter((_, k) => k !== j);
+                            updatePromptRow(row.id, {
+                              expectedResponses: responses.length > 0 ? responses : undefined,
+                              expectedResponseRegex: regex && regex.length > 0 ? regex : undefined,
+                            });
+                          }}
+                          className="text-rose-400 hover:text-rose-600 p-1 mt-1"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const responses = [...(row.expectedResponses || []), ""];
+                      const regex = row.expectedResponseRegex
+                        ? [...row.expectedResponseRegex, false]
+                        : undefined;
+                      updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
+                    }}
+                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] px-1 py-0.5"
+                  >
+                    <Plus size={10} />
+                    {lang === "zh" ? "添加期望结果" : "Add Response"}
+                  </button>
+                </div>
               </div>
             )}
           </div>
