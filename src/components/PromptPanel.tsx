@@ -120,6 +120,8 @@ export function PromptPanel({
   });
   const [totalLoops, setTotalLoops] = useState(1);
   const batchAbortRef = useRef<boolean>(false);
+  const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
+  const responseSetOptionsLoaded = useRef(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -132,6 +134,22 @@ export function PromptPanel({
   useEffect(() => {
     if (!regexCleanOpen) loadQuickPresets();
   }, [regexCleanOpen]);
+
+  // ── Load response set options for the row editor ──
+  useEffect(() => {
+    if (responseSetOptionsLoaded.current) return;
+    responseSetOptionsLoaded.current = true;
+    const { listResponseSets, loadResponseSet } = useResponseSet();
+    (async () => {
+      const names = await listResponseSets();
+      const options: { id: string; name: string }[] = [];
+      for (const name of names) {
+        const set = await loadResponseSet(name);
+        if (set) options.push({ id: name, name: set.name });
+      }
+      setResponseSetOptions(options);
+    })();
+  }, []);
 
   // ── Handle pending response set apply ──
   useEffect(() => {
@@ -723,9 +741,48 @@ export function PromptPanel({
             {/* Expanded expected responses editor */}
             {expandedRowId === row.id && (
               <div className="border-b border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
-                <label className="block text-[10px] font-semibold text-[var(--text-muted)] mb-1">
-                  {t("prompt_expected_responses", lang)}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-semibold text-[var(--text-muted)]">
+                    {t("prompt_expected_responses", lang)}
+                  </label>
+                  {responseSetOptions.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          if (!selectedId) return;
+                          const { loadResponseSet, applyToGrid } = useResponseSet();
+                          loadResponseSet(selectedId).then((set) => {
+                            if (!set) return;
+                            const updates = applyToGrid(set, promptRows);
+                            if (updates.length === 0) {
+                              pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands", "warn");
+                              return;
+                            }
+                            let matchCount = 0;
+                            for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
+                              updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
+                              matchCount++;
+                            }
+                            pushToast(
+                              lang === "zh"
+                                ? `已从「${set.name}」导入 ${matchCount} 条指令`
+                                : `Imported ${matchCount} commands from "${set.name}"`,
+                              "success"
+                            );
+                          });
+                        }}
+                        className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-primary)] max-w-[130px]"
+                      >
+                        <option value="">{lang === "zh" ? "从响应集导入..." : "Import from set..."}</option>
+                        {responseSetOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>{opt.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
                 <textarea
                   value={(row.expectedResponses || []).join("\n")}
                   onChange={(e) => {
