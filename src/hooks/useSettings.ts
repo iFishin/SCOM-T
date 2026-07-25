@@ -206,7 +206,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       : DEFAULT_GRID_LAYOUT,
     notificationUrl: typeof raw.notificationUrl === "string" ? raw.notificationUrl : "",
     timestampFormat: raw.timestampFormat === "time" || raw.timestampFormat === "datetime" || raw.timestampFormat === "none"
-      ? raw.timestampFormat : undefined,
+      ? raw.timestampFormat : "datetime",
     sendMode: raw.sendMode === "hex" ? "hex" : "ascii",
     receiveMode: raw.receiveMode === "hex" ? "hex" : "ascii",
     displayMode: raw.displayMode === "text" || raw.displayMode === "hex"

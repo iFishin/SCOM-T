@@ -166,7 +166,7 @@ function App() {
 
   // ── Sync timestamp format setting ──
   useEffect(() => {
-    setTimestampFormat(settings.timestampFormat ?? "time");
+    setTimestampFormat(settings.timestampFormat ?? "datetime");
   }, [settings.timestampFormat]);
 
   // ── App logger initialisation ──
