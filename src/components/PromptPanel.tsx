@@ -752,6 +752,57 @@ export function PromptPanel({
                         onChange={(e) => {
                           const selectedId = e.target.value;
                           if (!selectedId) return;
+                          const { loadResponseSet, saveResponseSet } = useResponseSet();
+                          loadResponseSet(selectedId).then((set) => {
+                            if (!set) return;
+                            // Update or add the current command
+                            const cmdText = row.command.trim();
+                            if (!cmdText) {
+                              pushToast(lang === "zh" ? "当前指令行为空，无法保存" : "Command is empty, cannot save", "warn");
+                              return;
+                            }
+                            const existing = set.commands.findIndex(
+                              (c) => c.command.trim().toUpperCase() === cmdText.toUpperCase()
+                            );
+                            const newResponses = row.expectedResponses || [];
+                            const newRegex = row.expectedResponseRegex;
+                            if (existing >= 0) {
+                              set.commands[existing] = {
+                                ...set.commands[existing],
+                                expectedResponses: newResponses,
+                                expectedResponseRegex: newRegex,
+                              };
+                            } else {
+                              set.commands.push({
+                                command: cmdText,
+                                expectedResponses: newResponses,
+                                expectedResponseRegex: newRegex,
+                                matchMode: "all",
+                              });
+                            }
+                            saveResponseSet(selectedId, set).then(() => {
+                              pushToast(
+                                lang === "zh"
+                                  ? `已保存到「${set.name}」`
+                                  : `Saved to "${set.name}"`,
+                                "success"
+                              );
+                            });
+                          });
+                        }}
+                        className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-muted)] max-w-[90px]"
+                      >
+                        <option value="">{lang === "zh" ? "保存到..." : "Save to..."}</option>
+                        {responseSetOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>{opt.name}</option>
+                        ))}
+                      </select>
+                      <span className="w-px h-3 bg-[var(--border)]" />
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          if (!selectedId) return;
                           const { loadResponseSet, applyToGrid } = useResponseSet();
                           loadResponseSet(selectedId).then((set) => {
                             if (!set) return;
