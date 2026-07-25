@@ -393,10 +393,12 @@ export class MockSerialService implements ISerialService {
     const cmd = text.trim().replace(/\r?\n$/, "");
 
     // Find matching response (custom responses take priority)
+    // Sort by key length descending so longer/more specific commands match first
     let response = "OK";
-    for (const [key, val] of Object.entries(this.allResponses)) {
+    const sortedKeys = Object.keys(this.allResponses).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
       if (cmd.toUpperCase().startsWith(key)) {
-        response = val;
+        response = this.allResponses[key];
         break;
       }
     }
