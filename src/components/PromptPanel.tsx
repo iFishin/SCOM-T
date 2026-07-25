@@ -12,7 +12,6 @@ import type { Lang } from "../i18n.ts";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
 import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
-import { ResponseSetPanel } from "./ResponseSetPanel.tsx";
 
 type PromptRowStatus = "idle" | "pending" | "success" | "error";
 
@@ -56,6 +55,7 @@ type PromptPanelProps = {
   updatePromptRowCount: (count: number) => void;
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
   onNavigateToConfig?: () => void;
+  onNavigateToResponseSet?: () => void;
   activeConfigFile?: string;
   logs?: SerialLogEntry[];
   /** TCP Server broadcast — sends data to all connected TCP clients */
@@ -72,6 +72,7 @@ export function PromptPanel({
   updatePromptRowCount,
   pushToast,
   onNavigateToConfig,
+  onNavigateToResponseSet,
   activeConfigFile = "prompts.yaml",
   logs = [],
   tcpServerBroadcast,
@@ -112,7 +113,6 @@ export function PromptPanel({
   });
   const [totalLoops, setTotalLoops] = useState(1);
   const batchAbortRef = useRef<boolean>(false);
-  const [responseSetOpen, setResponseSetOpen] = useState(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -748,7 +748,7 @@ export function PromptPanel({
       <button type="button" onClick={() => handlePromptTabChange("grid")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
       <button type="button" onClick={() => onNavigateToConfig?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
       <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
-      <button type="button" onClick={() => setResponseSetOpen(true)} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
+      <button type="button" onClick={() => onNavigateToResponseSet?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
       {activePromptTab === "config" && (
         <>
           <span className="mx-2 text-[var(--border)]">|</span>
@@ -931,19 +931,6 @@ export function PromptPanel({
           lang={lang}
           onApply={(result) => { setBatchText(result); setRegexCleanOpen(false); }}
           onClose={() => setRegexCleanOpen(false)}
-        />
-      )}
-      {responseSetOpen && (
-        <ResponseSetPanel
-          lang={lang}
-          promptRows={promptRows}
-          onApply={(updates) => {
-            for (const { rowId, expectedResponses } of updates) {
-              updatePromptRow(rowId, { expectedResponses });
-            }
-            setResponseSetOpen(false);
-          }}
-          onClose={() => setResponseSetOpen(false)}
         />
       )}
     </>

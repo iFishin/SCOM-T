@@ -12,6 +12,7 @@ import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { ConfigPage } from "./components/ConfigPage.tsx";
+import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
 import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
 import { CodecDialog } from "./components/tools/CodecDialog.tsx";
 import { FileSend } from "./components/FileSend.tsx";
@@ -95,7 +96,7 @@ function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
 }
 
 function App() {
-  const [page, setPage] = useState<"main" | "config">("main");
+  const [page, setPage] = useState<"main" | "config" | "responseSet">("main");
   const [isMaximized, setIsMaximized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -225,6 +226,7 @@ function App() {
   }, [lang, pushToast]);
 
   const handleNavigateToConfig = useCallback(() => setPage("config"), []);
+  const handleNavigateToResponseSet = useCallback(() => setPage("responseSet"), []);
 
   const handleAddToPrompts = useCallback((payload: string) => {
     // Clean: trim whitespace, split by newlines, filter empties
@@ -782,7 +784,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -974,6 +976,8 @@ function App() {
 
       {page === "config" ? (
         <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
+      ) : page === "responseSet" ? (
+        <ResponseSetPage lang={lang} onClose={() => setPage("main")} />
       ) : (<>
         {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -1275,7 +1279,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
                 </div>
               </div>
             )}
