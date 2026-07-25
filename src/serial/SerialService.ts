@@ -7,6 +7,7 @@ import {
   type PortInfo,
 } from "tauri-plugin-serialplugin-api";
 import type { SerialConfig, PortSummary } from "./types.ts";
+import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import { normalizePluginPayload } from "../utils/hexConverter.ts";
 
 // ── Mapping helpers (internal) ──
@@ -220,7 +221,13 @@ export class TauriSerialService implements ISerialService {
 
 // ── Utility functions (not tied to a port instance) ──
 
-export async function listAvailablePorts(filterMode: "default" | "all" = "default"): Promise<PortSummary[]> {
+// Mock serial port path constant
+const MOCK_PORT_PATH = "__MOCK_SERIAL__";
+
+export async function listAvailablePorts(
+  filterMode: "default" | "all" = "default",
+  mockEnabled: boolean = false
+): Promise<PortSummary[]> {
   const result = await SerialPort.available_ports();
   const entries = Object.entries(result);
 
@@ -270,20 +277,22 @@ export async function listAvailablePorts(filterMode: "default" | "all" = "defaul
     };
   });
 
-  // Add mock serial port for testing
-  ports.unshift({
-    path: MOCK_PORT_PATH,
-    label: "[MOCK] 模拟串口 (AT指令测试)",
-    detail: {
+  // Add mock serial port only if enabled in settings
+  if (mockEnabled) {
+    ports.unshift({
       path: MOCK_PORT_PATH,
-      manufacturer: "SCOM-T",
-      product: "Mock Serial",
-      pid: "Unknown",
-      serial_number: "Unknown",
-      type: "Unknown",
-      vid: "Unknown",
-    },
-  });
+      label: "[MOCK] 模拟串口 (AT指令测试)",
+      detail: {
+        path: MOCK_PORT_PATH,
+        manufacturer: "SCOM-T",
+        product: "Mock Serial",
+        pid: "Unknown",
+        serial_number: "Unknown",
+        type: "Unknown",
+        vid: "Unknown",
+      },
+    });
+  }
 
   return ports;
 }
@@ -294,10 +303,8 @@ export async function forceClosePort(path: string): Promise<void> {
 
 // ── Mock Serial Service for testing ──
 
-const MOCK_PORT_PATH = "__MOCK_SERIAL__";
-
 // Common AT command responses for mock serial
-const MOCK_AT_RESPONSES: Record<string, string> = {
+export const BUILTIN_MOCK_RESPONSES: Record<string, string> = {
   "AT": "OK",
   "ATE0": "OK",
   "ATE1": "OK",
@@ -324,7 +331,30 @@ export class MockSerialService implements ISerialService {
   private _path: string | null = null;
   private dataCallback: ((data: Uint8Array) => void) | null = null;
   private disconnectCallback: (() => void) | null = null;
-  private responseDelay = 100; // ms
+  private responseDelay = 100;
+  private allResponses: Record<string, string> = { ...BUILTIN_MOCK_RESPONSES };
+
+  constructor(config?: MockSerialConfig) {
+    if (config) {
+      this.configure(config);
+    }
+  }
+
+  configure(config: MockSerialConfig): void {
+    this.responseDelay = config.responseDelay;
+
+    // Start with built-in responses
+    this.allResponses = { ...BUILTIN_MOCK_RESPONSES };
+
+    // Add custom responses (enabled ones override built-in)
+    if (config.customResponses) {
+      for (const r of config.customResponses) {
+        if (r.enabled && r.command) {
+          this.allResponses[r.command.toUpperCase()] = r.response;
+        }
+      }
+    }
+  }
 
   get isOpen(): boolean {
     return this._isOpen;
@@ -362,9 +392,9 @@ export class MockSerialService implements ISerialService {
     const text = new TextDecoder().decode(new Uint8Array(data));
     const cmd = text.trim().replace(/\r?\n$/, "");
 
-    // Find matching response
+    // Find matching response (custom responses take priority)
     let response = "OK";
-    for (const [key, val] of Object.entries(MOCK_AT_RESPONSES)) {
+    for (const [key, val] of Object.entries(this.allResponses)) {
       if (cmd.toUpperCase().startsWith(key)) {
         response = val;
         break;

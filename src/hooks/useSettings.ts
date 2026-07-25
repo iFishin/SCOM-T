@@ -40,6 +40,19 @@ export type GridItemLayout = {
   minH?: number;
 };
 
+export type MockResponse = {
+  id: string;
+  command: string;
+  response: string;
+  enabled: boolean;
+};
+
+export type MockSerialConfig = {
+  enabled: boolean;
+  responseDelay: number;
+  customResponses: MockResponse[];
+};
+
 export type AppSettings = {
   hotkeys: HotkeyConfig[];
   theme: ThemeSettings;
@@ -64,7 +77,8 @@ export type AppSettings = {
   sendPanelFileCollapsed?: boolean;
   sendPanelHotkeysCollapsed?: boolean;
   activeConfigFile?: string;
-  portFilterMode?: "default" | "all"; // 串口过滤模式：default=macOS隐藏tty.*, all=显示全部
+  portFilterMode?: "default" | "all";
+  mockSerial?: MockSerialConfig;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -208,6 +222,18 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
     sendPanelFileCollapsed: raw.sendPanelFileCollapsed === false ? false : true,
     sendPanelHotkeysCollapsed: raw.sendPanelHotkeysCollapsed === false ? false : true,
     portFilterMode: raw.portFilterMode === "all" ? "all" : "default",
+    mockSerial: raw.mockSerial && typeof raw.mockSerial === "object" ? {
+      enabled: raw.mockSerial.enabled === true,
+      responseDelay: typeof raw.mockSerial.responseDelay === "number"
+        ? Math.max(0, Math.min(5000, raw.mockSerial.responseDelay)) : 100,
+      customResponses: Array.isArray(raw.mockSerial.customResponses)
+        ? raw.mockSerial.customResponses.map(r => ({
+            id: r.id || `mock-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            command: r.command || "",
+            response: r.response || "",
+            enabled: r.enabled !== false,
+          })).filter(r => r.command) : [],
+    } : { enabled: false, responseDelay: 100, customResponses: [] },
   };
 }
 
@@ -414,6 +440,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, portFilterMode: mode }));
   }
 
+  function updateMockSerial(config: MockSerialConfig) {
+    setSettings((current) => ({ ...current, mockSerial: config }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -457,5 +487,6 @@ export function useSettings() {
     updateSendPanelHotkeysCollapsed,
     updateActiveConfigFile,
     updatePortFilterMode,
+    updateMockSerial,
   };
 }

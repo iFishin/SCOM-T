@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Clock, X } from "lucide-react";
 import { Button } from "./ui/Button";
-import type { HotkeyConfig, ThemeSettings, GridItemLayout } from "../hooks/useSettings.ts";
+import type { HotkeyConfig, ThemeSettings, GridItemLayout, MockSerialConfig } from "../hooks/useSettings.ts";
 import { DEFAULT_GRID_LAYOUT } from "../hooks/useSettings.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
@@ -9,6 +9,7 @@ import { GeneralSettings } from "./settings/GeneralSettings.tsx";
 import { HotkeysEditor } from "./settings/HotkeysEditor.tsx";
 import { ThemeEditor } from "./settings/ThemeEditor.tsx";
 import { LayoutEditor } from "./settings/LayoutEditor.tsx";
+import { MockSerialSettings } from "./settings/MockSerialSettings.tsx";
 
 // Subcomponents extracted to src/components/settings/*
 
@@ -26,6 +27,7 @@ type SettingsModalProps = {
   timestampFormat?: "time" | "datetime" | "none";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
+  mockSerial?: MockSerialConfig;
   onClose: () => void;
   onHotkeysChange: (hotkeys: HotkeyConfig[]) => void;
   onThemeChange: (theme: ThemeSettings) => void;
@@ -39,6 +41,7 @@ type SettingsModalProps = {
   onTimestampFormatChange?: (format: "time" | "datetime" | "none") => void;
   onLogRetentionDaysChange?: (days: number) => void;
   onPortFilterModeChange?: (mode: "default" | "all") => void;
+  onMockSerialChange?: (config: MockSerialConfig) => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -56,6 +59,7 @@ export function SettingsModal({
   timestampFormat,
   layoutMode,
   gridLayout,
+  mockSerial,
   onClose,
   onHotkeysChange,
   onThemeChange,
@@ -69,6 +73,7 @@ export function SettingsModal({
   onTimestampFormatChange,
   onLogRetentionDaysChange,
   onPortFilterModeChange,
+  onMockSerialChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -77,6 +82,7 @@ export function SettingsModal({
     t("settings_hotkeys", lang),
     t("settings_theme", lang),
     t("settings_layout", lang),
+    t("settings_mock_serial", lang),
   ];
 
 
@@ -210,6 +216,14 @@ export function SettingsModal({
                   />
                 )}
               </div>
+            )}
+
+            {activeTab === 5 && mockSerial && onMockSerialChange && (
+              <MockSerialSettings
+                lang={lang}
+                mockSerial={mockSerial}
+                onMockSerialChange={onMockSerialChange}
+              />
             )}
 
             </div>

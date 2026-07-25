@@ -11,6 +11,7 @@ import type { ITcpServerService } from "../tcp/TcpServerService.ts";
 import { TauriTcpServerService } from "../tcp/TcpServerService.ts";
 import type { PortSummary, SerialLogEntry, ReceiveMode, SendMode } from "../serial/types.ts";
 import type { ConnectionType, TcpConnectionStatus, TcpServerStatus, TcpClientInfo, TcpProtocol } from "../tcp/types.ts";
+import type { MockSerialConfig } from "./useSettings.ts";
 
 // ── Re-export types from the new service layers for backward compatibility ──
 
@@ -65,16 +66,19 @@ export function useSerialPort({
   config,
   receiveMode,
   portFilterMode = "default",
+  mockSerial,
 }: {
   config: SerialConfig;
   receiveMode: ReceiveMode;
   portFilterMode?: "default" | "all";
+  mockSerial?: MockSerialConfig;
 }) {
   const serialRef = useRef<ISerialService | null>(null);
   const tcpClientRef = useRef<ITcpClientService | null>(null);
   const tcpServerRef = useRef<ITcpServerService | null>(null);
   const receiveModeRef = useRef(receiveMode);
   const configRef = useRef(config);
+  const mockSerialRef = useRef(mockSerial);
   // Keep configRef in sync so callback closures always read latest config
   configRef.current = config;
   const seqCounter = useRef(0);
@@ -131,6 +135,10 @@ export function useSerialPort({
   useEffect(() => {
     receiveModeRef.current = receiveMode;
   }, [receiveMode]);
+
+  useEffect(() => {
+    mockSerialRef.current = mockSerial;
+  }, [mockSerial]);
 
   // ── Rate calculation (every 1s) ──
   useEffect(() => {
@@ -196,7 +204,7 @@ export function useSerialPort({
         if (serialRef.current) {
           serialRef.current.dispose().catch(() => undefined);
         }
-        serialRef.current = new MockSerialService();
+        serialRef.current = new MockSerialService(mockSerialRef.current);
         // Wire up serial data callback
         serialRef.current.onData((data: Uint8Array) => {
           const bytes = Array.from(data);
@@ -449,7 +457,8 @@ export function useSerialPort({
 
   async function refreshPorts(): Promise<number> {
     try {
-      const result = await listAvailablePorts(portFilterMode);
+      const mockEnabled = mockSerialRef.current?.enabled === true;
+      const result = await listAvailablePorts(portFilterMode, mockEnabled);
       setPorts(result);
       setError(null);
       return result.length;

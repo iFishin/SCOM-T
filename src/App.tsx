@@ -143,7 +143,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -158,7 +158,7 @@ function App() {
     refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
     tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals, tcpServerBroadcast,
     txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates, getSignalHistory,
-  } = useSerialPort({ config, receiveMode, portFilterMode: settings.portFilterMode });
+  } = useSerialPort({ config, receiveMode, portFilterMode: settings.portFilterMode, mockSerial: settings.mockSerial });
 
   const logFile = useLogFile();
   // Sync logs to log file hook via ref (no re-render trigger)
@@ -1308,6 +1308,7 @@ function App() {
         portFilterMode={settings.portFilterMode}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
+        mockSerial={settings.mockSerial}
         onClose={() => setSettingsOpen(false)}
         onHotkeysChange={updateHotkeys}
         onThemeChange={updateTheme}
@@ -1321,6 +1322,7 @@ function App() {
         onTimestampFormatChange={updateTimestampFormat}
         onLogRetentionDaysChange={updateLogRetentionDays}
         onPortFilterModeChange={updatePortFilterMode}
+        onMockSerialChange={updateMockSerial}
       />
       {/* ── Notification card modal ── */}
       {cardNotifications.length > 0 && (

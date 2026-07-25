@@ -258,6 +258,14 @@ const ZH: Dict = {
   batch_start: "▶ 开始",
   batch_stop: "■ 停止",
   batch_no_selected: "请先选择要执行的指令",
+  settings_mock_serial_desc: "用于AT指令调试的模拟串口设备",
+  mock_serial_delay: "响应延迟",
+  mock_serial_builtin_responses: "内置响应",
+  mock_serial_custom_responses: "自定义响应",
+  mock_serial_add_response: "添加响应",
+  mock_serial_templates: "响应模板",
+  mock_serial_command: "AT指令",
+  mock_serial_response: "响应内容",
 };
 
 const EN: Dict = {
@@ -518,6 +526,17 @@ const EN: Dict = {
   batch_start: "▶ Start",
   batch_stop: "■ Stop",
   batch_no_selected: "Select commands to execute",
+
+  // Mock serial settings
+  settings_mock_serial: "Mock Serial",
+  settings_mock_serial_desc: "Virtual serial port for AT command debugging",
+  mock_serial_delay: "Response Delay",
+  mock_serial_builtin_responses: "Built-in Responses",
+  mock_serial_custom_responses: "Custom Responses",
+  mock_serial_add_response: "Add Response",
+  mock_serial_templates: "Response Templates",
+  mock_serial_command: "AT Command",
+  mock_serial_response: "Response",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };
