@@ -590,7 +590,17 @@ export function PromptPanel({
         <button onClick={clearAllStatuses} className="hover:text-[var(--text-primary)] transition-colors" title={lang === "zh" ? "点击清空所有状态" : "Clear all statuses"}>#</button>
         <div className="flex justify-center">
           <Checkbox checked={allSelected} onChange={() => toggleSelectAll()} />
-        </div><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
+        </div><div>{t("send", lang)}</div><div className="flex items-center justify-center gap-1">
+          <span>{t("command_placeholder", lang)}</span>
+          <button
+            type="button"
+            onClick={() => setResponseSetOpen(true)}
+            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
+            title={lang === "zh" ? "指令响应集" : "Response Sets"}
+          >
+            <List size={9} />
+          </button>
+        </div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
       </div>
       <div className="h-[calc(100%-30px)] overflow-y-auto">
         {promptRows.map((row, index) => (
@@ -816,18 +826,6 @@ export function PromptPanel({
           {lang === "zh" ? "广播选中" : "Broadcast"}
         </Button>
       )}
-
-      <span className="w-px h-4 bg-[var(--border)]" />
-
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => setResponseSetOpen(true)}
-        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)]"
-      >
-        <List size={12} />
-        {lang === "zh" ? "指令响应集" : "Response Sets"}
-      </Button>
     </div>
   );
 
