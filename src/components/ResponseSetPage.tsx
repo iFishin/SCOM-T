@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, FileText, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, FolderOpen, Plus, Save, Trash2, List } from "lucide-react";
 import { Button } from "./ui/Button.tsx";
 import { Input } from "./ui/Input.tsx";
 import { t } from "../i18n";
@@ -9,19 +9,28 @@ import { useResponseSet, type ResponseSet, type ResponseSetCommand } from "../ho
 type ResponseSetPageProps = {
   lang: Lang;
   onClose: () => void;
+  onApply?: (responseSetId: string) => void;
 };
 
-export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
+export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps) {
   const { listResponseSets, loadResponseSet, saveResponseSet, deleteResponseSet, openResponseSetsDir } = useResponseSet();
   const [setNames, setSetNames] = useState<string[]>([]);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [currentSet, setCurrentSet] = useState<ResponseSet | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    listResponseSets().then((names) => {
+    listResponseSets().then(async (names) => {
       setSetNames(names);
+      // Load display names for sidebar
+      const namesMap: Record<string, string> = {};
+      for (const name of names) {
+        const set = await loadResponseSet(name);
+        if (set) namesMap[name] = set.name;
+      }
+      setDisplayNames(namesMap);
       if (names.length > 0) {
         setSelectedName(names[0]);
       }
@@ -39,6 +48,13 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
     }
   }, [selectedName]);
 
+  // Sync display name when currentSet changes
+  useEffect(() => {
+    if (selectedName && currentSet) {
+      setDisplayNames((prev) => ({ ...prev, [selectedName]: currentSet.name }));
+    }
+  }, [currentSet?.name]);
+
   function handleCreateNew() {
     const baseName = lang === "zh" ? "新响应集" : "New Response Set";
     const newName = `${baseName}_${Date.now()}`;
@@ -49,6 +65,7 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
     };
     saveResponseSet(newName, newSet).then(() => {
       setSetNames((prev) => [...prev, newName].sort());
+      setDisplayNames((prev) => ({ ...prev, [newName]: baseName }));
       setSelectedName(newName);
     });
   }
@@ -70,6 +87,14 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
     setSaving(false);
   }
 
+  function handleApplyAndClose() {
+    if (!currentSet || !selectedName) return;
+    handleSave().then(() => {
+      onApply?.(selectedName);
+      onClose();
+    });
+  }
+
   function updateSetField(field: "name" | "description", value: string) {
     if (!currentSet) return;
     setCurrentSet({ ...currentSet, [field]: value });
@@ -84,18 +109,49 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
     setDirty(true);
   }
 
-  function updateExpectedResponses(index: number, text: string) {
+  function updateMatchMode(index: number, matchMode: "all" | "any") {
     if (!currentSet) return;
-    const lines = text.split("\n").filter((l) => l.trim() !== "");
     const commands = [...currentSet.commands];
-    commands[index] = { ...commands[index], expectedResponses: lines };
+    commands[index] = { ...commands[index], matchMode };
+    setCurrentSet({ ...currentSet, commands });
+    setDirty(true);
+  }
+
+  function addExpectedResponse(cmdIndex: number) {
+    if (!currentSet) return;
+    const commands = [...currentSet.commands];
+    const cmd = commands[cmdIndex];
+    commands[cmdIndex] = { ...cmd, expectedResponses: [...cmd.expectedResponses, ""] };
+    setCurrentSet({ ...currentSet, commands });
+    setDirty(true);
+  }
+
+  function updateExpectedResponse(cmdIndex: number, respIndex: number, text: string) {
+    if (!currentSet) return;
+    const commands = [...currentSet.commands];
+    const cmd = commands[cmdIndex];
+    const responses = [...cmd.expectedResponses];
+    responses[respIndex] = text;
+    commands[cmdIndex] = { ...cmd, expectedResponses: responses };
+    setCurrentSet({ ...currentSet, commands });
+    setDirty(true);
+  }
+
+  function removeExpectedResponse(cmdIndex: number, respIndex: number) {
+    if (!currentSet) return;
+    const commands = [...currentSet.commands];
+    const cmd = commands[cmdIndex];
+    commands[cmdIndex] = {
+      ...cmd,
+      expectedResponses: cmd.expectedResponses.filter((_, i) => i !== respIndex),
+    };
     setCurrentSet({ ...currentSet, commands });
     setDirty(true);
   }
 
   function addCommand() {
     if (!currentSet) return;
-    const newCmd: ResponseSetCommand = { command: "", expectedResponses: [] };
+    const newCmd: ResponseSetCommand = { command: "", expectedResponses: [], matchMode: "all" };
     setCurrentSet({ ...currentSet, commands: [...currentSet.commands, newCmd] });
     setDirty(true);
   }
@@ -133,7 +189,7 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
             className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
           >
             <Plus size={12} />
-            {lang === "zh" ? "新建响应集" : "New Set"}
+            {lang === "zh" ? "新建" : "New"}
           </Button>
           <Button
             type="button"
@@ -141,8 +197,19 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
             className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
           >
             <FolderOpen size={12} />
-            {lang === "zh" ? "打开文件夹" : "Open Folder"}
+            {lang === "zh" ? "文件夹" : "Folder"}
           </Button>
+          {currentSet && selectedName && (
+            <Button
+              type="button"
+              onClick={handleApplyAndClose}
+              disabled={!currentSet.commands.some((c) => c.command.trim() && c.expectedResponses.some((r) => r.trim()))}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
+            >
+              <List size={12} />
+              {t("response_set_apply", lang)}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -167,12 +234,14 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
                 }`}
               >
                 <FileText size={13} />
-                <span className="truncate">{name.replace(/_\d+$/, "")}</span>
+                <span className="truncate">
+                  {displayNames[name] || name.replace(/_\d+$/, "")}
+                </span>
               </button>
             ))}
             {setNames.length === 0 && (
               <div className="text-[10px] text-[var(--text-muted)] text-center py-8">
-                {lang === "zh" ? "暂无响应集\n点击上方「新建」创建" : "No response sets\nClick 'New Set' to create"}
+                {lang === "zh" ? "暂无响应集\n点击上方「新建」创建" : "No response sets\nClick 'New' to create"}
               </div>
             )}
           </div>
@@ -239,9 +308,10 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
                   </Button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {currentSet.commands.map((cmd, i) => (
                     <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-3 space-y-2">
+                      {/* Command header */}
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-[var(--text-muted)] font-mono w-5">#{i + 1}</span>
                         <Input
@@ -251,26 +321,78 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
                           placeholder={lang === "zh" ? "AT指令" : "AT Command"}
                           className="flex-1 text-xs font-mono"
                         />
+                        {/* Match mode toggle */}
+                        <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => updateMatchMode(i, "all")}
+                            className={`px-2 py-1 text-[10px] transition-colors ${
+                              cmd.matchMode === "all"
+                                ? "bg-[var(--accent)] text-white"
+                                : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                            }`}
+                            title={lang === "zh" ? "全部匹配（顺序）" : "Match all (sequential)"}
+                          >
+                            {t("response_set_match_all", lang)}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateMatchMode(i, "any")}
+                            className={`px-2 py-1 text-[10px] transition-colors ${
+                              cmd.matchMode === "any"
+                                ? "bg-[var(--accent)] text-white"
+                                : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                            }`}
+                            title={lang === "zh" ? "任意匹配" : "Match any"}
+                          >
+                            {t("response_set_match_any", lang)}
+                          </button>
+                        </div>
                         <Button
                           type="button"
                           onClick={() => removeCommand(i)}
                           className="text-rose-500 hover:text-rose-600 p-1"
-                          title={lang === "zh" ? "删除" : "Delete"}
+                          title={lang === "zh" ? "删除指令" : "Delete command"}
                         >
                           <Trash2 size={12} />
                         </Button>
                       </div>
-                      <div>
-                        <div className="text-[10px] text-[var(--text-muted)] mb-1">
-                          {lang === "zh" ? "期望响应（每行一个，按顺序匹配）" : "Expected responses (one per line, matched in order)"}
+
+                      {/* Expected responses */}
+                      <div className="space-y-1.5 pl-7">
+                        <div className="text-[10px] text-[var(--text-muted)]">
+                          {cmd.matchMode === "all"
+                            ? (lang === "zh" ? "期望响应（按顺序全部匹配）：" : "Expected responses (match all in order):")
+                            : (lang === "zh" ? "期望响应（匹配任意一个即可）：" : "Expected responses (match any one):")
+                          }
                         </div>
-                        <textarea
-                          value={cmd.expectedResponses.join("\n")}
-                          onChange={(e) => updateExpectedResponses(i, e.target.value)}
-                          placeholder={lang === "zh" ? "每行输入一个期望响应..." : "Enter one expected response per line..."}
-                          className="w-full text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-[var(--accent)] font-mono"
-                          rows={3}
-                        />
+                        {cmd.expectedResponses.map((resp, j) => (
+                          <div key={j} className="flex items-start gap-1.5">
+                            <textarea
+                              value={resp}
+                              onChange={(e) => updateExpectedResponse(i, j, e.target.value)}
+                              placeholder={lang === "zh" ? "输入期望响应内容..." : "Enter expected response text..."}
+                              className="flex-1 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-[var(--accent)] font-mono min-h-[28px]"
+                              rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeExpectedResponse(i, j)}
+                              className="text-rose-400 hover:text-rose-600 p-1 mt-1"
+                              title={lang === "zh" ? "删除" : "Remove"}
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addExpectedResponse(i)}
+                          className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] px-1 py-0.5"
+                        >
+                          <Plus size={10} />
+                          {t("response_set_add_expected", lang)}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -284,7 +406,7 @@ export function ResponseSetPage({ lang, onClose }: ResponseSetPageProps) {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-xs text-[var(--text-muted)]">
-              {lang === "zh" ? "从左侧选择一个响应集，或点击「新建响应集」创建" : "Select a response set from the left, or create a new one"}
+              {lang === "zh" ? "从左侧选择一个响应集，或点击「新建」创建" : "Select a response set from the left, or create a new one"}
             </div>
           )}
         </div>

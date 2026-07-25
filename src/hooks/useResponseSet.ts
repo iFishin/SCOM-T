@@ -8,6 +8,7 @@ import yaml from "js-yaml";
 export type ResponseSetCommand = {
   command: string;
   expectedResponses: string[];
+  matchMode: "all" | "any";
 };
 
 export type ResponseSet = {
@@ -25,6 +26,7 @@ interface YamlResponseSet {
   commands: {
     command: string;
     expected_responses?: string[];
+    match_mode?: "all" | "any";
   }[];
 }
 
@@ -85,6 +87,7 @@ export function useResponseSet() {
               expectedResponses: Array.isArray(c.expected_responses)
                 ? c.expected_responses.map(String)
                 : [],
+              matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
             })).filter((c) => c.command)
           : [],
       };
@@ -101,6 +104,7 @@ export function useResponseSet() {
       commands: set.commands.map((c) => ({
         command: c.command,
         expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
+        match_mode: c.matchMode === "any" ? "any" : undefined,
       })),
     };
     const yamlText = yaml.dump(yamlDoc, { indent: 2, lineWidth: -1, noRefs: true, quotingType: "'" });
@@ -130,15 +134,15 @@ export function useResponseSet() {
   function applyToGrid(
     responseSet: ResponseSet,
     promptRows: { id: number; command: string }[],
-  ): { rowId: number; expectedResponses: string[] }[] {
-    const results: { rowId: number; expectedResponses: string[] }[] = [];
+  ): { rowId: number; expectedResponses: string[]; matchMode: "all" | "any" }[] {
+    const results: { rowId: number; expectedResponses: string[]; matchMode: "all" | "any" }[] = [];
     for (const row of promptRows) {
       if (!row.command.trim()) continue;
       const matched = responseSet.commands.find(
         (c) => c.command.trim().toUpperCase() === row.command.trim().toUpperCase(),
       );
       if (matched && matched.expectedResponses.length > 0) {
-        results.push({ rowId: row.id, expectedResponses: [...matched.expectedResponses] });
+        results.push({ rowId: row.id, expectedResponses: [...matched.expectedResponses], matchMode: matched.matchMode });
       }
     }
     return results;

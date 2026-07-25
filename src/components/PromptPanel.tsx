@@ -10,6 +10,7 @@ import { Select } from "./ui/Select.tsx";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
+import { useResponseSet } from "../hooks/useResponseSet.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
 import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 
@@ -56,6 +57,8 @@ type PromptPanelProps = {
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
   onNavigateToConfig?: () => void;
   onNavigateToResponseSet?: () => void;
+  pendingApplyResponseSet?: string | null;
+  onClearPendingApply?: () => void;
   activeConfigFile?: string;
   logs?: SerialLogEntry[];
   /** TCP Server broadcast — sends data to all connected TCP clients */
@@ -73,6 +76,8 @@ export function PromptPanel({
   pushToast,
   onNavigateToConfig,
   onNavigateToResponseSet,
+  pendingApplyResponseSet,
+  onClearPendingApply,
   activeConfigFile = "prompts.yaml",
   logs = [],
   tcpServerBroadcast,
@@ -125,6 +130,37 @@ export function PromptPanel({
   useEffect(() => {
     if (!regexCleanOpen) loadQuickPresets();
   }, [regexCleanOpen]);
+
+  // ── Handle pending response set apply ──
+  useEffect(() => {
+    if (!pendingApplyResponseSet || !onClearPendingApply) return;
+    const { loadResponseSet, applyToGrid } = useResponseSet();
+    (async () => {
+      const set = await loadResponseSet(pendingApplyResponseSet);
+      if (!set) {
+        pushToast(lang === "zh" ? "响应集加载失败" : "Failed to load response set", "error");
+        onClearPendingApply();
+        return;
+      }
+      const updates = applyToGrid(set, promptRows);
+      if (updates.length === 0) {
+        pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands in response set", "warn");
+      } else {
+        let matchCount = 0;
+        for (const { rowId, expectedResponses } of updates) {
+          updatePromptRow(rowId, { expectedResponses });
+          matchCount++;
+        }
+        pushToast(
+          lang === "zh"
+            ? `已从「${set.name}」应用 ${matchCount} 条指令的期望结果`
+            : `Applied ${matchCount} commands from "${set.name}"`,
+          "success"
+        );
+      }
+      onClearPendingApply();
+    })();
+  }, [pendingApplyResponseSet]);
 
   async function loadQuickPresets() {
     try {

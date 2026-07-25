@@ -97,6 +97,7 @@ function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
 
 function App() {
   const [page, setPage] = useState<"main" | "config" | "responseSet">("main");
+  const [pendingApplyResponseSet, setPendingApplyResponseSet] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -784,7 +785,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -977,7 +978,7 @@ function App() {
       {page === "config" ? (
         <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
       ) : page === "responseSet" ? (
-        <ResponseSetPage lang={lang} onClose={() => setPage("main")} />
+        <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
       ) : (<>
         {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -1279,7 +1280,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
                 </div>
               </div>
             )}
