@@ -1,5 +1,0 @@
-{
-    "AT+CUSTOM": "CUSTOM RESPONSE",
-    "AT+TEST": "+TEST: 1,2,3\n\nOK",
-    "AT+DATA": "+DATA: \"Hello World\"\n\nOK"
-}
