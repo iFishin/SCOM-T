@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, List } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -590,17 +590,7 @@ export function PromptPanel({
         <button onClick={clearAllStatuses} className="hover:text-[var(--text-primary)] transition-colors" title={lang === "zh" ? "点击清空所有状态" : "Clear all statuses"}>#</button>
         <div className="flex justify-center">
           <Checkbox checked={allSelected} onChange={() => toggleSelectAll()} />
-        </div><div>{t("send", lang)}</div><div className="flex items-center justify-center gap-1">
-          <span>{t("command_placeholder", lang)}</span>
-          <button
-            type="button"
-            onClick={() => setResponseSetOpen(true)}
-            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
-            title={lang === "zh" ? "指令响应集" : "Response Sets"}
-          >
-            <List size={9} />
-          </button>
-        </div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
+        </div><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
       </div>
       <div className="h-[calc(100%-30px)] overflow-y-auto">
         {promptRows.map((row, index) => (
@@ -757,7 +747,8 @@ export function PromptPanel({
     <div className="flex items-center rounded-md border border-[var(--border)] overflow-hidden">
       <button type="button" onClick={() => handlePromptTabChange("grid")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
       <button type="button" onClick={() => onNavigateToConfig?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
-      <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
+      <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
+      <button type="button" onClick={() => setResponseSetOpen(true)} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
       {activePromptTab === "config" && (
         <>
           <span className="mx-2 text-[var(--border)]">|</span>
