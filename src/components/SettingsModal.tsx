@@ -22,6 +22,7 @@ type SettingsModalProps = {
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
   logRetentionDays?: number;
+  portFilterMode?: "default" | "all";
   timestampFormat?: "time" | "datetime" | "none";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
@@ -37,6 +38,7 @@ type SettingsModalProps = {
   onGridLayoutChange?: (layout: GridItemLayout[]) => void;
   onTimestampFormatChange?: (format: "time" | "datetime" | "none") => void;
   onLogRetentionDaysChange?: (days: number) => void;
+  onPortFilterModeChange?: (mode: "default" | "all") => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -50,6 +52,7 @@ export function SettingsModal({
   closeToTray,
   allowMultiInstance,
   logRetentionDays,
+  portFilterMode,
   timestampFormat,
   layoutMode,
   gridLayout,
@@ -65,6 +68,7 @@ export function SettingsModal({
   onGridLayoutChange,
   onTimestampFormatChange,
   onLogRetentionDaysChange,
+  onPortFilterModeChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -116,7 +120,7 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} />
+              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} />
             )}
 
             {activeTab === 1 && (

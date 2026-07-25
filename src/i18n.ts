@@ -243,6 +243,14 @@ const ZH: Dict = {
   config_cancel: "取消",
   config_new_name_hint: "输入配置文件名称",
 
+  // Port filter mode
+  port_filter_mode: "串口过滤模式",
+  port_filter_mode_desc: "macOS 系统中每个串口有两个设备(cu.* 和 tty.*)，此设置控制是否显示全部",
+  port_filter_default: "推荐",
+  port_filter_default_desc: "macOS 隐藏 tty.* 设备，其他系统显示全部",
+  port_filter_all: "显示全部",
+  port_filter_all_desc: "显示所有串口设备（包括虚拟串口）",
+
   // Batch execution
   batch_loop: "循环",
   batch_times: "次",
@@ -494,6 +502,14 @@ const EN: Dict = {
   config_dont_save: "Don't Save",
   config_cancel: "Cancel",
   config_new_name_hint: "Enter config file name",
+
+  // Port filter mode
+  port_filter_mode: "Port Filter Mode",
+  port_filter_mode_desc: "On macOS, each serial port has two devices (cu.* and tty.*). This setting controls whether to show all devices.",
+  port_filter_default: "Recommended",
+  port_filter_default_desc: "macOS hides tty.* devices, other systems show all",
+  port_filter_all: "Show All",
+  port_filter_all_desc: "Show all serial devices (including virtual ports)",
 
   // Batch execution
   batch_loop: "Loop",

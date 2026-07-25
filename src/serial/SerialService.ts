@@ -220,15 +220,35 @@ export class TauriSerialService implements ISerialService {
 
 // ── Utility functions (not tied to a port instance) ──
 
-export async function listAvailablePorts(): Promise<PortSummary[]> {
+export async function listAvailablePorts(filterMode: "default" | "all" = "default"): Promise<PortSummary[]> {
   const result = await SerialPort.available_ports();
   const entries = Object.entries(result);
-  // Deduplicate: on macOS each physical port appears as both /dev/cu.* and /dev/tty.*
-  // Prefer cu.* (call-up) as it's the standard for serial communication
+
+  // macOS: each physical port appears as both /dev/cu.* and /dev/tty.*
+  // Filter based on user preference
   const seen = new Set<string>();
   const deduped = entries.filter(([portName]) => {
     const base = portName.replace(/^.*\//, ""); // last path component
-    // For macOS-style pairs, prefer cu.* over tty.*
+
+    // If showing all ports, skip deduplication logic for tty.*
+    if (filterMode === "all") {
+      // Still deduplicate cu.* vs tty.* pairs, but keep tty.* if no cu.* exists
+      if (base.startsWith("cu.")) {
+        const key = base.replace(/^cu\./, "");
+        if (seen.has(`tty.${key}`)) return false; // tty.* already seen, skip this cu.*
+        seen.add(`cu.${key}`);
+        return true;
+      }
+      if (base.startsWith("tty.")) {
+        const key = base.replace(/^tty\./, "");
+        if (seen.has(`cu.${key}`)) return false; // cu.* exists, skip this tty.*
+        seen.add(`tty.${key}`);
+        return true;
+      }
+      return true; // Non-macOS port, keep as-is
+    }
+
+    // Default mode: prefer cu.* over tty.*
     if (base.startsWith("cu.")) {
       const key = base.replace(/^cu\./, "");
       if (seen.has(key)) return false;
@@ -236,11 +256,11 @@ export async function listAvailablePorts(): Promise<PortSummary[]> {
       return true;
     }
     if (base.startsWith("tty.")) {
-      return false; // Always drop tty.*
+      return false; // Always drop tty.* in default mode
     }
-    // Non-macOS port (e.g., COM ports on Windows), keep as-is
     return true;
   });
+
   return deduped.map(([portName, port]) => {
     const detail = { ...port, path: portName };
     return {

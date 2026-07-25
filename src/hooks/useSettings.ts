@@ -63,7 +63,8 @@ export type AppSettings = {
   sendPanelExpanded?: boolean;
   sendPanelFileCollapsed?: boolean;
   sendPanelHotkeysCollapsed?: boolean;
-  activeConfigFile?: string; // Currently active config file name
+  activeConfigFile?: string;
+  portFilterMode?: "default" | "all"; // 串口过滤模式：default=macOS隐藏tty.*, all=显示全部
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -156,6 +157,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   sendPanelExpanded: false,
   sendPanelFileCollapsed: true,
   sendPanelHotkeysCollapsed: true,
+  portFilterMode: "default",
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -205,6 +207,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
     sendPanelExpanded: raw.sendPanelExpanded === true,
     sendPanelFileCollapsed: raw.sendPanelFileCollapsed === false ? false : true,
     sendPanelHotkeysCollapsed: raw.sendPanelHotkeysCollapsed === false ? false : true,
+    portFilterMode: raw.portFilterMode === "all" ? "all" : "default",
   };
 }
 
@@ -407,6 +410,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, activeConfigFile: fileName }));
   }
 
+  function updatePortFilterMode(mode: "default" | "all") {
+    setSettings((current) => ({ ...current, portFilterMode: mode }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -449,5 +456,6 @@ export function useSettings() {
     updateSendPanelFileCollapsed,
     updateSendPanelHotkeysCollapsed,
     updateActiveConfigFile,
+    updatePortFilterMode,
   };
 }

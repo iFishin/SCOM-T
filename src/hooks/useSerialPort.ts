@@ -64,9 +64,11 @@ export type SerialConfig = {
 export function useSerialPort({
   config,
   receiveMode,
+  portFilterMode = "default",
 }: {
   config: SerialConfig;
   receiveMode: ReceiveMode;
+  portFilterMode?: "default" | "all";
 }) {
   const serialRef = useRef<ISerialService | null>(null);
   const tcpClientRef = useRef<ITcpClientService | null>(null);
@@ -395,7 +397,7 @@ export function useSerialPort({
 
   async function refreshPorts(): Promise<number> {
     try {
-      const result = await listAvailablePorts();
+      const result = await listAvailablePorts(portFilterMode);
       setPorts(result);
       setError(null);
       return result.length;
