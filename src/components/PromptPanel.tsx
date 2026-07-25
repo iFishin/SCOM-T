@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -11,7 +11,19 @@ import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
-import type { SendMode } from "../hooks/useSerialPort.ts";
+import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
+
+type PromptRowStatus = "idle" | "pending" | "success" | "error";
+
+type WaitingResponse = {
+  rowId: number;
+  expected: string[];
+  timeout: number;
+  startTime: number;
+  receivedBuffer: string;
+  matchIndex: number;
+  timer: ReturnType<typeof setTimeout>;
+};
 
 type PromptRow = {
   id: number;
@@ -22,6 +34,7 @@ type PromptRow = {
   interval: string;
   device?: string;
   expectedResponses?: string[];
+  status?: PromptRowStatus;
 };
 
 type PromptPanelProps = {
@@ -33,6 +46,8 @@ type PromptPanelProps = {
   updatePromptRowCount: (count: number) => void;
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
   onNavigateToConfig?: () => void;
+  activeConfigFile?: string;
+  logs?: SerialLogEntry[];
   /** TCP Server broadcast — sends data to all connected TCP clients */
   tcpServerBroadcast?: (data: number[]) => Promise<void>;
   tcpClientCount?: number;
@@ -47,6 +62,8 @@ export function PromptPanel({
   updatePromptRowCount,
   pushToast,
   onNavigateToConfig,
+  activeConfigFile = "prompts.yaml",
+  logs = [],
   tcpServerBroadcast,
   tcpClientCount,
 }: PromptPanelProps) {
@@ -62,6 +79,7 @@ export function PromptPanel({
       isHex: false,
       ender: "\r\n" as const,
       interval: "",
+      status: "idle" as PromptRowStatus,
     })),
   );
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -73,6 +91,8 @@ export function PromptPanel({
   const [regexCleanOpen, setRegexCleanOpen] = useState(false);
   const [quickPresets, setQuickPresets] = useState<{ name: string; pattern: string; replacement: string; mode?: string; pinned?: boolean }[]>([]);
   const presetsLoaded = useRef(false);
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+  const waitingResponsesRef = useRef<Map<number, WaitingResponse>>(new Map());
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -115,23 +135,32 @@ export function PromptPanel({
   const promptRowsRef = useRef(promptRows);
   promptRowsRef.current = promptRows;
 
-  // ── Load prompts.yaml on startup ──
+  // ── Load config file on startup ──
 
   useEffect(() => {
     async function load() {
       try {
         const { join, homeDir } = await import("@tauri-apps/api/path");
         const { readTextFile } = await import("@tauri-apps/plugin-fs");
-        const path = await join(await homeDir(), "SCOM-T", "prompts.yaml");
-        const text = await readTextFile(path);
+
+        let filePath: string;
+        if (activeConfigFile === "prompts.yaml") {
+          filePath = await join(await homeDir(), "SCOM-T", "prompts.yaml");
+        } else {
+          filePath = await join(await homeDir(), "SCOM-T", "prompts", activeConfigFile);
+        }
+
+        const text = await readTextFile(filePath);
         const result = parseYamlToRows(text);
         if (result.valid && result.rows.length > 0) {
           setPromptRows(result.rows);
+          // Update promptRowCount to match the loaded config
+          updatePromptRowCount(result.rows.length);
         }
       } catch { /* file may not exist yet */ }
     }
     load();
-  }, []);
+  }, [activeConfigFile]);
 
   // Keep promptRows length in sync with promptRowCount
   useEffect(() => {
@@ -142,12 +171,12 @@ export function PromptPanel({
         const existing = current[i];
         return existing
           ? { ...existing, id: i + 1 }
-          : { id: i + 1, selected: false, command: "", isHex: false, ender: "\r\n" as const, interval: "" };
+          : { id: i + 1, selected: false, command: "", isHex: false, ender: "\r\n" as const, interval: "", status: "idle" as PromptRowStatus };
       });
     });
   }, [promptRowCount]);
 
-  // Auto-save to ~/SCOM-T/prompts.yaml
+  // Auto-save to config file
   useEffect(() => {
     if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
     promptSaveTimer.current = setTimeout(async () => {
@@ -156,12 +185,25 @@ export function PromptPanel({
         const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
         const dir = await join(await homeDir(), "SCOM-T");
         await mkdir(dir, { recursive: true }).catch(() => {});
-        const path = await join(dir, "prompts.yaml");
-        await writeTextFile(path, serializeToYaml(promptRows));
+
+        let savePath: string;
+        if (activeConfigFile === "prompts.yaml") {
+          savePath = await join(dir, "prompts.yaml");
+        } else {
+          savePath = await join(dir, "prompts", activeConfigFile);
+        }
+
+        await writeTextFile(savePath, serializeToYaml(promptRows));
+
+        // Also sync to prompts.yaml if editing a file from prompts directory
+        if (activeConfigFile !== "prompts.yaml") {
+          const mainPath = await join(dir, "prompts.yaml");
+          await writeTextFile(mainPath, serializeToYaml(promptRows));
+        }
       } catch { /* auto-save failure is non-critical */ }
     }, 800);
     return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
-  }, [promptRows]);
+  }, [promptRows, activeConfigFile]);
 
   useEffect(() => {
     function flush() { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); }
@@ -179,6 +221,41 @@ export function PromptPanel({
   useEffect(() => {
     setRowCountInput(String(promptRowCount));
   }, [promptRowCount]);
+
+  // ── Response matching: monitor logs for expected responses ──
+  useEffect(() => {
+    if (waitingResponsesRef.current.size === 0) return;
+    if (!logs || logs.length === 0) return;
+
+    const latestLog = logs[logs.length - 1];
+    if (latestLog?.direction !== "received") return;
+
+    const receivedText = latestLog.payload;
+
+    waitingResponsesRef.current.forEach((waiting, rowId) => {
+      waiting.receivedBuffer += receivedText;
+
+      // Try to match expected responses in order
+      while (waiting.matchIndex < waiting.expected.length) {
+        const expected = waiting.expected[waiting.matchIndex];
+        if (waiting.receivedBuffer.includes(expected)) {
+          waiting.matchIndex++;
+          // Remove matched content, keep the rest
+          const idx = waiting.receivedBuffer.indexOf(expected);
+          waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+        } else {
+          break;
+        }
+      }
+
+      // All expected responses matched
+      if (waiting.matchIndex >= waiting.expected.length) {
+        clearTimeout(waiting.timer);
+        updatePromptRow(rowId, { status: "success" });
+        waitingResponsesRef.current.delete(rowId);
+      }
+    });
+  }, [logs]);
 
   function handleRowCountApply(newCount: number) {
     const clamped = Math.max(1, Math.min(500, Math.floor(newCount)));
@@ -201,13 +278,55 @@ export function PromptPanel({
     setPromptRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
+  function toggleExpandRow(id: number) {
+    setExpandedRowId((prev) => (prev === id ? null : id));
+  }
+
   async function handleSendPromptRow(row: PromptRow) {
     if (!isConnected) { pushToast(t("toast_not_connected", lang), "warn"); return; }
     if (!row.command) { pushToast(`${t("prompt_sender", lang)} ${row.id}: ${t("toast_command_empty", lang)}`, "warn"); return; }
-    // Mark this row as selected
-    updatePromptRow(row.id, { selected: true });
-    const mode = row.isHex ? "hex" : "ascii";
-    await sendData(row.command, mode as SendMode, row.ender);
+
+    // Set status to pending
+    updatePromptRow(row.id, { selected: true, status: "pending" });
+
+    try {
+      const mode = row.isHex ? "hex" : "ascii";
+      await sendData(row.command, mode as SendMode, row.ender);
+
+      // If has expected responses, start monitoring; otherwise set success immediately
+      if (row.expectedResponses && row.expectedResponses.length > 0) {
+        startResponseMonitoring(row);
+      } else {
+        updatePromptRow(row.id, { status: "success" });
+      }
+    } catch (error) {
+      updatePromptRow(row.id, { status: "error" });
+    }
+  }
+
+  function startResponseMonitoring(row: PromptRow) {
+    // Clear existing timer for this row
+    const existing = waitingResponsesRef.current.get(row.id);
+    if (existing) clearTimeout(existing.timer);
+
+    const timeout = row.interval ? parseInt(row.interval, 10) : 3000;
+    const validTimeout = isNaN(timeout) || timeout < 100 ? 3000 : timeout;
+
+    const waiting: WaitingResponse = {
+      rowId: row.id,
+      expected: row.expectedResponses!,
+      timeout: validTimeout,
+      startTime: Date.now(),
+      receivedBuffer: "",
+      matchIndex: 0,
+      timer: setTimeout(() => {
+        // Timeout — mark as error
+        updatePromptRow(row.id, { status: "error" });
+        waitingResponsesRef.current.delete(row.id);
+      }, validTimeout),
+    };
+
+    waitingResponsesRef.current.set(row.id, waiting);
   }
 
   function handleCommandKeyDown(e: React.KeyboardEvent, row: PromptRow) {
@@ -257,6 +376,7 @@ export function PromptPanel({
           isHex: existing?.isHex ?? false,
           ender: (existing?.ender ?? "\r\n") as "" | "\r\n" | "\r" | "\n",
           interval: existing?.interval ?? "",
+          status: (existing?.status ?? "idle") as PromptRowStatus,
         };
       });
     });
@@ -276,6 +396,7 @@ export function PromptPanel({
         isHex: false,
         ender: "\r\n" as const,
         interval: "",
+        status: "idle" as PromptRowStatus,
       });
       return copy.map((row, i) => ({ ...row, id: i + 1 }));
     });
@@ -379,7 +500,26 @@ export function PromptPanel({
             </div>
             {/* Row */}
             <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] px-1.5 py-0.5 last:border-0 hover:bg-[var(--bg-hover)] group/row">
-              <div className="flex justify-center"><span className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] text-[9px] text-[var(--text-muted)]">{row.id}</span></div>
+              {/* Status indicator */}
+              <div className="flex justify-center">
+                {row.status === "success" ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
+                    <Check size={10} strokeWidth={3} />
+                  </span>
+                ) : row.status === "error" ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
+                    <X size={10} strokeWidth={3} />
+                  </span>
+                ) : row.status === "pending" ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white animate-pulse">
+                    <Loader2 size={10} className="animate-spin" />
+                  </span>
+                ) : (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[10px] font-medium text-[var(--text-muted)]">
+                    {row.id}
+                  </span>
+                )}
+              </div>
               <div className="flex justify-center"><Checkbox checked={row.selected} onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })} /></div>
               <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)} className="text-[10px] px-1.5 py-0.5">{t("prompt_sender", lang)}</Button>
               <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-[11px]" />
@@ -388,13 +528,44 @@ export function PromptPanel({
                 <option value="\r\n">{t("ender_crlf", lang)}</option><option value="">{t("ender_none", lang)}</option><option value="\n">{t("ender_lf", lang)}</option><option value="\r">{t("ender_cr", lang)}</option>
               </Select>
               <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px] placeholder:text-[11px]" />
-              <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
+              <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity gap-1">
+                <button
+                  type="button"
+                  onClick={() => toggleExpandRow(row.id)}
+                  className={`flex h-5 w-5 items-center justify-center rounded transition-colors ${
+                    row.expectedResponses && row.expectedResponses.length > 0
+                      ? "text-[var(--accent)]"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                  }`}
+                >
+                  {expandedRowId === row.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                <div className="w-px h-4 bg-[var(--border)]" />
                 <button onClick={() => deleteRow(row.id)}
-                        className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-[10px] leading-none transition-colors">
+                        className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-xs leading-none transition-colors">
                   ×
                 </button>
               </div>
             </div>
+            {/* Expanded expected responses editor */}
+            {expandedRowId === row.id && (
+              <div className="border-b border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
+                <label className="block text-[10px] font-semibold text-[var(--text-muted)] mb-1">
+                  {t("prompt_expected_responses", lang)}
+                </label>
+                <textarea
+                  value={(row.expectedResponses || []).join("\n")}
+                  onChange={(e) => {
+                    const lines = e.target.value.split("\n");
+                    const filtered = lines.filter((l) => l.trim() !== "");
+                    updatePromptRow(row.id, { expectedResponses: filtered.length > 0 ? filtered : undefined });
+                  }}
+                  placeholder={lang === "zh" ? "每行一个预期结果..." : "One expected response per line..."}
+                  className="w-full min-h-[60px] max-h-[120px] text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)]"
+                  rows={3}
+                />
+              </div>
+            )}
           </div>
         ))}
         {/* Insert after last row */}

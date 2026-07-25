@@ -63,6 +63,7 @@ export type AppSettings = {
   sendPanelExpanded?: boolean;
   sendPanelFileCollapsed?: boolean;
   sendPanelHotkeysCollapsed?: boolean;
+  activeConfigFile?: string; // Currently active config file name
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -402,6 +403,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, sendPanelHotkeysCollapsed: v }));
   }
 
+  function updateActiveConfigFile(fileName: string) {
+    setSettings((current) => ({ ...current, activeConfigFile: fileName }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -443,5 +448,6 @@ export function useSettings() {
     updateSendPanelExpanded,
     updateSendPanelFileCollapsed,
     updateSendPanelHotkeysCollapsed,
+    updateActiveConfigFile,
   };
 }

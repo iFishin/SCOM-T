@@ -143,7 +143,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -782,7 +782,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -792,18 +792,12 @@ function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      {page === "config" ? (
-        <ConfigPage
-          lang={lang}
-          pushToast={pushToast}
-          onBack={() => setPage("main")}
-        />
-      ) : (<React.Fragment>
       <header
         className="flex h-11 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-surface)] pl-2 pr-0 select-none"
         style={{ WebkitAppRegion: "drag", appRegion: "drag" } as React.CSSProperties}
       >
         {/* Logo */}
+        {page !== "config" && (
         <div className="flex items-center shrink-0 pl-1 pr-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg">
             <img
@@ -813,8 +807,26 @@ function App() {
             />
           </div>
         </div>
+        )}
 
-        {/* Menu bar */}
+        {page === "config" ? (
+          /* Config page header controls */
+          <nav className="flex items-center gap-2 flex-1 min-w-0">
+            <Button
+              type="button"
+              onClick={() => setPage("main")}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+              style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
+            >
+              <ChevronLeft size={14} />
+              {lang === "zh" ? "返回" : "Back"}
+            </Button>
+            <span className="text-xs font-semibold text-[var(--text-primary)]">
+              {lang === "zh" ? "配置文件管理" : "Config File Manager"}
+            </span>
+          </nav>
+        ) : (
+          /* Main menu bar */
         <nav className="flex items-center gap-0.5 flex-1 min-w-0">
           <Button
             type="button"
@@ -910,6 +922,7 @@ function App() {
             </span>
           </Button>
         </nav>
+        )}
 
         {/* Window controls — native Windows 11 style */}
         <div className="flex h-full items-stretch">
@@ -959,7 +972,10 @@ function App() {
 
       <ErrorBoundary>
 
-      {aboutOpen && (
+      {page === "config" ? (
+        <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
+      ) : (<>
+        {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="flex max-h-[80vh] w-[640px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl">
             <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-4 py-3">
@@ -1259,7 +1275,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
                 </div>
               </div>
             )}
@@ -1394,8 +1410,8 @@ function App() {
           onClose={() => setCtxMenu(null)}
         />
       )}
+      </>)}
       </ErrorBoundary>
-      </React.Fragment>)}
     </div>
   );
 }

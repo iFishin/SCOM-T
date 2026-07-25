@@ -110,6 +110,8 @@ const ZH: Dict = {
   ender_lf: "LF",
   ender_cr: "CR",
   interval_placeholder: "毫秒",
+  prompt_expected_responses: "预期结果",
+  prompt_add_expected: "添加预期结果",
   format: "格式化",
   save_config: "保存",
   load_config: "加载",
@@ -225,6 +227,21 @@ const ZH: Dict = {
   health_max: "最大",
   signal_waveform: "信号波形",
   dialog_close: "关闭",
+
+  // Config file management
+  config_files: "配置文件",
+  config_new: "新建配置",
+  config_rename: "重命名",
+  config_delete: "删除",
+  config_delete_confirm: "确定删除此配置文件？",
+  config_name_placeholder: "配置文件名称",
+  config_active: "当前使用",
+  config_unsaved_changes: "当前有未保存的修改",
+  config_save_before_switch: "是否保存当前修改？",
+  config_save: "保存",
+  config_dont_save: "不保存",
+  config_cancel: "取消",
+  config_new_name_hint: "输入配置文件名称",
 };
 
 const EN: Dict = {
@@ -339,6 +356,8 @@ const EN: Dict = {
   ender_lf: "LF",
   ender_cr: "CR",
   interval_placeholder: "ms",
+  prompt_expected_responses: "Expected Responses",
+  prompt_add_expected: "Add Expected Response",
   format: "Format",
   save_config: "Save",
   load_config: "Load",
@@ -452,6 +471,21 @@ const EN: Dict = {
   health_max: "Max",
   signal_waveform: "Signal Waveform",
   dialog_close: "Close",
+
+  // Config file management
+  config_files: "Config Files",
+  config_new: "New Config",
+  config_rename: "Rename",
+  config_delete: "Delete",
+  config_delete_confirm: "Delete this config file?",
+  config_name_placeholder: "Config file name",
+  config_active: "Active",
+  config_unsaved_changes: "Unsaved changes",
+  config_save_before_switch: "Save changes before switching?",
+  config_save: "Save",
+  config_dont_save: "Don't Save",
+  config_cancel: "Cancel",
+  config_new_name_hint: "Enter config file name",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };
