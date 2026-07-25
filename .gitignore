@@ -61,3 +61,4 @@ Thumbs.db
 
 # Keep workspace-specific misc files out
 .claude/
+__pycache__
