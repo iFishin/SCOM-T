@@ -309,14 +309,14 @@ function AddResponseForm({ lang, onAdd }: { lang: Lang; onAdd: (command: string,
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           placeholder={lang === "zh" ? "AT指令" : "AT Command"}
-          className="flex-1 text-xs"
+          className="w-1/3 text-xs"
         />
-        <Input
-          type="text"
+        <textarea
           value={response}
           onChange={(e) => setResponse(e.target.value)}
-          placeholder={lang === "zh" ? "响应内容" : "Response"}
-          className="flex-1 text-xs"
+          placeholder={lang === "zh" ? "响应内容（支持多行）" : "Response (supports multiple lines)"}
+          className="flex-1 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={2}
         />
         <Button
           type="button"

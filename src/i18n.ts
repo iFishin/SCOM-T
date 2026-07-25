@@ -267,6 +267,7 @@ const ZH: Dict = {
   mock_serial_templates: "响应模板",
   mock_serial_command: "AT指令",
   mock_serial_response: "响应内容",
+  mock_serial_response_hint: "支持多行响应，使用 \\n 表示换行",
 };
 
 const EN: Dict = {
@@ -538,6 +539,7 @@ const EN: Dict = {
   mock_serial_templates: "Response Templates",
   mock_serial_command: "AT Command",
   mock_serial_response: "Response",
+  mock_serial_response_hint: "Supports multiple lines, use \\n for newline",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };
