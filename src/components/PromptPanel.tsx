@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, List } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -12,6 +12,7 @@ import type { Lang } from "../i18n.ts";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
 import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
+import { ResponseSetPanel } from "./ResponseSetPanel.tsx";
 
 type PromptRowStatus = "idle" | "pending" | "success" | "error";
 
@@ -111,6 +112,7 @@ export function PromptPanel({
   });
   const [totalLoops, setTotalLoops] = useState(1);
   const batchAbortRef = useRef<boolean>(false);
+  const [responseSetOpen, setResponseSetOpen] = useState(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -814,6 +816,18 @@ export function PromptPanel({
           {lang === "zh" ? "广播选中" : "Broadcast"}
         </Button>
       )}
+
+      <span className="w-px h-4 bg-[var(--border)]" />
+
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setResponseSetOpen(true)}
+        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)]"
+      >
+        <List size={12} />
+        {lang === "zh" ? "指令响应集" : "Response Sets"}
+      </Button>
     </div>
   );
 
@@ -928,6 +942,19 @@ export function PromptPanel({
           lang={lang}
           onApply={(result) => { setBatchText(result); setRegexCleanOpen(false); }}
           onClose={() => setRegexCleanOpen(false)}
+        />
+      )}
+      {responseSetOpen && (
+        <ResponseSetPanel
+          lang={lang}
+          promptRows={promptRows}
+          onApply={(updates) => {
+            for (const { rowId, expectedResponses } of updates) {
+              updatePromptRow(rowId, { expectedResponses });
+            }
+            setResponseSetOpen(false);
+          }}
+          onClose={() => setResponseSetOpen(false)}
         />
       )}
     </>
