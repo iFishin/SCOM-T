@@ -121,7 +121,12 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
     if (!currentSet) return;
     const commands = [...currentSet.commands];
     const cmd = commands[cmdIndex];
-    commands[cmdIndex] = { ...cmd, expectedResponses: [...cmd.expectedResponses, ""] };
+    const regex = cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : [];
+    commands[cmdIndex] = {
+      ...cmd,
+      expectedResponses: [...cmd.expectedResponses, ""],
+      expectedResponseRegex: [...regex, false],
+    };
     setCurrentSet({ ...currentSet, commands });
     setDirty(true);
   }
@@ -137,13 +142,26 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
     setDirty(true);
   }
 
+  function toggleExpectedResponseRegex(cmdIndex: number, respIndex: number) {
+    if (!currentSet) return;
+    const commands = [...currentSet.commands];
+    const cmd = commands[cmdIndex];
+    const regex = cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : cmd.expectedResponses.map(() => false);
+    regex[respIndex] = !regex[respIndex];
+    commands[cmdIndex] = { ...cmd, expectedResponseRegex: regex };
+    setCurrentSet({ ...currentSet, commands });
+    setDirty(true);
+  }
+
   function removeExpectedResponse(cmdIndex: number, respIndex: number) {
     if (!currentSet) return;
     const commands = [...currentSet.commands];
     const cmd = commands[cmdIndex];
+    const regex = cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : undefined;
     commands[cmdIndex] = {
       ...cmd,
       expectedResponses: cmd.expectedResponses.filter((_, i) => i !== respIndex),
+      expectedResponseRegex: regex ? regex.filter((_, i) => i !== respIndex) : undefined,
     };
     setCurrentSet({ ...currentSet, commands });
     setDirty(true);
@@ -366,12 +384,32 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
                             : (lang === "zh" ? "期望响应（匹配任意一个即可）：" : "Expected responses (match any one):")
                           }
                         </div>
-                        {cmd.expectedResponses.map((resp, j) => (
+                        {cmd.expectedResponses.map((resp, j) => {
+                        const isRegex = cmd.expectedResponseRegex?.[j] ?? false;
+                        return (
                           <div key={j} className="flex items-start gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpectedResponseRegex(i, j)}
+                              className={`shrink-0 mt-1 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
+                                isRegex
+                                  ? "bg-amber-100 border-amber-300 text-amber-700"
+                                  : "bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)]"
+                              }`}
+                              title={isRegex
+                                ? (lang === "zh" ? "当前为正则模式，点击切换为文本" : "Regex mode, click for text")
+                                : (lang === "zh" ? "当前为文本模式，点击切换为正则" : "Text mode, click for regex")
+                              }
+                            >
+                              {isRegex ? ".*" : "Abc"}
+                            </button>
                             <textarea
                               value={resp}
                               onChange={(e) => updateExpectedResponse(i, j, e.target.value)}
-                              placeholder={lang === "zh" ? "输入期望响应内容..." : "Enter expected response text..."}
+                              placeholder={isRegex
+                                ? (lang === "zh" ? "正则表达式，如 \\\\+CSQ:\\\\s+\\\\d+" : "Regex pattern, e.g. \\\\+CSQ:\\\\s+\\\\d+")
+                                : (lang === "zh" ? "输入期望响应内容..." : "Enter expected response text...")
+                              }
                               className="flex-1 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-[var(--accent)] font-mono min-h-[28px]"
                               rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)}
                             />
@@ -384,7 +422,8 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
                               <Trash2 size={10} />
                             </button>
                           </div>
-                        ))}
+                        );
+                      })}
                         <button
                           type="button"
                           onClick={() => addExpectedResponse(i)}

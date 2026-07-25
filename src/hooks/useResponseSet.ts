@@ -8,6 +8,7 @@ import yaml from "js-yaml";
 export type ResponseSetCommand = {
   command: string;
   expectedResponses: string[];
+  expectedResponseRegex?: boolean[];
   matchMode: "all" | "any";
 };
 
@@ -26,6 +27,7 @@ interface YamlResponseSet {
   commands: {
     command: string;
     expected_responses?: string[];
+    expected_responses_regex?: boolean[];
     match_mode?: "all" | "any";
   }[];
 }
@@ -82,13 +84,16 @@ export function useResponseSet() {
         name: raw.name || name,
         description: raw.description,
         commands: Array.isArray(raw.commands)
-          ? raw.commands.map((c) => ({
-              command: c.command || "",
-              expectedResponses: Array.isArray(c.expected_responses)
-                ? c.expected_responses.map(String)
-                : [],
-              matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
-            })).filter((c) => c.command)
+          ? raw.commands.map((c) => {
+              const responses = Array.isArray(c.expected_responses) ? c.expected_responses.map(String) : [];
+              const regex = Array.isArray(c.expected_responses_regex) ? c.expected_responses_regex : [];
+              return {
+                command: c.command || "",
+                expectedResponses: responses,
+                expectedResponseRegex: regex.length === responses.length ? regex : undefined,
+                matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
+              };
+            }).filter((c) => c.command)
           : [],
       };
     } catch {
@@ -101,11 +106,15 @@ export function useResponseSet() {
     const yamlDoc: YamlResponseSet = {
       name: set.name,
       description: set.description,
-      commands: set.commands.map((c) => ({
-        command: c.command,
-        expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
-        match_mode: c.matchMode === "any" ? "any" : undefined,
-      })),
+      commands: set.commands.map((c) => {
+        const hasRegex = c.expectedResponseRegex?.some(Boolean);
+        return {
+          command: c.command,
+          expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
+          expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
+          match_mode: c.matchMode === "any" ? "any" : undefined,
+        };
+      }),
     };
     const yamlText = yaml.dump(yamlDoc, { indent: 2, lineWidth: -1, noRefs: true, quotingType: "'" });
     const path = await join(dir, `${sanitizeFileName(name)}.yaml`);
@@ -134,15 +143,20 @@ export function useResponseSet() {
   function applyToGrid(
     responseSet: ResponseSet,
     promptRows: { id: number; command: string }[],
-  ): { rowId: number; expectedResponses: string[]; matchMode: "all" | "any" }[] {
-    const results: { rowId: number; expectedResponses: string[]; matchMode: "all" | "any" }[] = [];
+  ): { rowId: number; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] {
+    const results: { rowId: number; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] = [];
     for (const row of promptRows) {
       if (!row.command.trim()) continue;
       const matched = responseSet.commands.find(
         (c) => c.command.trim().toUpperCase() === row.command.trim().toUpperCase(),
       );
       if (matched && matched.expectedResponses.length > 0) {
-        results.push({ rowId: row.id, expectedResponses: [...matched.expectedResponses], matchMode: matched.matchMode });
+        results.push({
+          rowId: row.id,
+          expectedResponses: [...matched.expectedResponses],
+          expectedResponseRegex: matched.expectedResponseRegex ? [...matched.expectedResponseRegex] : undefined,
+          matchMode: matched.matchMode,
+        });
       }
     }
     return results;

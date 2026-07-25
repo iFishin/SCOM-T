@@ -19,6 +19,7 @@ type PromptRowStatus = "idle" | "pending" | "success" | "error";
 type WaitingResponse = {
   rowId: number;
   expected: string[];
+  isRegex: boolean[];
   timeout: number;
   startTime: number;
   receivedBuffer: string;
@@ -44,6 +45,7 @@ type PromptRow = {
   interval: string;
   device?: string;
   expectedResponses?: string[];
+  expectedResponseRegex?: boolean[];
   status?: PromptRowStatus;
 };
 
@@ -147,8 +149,8 @@ export function PromptPanel({
         pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands in response set", "warn");
       } else {
         let matchCount = 0;
-        for (const { rowId, expectedResponses } of updates) {
-          updatePromptRow(rowId, { expectedResponses });
+        for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
+          updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
           matchCount++;
         }
         pushToast(
@@ -294,11 +296,32 @@ export function PromptPanel({
       // Try to match expected responses in order
       while (waiting.matchIndex < waiting.expected.length) {
         const expected = waiting.expected[waiting.matchIndex];
-        if (waiting.receivedBuffer.includes(expected)) {
+        const isRegex = waiting.isRegex[waiting.matchIndex] ?? false;
+        let matched = false;
+
+        if (isRegex) {
+          try {
+            const re = new RegExp(expected);
+            matched = re.test(waiting.receivedBuffer);
+            if (matched) {
+              // For regex, clear the buffer after a match
+              waiting.receivedBuffer = "";
+            }
+          } catch {
+            // Invalid regex, fall back to text match
+            matched = waiting.receivedBuffer.includes(expected);
+          }
+        } else {
+          matched = waiting.receivedBuffer.includes(expected);
+        }
+
+        if (matched) {
           waiting.matchIndex++;
-          // Remove matched content, keep the rest
-          const idx = waiting.receivedBuffer.indexOf(expected);
-          waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+          // For text matches, consume the matched content
+          if (!isRegex) {
+            const idx = waiting.receivedBuffer.indexOf(expected);
+            waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+          }
         } else {
           break;
         }
@@ -371,6 +394,7 @@ export function PromptPanel({
       const waiting: WaitingResponse = {
         rowId: row.id,
         expected: row.expectedResponses!,
+        isRegex: row.expectedResponseRegex ?? row.expectedResponses!.map(() => false),
         timeout: validTimeout,
         startTime: Date.now(),
         receivedBuffer: "",
