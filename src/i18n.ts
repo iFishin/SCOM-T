@@ -242,6 +242,14 @@ const ZH: Dict = {
   config_dont_save: "不保存",
   config_cancel: "取消",
   config_new_name_hint: "输入配置文件名称",
+
+  // Batch execution
+  batch_loop: "循环",
+  batch_times: "次",
+  batch_ready: "就绪",
+  batch_start: "▶ 开始",
+  batch_stop: "■ 停止",
+  batch_no_selected: "请先选择要执行的指令",
 };
 
 const EN: Dict = {
@@ -486,6 +494,14 @@ const EN: Dict = {
   config_dont_save: "Don't Save",
   config_cancel: "Cancel",
   config_new_name_hint: "Enter config file name",
+
+  // Batch execution
+  batch_loop: "Loop",
+  batch_times: "times",
+  batch_ready: "Ready",
+  batch_start: "▶ Start",
+  batch_stop: "■ Stop",
+  batch_no_selected: "Select commands to execute",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };

@@ -23,6 +23,15 @@ type WaitingResponse = {
   receivedBuffer: string;
   matchIndex: number;
   timer: ReturnType<typeof setTimeout>;
+  onComplete?: () => void;
+};
+
+type BatchExecutionState = {
+  isRunning: boolean;
+  currentLoop: number;
+  totalLoops: number;
+  currentIndex: number;
+  selectedRows: PromptRow[];
 };
 
 type PromptRow = {
@@ -93,6 +102,15 @@ export function PromptPanel({
   const presetsLoaded = useRef(false);
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   const waitingResponsesRef = useRef<Map<number, WaitingResponse>>(new Map());
+  const [batchState, setBatchState] = useState<BatchExecutionState>({
+    isRunning: false,
+    currentLoop: 0,
+    totalLoops: 1,
+    currentIndex: 0,
+    selectedRows: [],
+  });
+  const [totalLoops, setTotalLoops] = useState(1);
+  const batchAbortRef = useRef<boolean>(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -253,6 +271,7 @@ export function PromptPanel({
         clearTimeout(waiting.timer);
         updatePromptRow(rowId, { status: "success" });
         waitingResponsesRef.current.delete(rowId);
+        waiting.onComplete?.();
       }
     });
   }, [logs]);
@@ -286,16 +305,14 @@ export function PromptPanel({
     if (!isConnected) { pushToast(t("toast_not_connected", lang), "warn"); return; }
     if (!row.command) { pushToast(`${t("prompt_sender", lang)} ${row.id}: ${t("toast_command_empty", lang)}`, "warn"); return; }
 
-    // Set status to pending
     updatePromptRow(row.id, { selected: true, status: "pending" });
 
     try {
       const mode = row.isHex ? "hex" : "ascii";
       await sendData(row.command, mode as SendMode, row.ender);
 
-      // If has expected responses, start monitoring; otherwise set success immediately
       if (row.expectedResponses && row.expectedResponses.length > 0) {
-        startResponseMonitoring(row);
+        waitForResponse(row);  // Don't await - fire and forget for single execution
       } else {
         updatePromptRow(row.id, { status: "success" });
       }
@@ -304,29 +321,112 @@ export function PromptPanel({
     }
   }
 
-  function startResponseMonitoring(row: PromptRow) {
-    // Clear existing timer for this row
-    const existing = waitingResponsesRef.current.get(row.id);
-    if (existing) clearTimeout(existing.timer);
+  function waitForResponse(row: PromptRow): Promise<void> {
+    return new Promise((resolve) => {
+      // Clear existing timer for this row
+      const existing = waitingResponsesRef.current.get(row.id);
+      if (existing) clearTimeout(existing.timer);
 
-    const timeout = row.interval ? parseInt(row.interval, 10) : 3000;
-    const validTimeout = isNaN(timeout) || timeout < 100 ? 3000 : timeout;
+      const timeout = row.interval ? parseInt(row.interval, 10) : 5000;
+      const validTimeout = isNaN(timeout) || timeout < 100 ? 5000 : timeout;
 
-    const waiting: WaitingResponse = {
-      rowId: row.id,
-      expected: row.expectedResponses!,
-      timeout: validTimeout,
-      startTime: Date.now(),
-      receivedBuffer: "",
-      matchIndex: 0,
-      timer: setTimeout(() => {
-        // Timeout — mark as error
-        updatePromptRow(row.id, { status: "error" });
-        waitingResponsesRef.current.delete(row.id);
-      }, validTimeout),
-    };
+      const waiting: WaitingResponse = {
+        rowId: row.id,
+        expected: row.expectedResponses!,
+        timeout: validTimeout,
+        startTime: Date.now(),
+        receivedBuffer: "",
+        matchIndex: 0,
+        timer: setTimeout(() => {
+          // Timeout — mark as error
+          updatePromptRow(row.id, { status: "error" });
+          waitingResponsesRef.current.delete(row.id);
+          resolve();
+        }, validTimeout),
+        onComplete: resolve,
+      };
 
-    waitingResponsesRef.current.set(row.id, waiting);
+      waitingResponsesRef.current.set(row.id, waiting);
+    });
+  }
+
+  async function executeSingleCommand(row: PromptRow) {
+    updatePromptRow(row.id, { status: "pending" });
+
+    try {
+      const mode = row.isHex ? "hex" : "ascii";
+      await sendData(row.command, mode as SendMode, row.ender);
+
+      if (row.expectedResponses && row.expectedResponses.length > 0) {
+        await waitForResponse(row);
+      } else {
+        updatePromptRow(row.id, { status: "success" });
+      }
+    } catch (error) {
+      updatePromptRow(row.id, { status: "error" });
+    }
+  }
+
+  async function startBatchExecution() {
+    const selected = promptRows
+      .filter(r => r.selected && r.command.trim())
+      .sort((a, b) => a.id - b.id);
+
+    if (selected.length === 0) {
+      pushToast(t("batch_no_selected", lang), "warn");
+      return;
+    }
+
+    batchAbortRef.current = false;
+    setBatchState({
+      isRunning: true,
+      currentLoop: 0,
+      totalLoops: totalLoops,
+      currentIndex: 0,
+      selectedRows: selected,
+    });
+
+    for (let loop = 0; loop < totalLoops; loop++) {
+      if (batchAbortRef.current) break;
+
+      setBatchState(prev => ({ ...prev, currentLoop: loop + 1 }));
+
+      for (let i = 0; i < selected.length; i++) {
+        if (batchAbortRef.current) break;
+
+        setBatchState(prev => ({ ...prev, currentIndex: i }));
+        await executeSingleCommand(selected[i]);
+      }
+    }
+
+    resetBatchState();
+  }
+
+  function stopBatchExecution() {
+    batchAbortRef.current = true;
+
+    waitingResponsesRef.current.forEach((waiting) => {
+      clearTimeout(waiting.timer);
+    });
+    waitingResponsesRef.current.clear();
+
+    resetBatchState();
+  }
+
+  function resetBatchState() {
+    setBatchState({
+      isRunning: false,
+      currentLoop: 0,
+      totalLoops: 1,
+      currentIndex: 0,
+      selectedRows: [],
+    });
+
+    setPromptRows(current => current.map(row => ({
+      ...row,
+      selected: false,
+      status: "idle" as PromptRowStatus,
+    })));
   }
 
   function handleCommandKeyDown(e: React.KeyboardEvent, row: PromptRow) {
@@ -476,12 +576,17 @@ export function PromptPanel({
     setConfigAction("load");
   }
 
+  function clearAllStatuses() {
+    setPromptRows((current) => current.map((row) => ({ ...row, status: "idle" as PromptRowStatus })));
+  }
+
   // ── Content blocks ──
 
   const gridContent = (
     <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
-        <div /><div className="flex justify-center">
+      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
+        <button onClick={clearAllStatuses} className="hover:text-[var(--text-primary)] transition-colors" title={lang === "zh" ? "点击清空所有状态" : "Clear all statuses"}>#</button>
+        <div className="flex justify-center">
           <Checkbox checked={allSelected} onChange={() => toggleSelectAll()} />
         </div><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
       </div>
@@ -499,7 +604,11 @@ export function PromptPanel({
               </div>
             </div>
             {/* Row */}
-            <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] px-1.5 py-0.5 last:border-0 hover:bg-[var(--bg-hover)] group/row">
+            <div className={`grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] px-1.5 py-0.5 last:border-0 hover:bg-[var(--bg-hover)] group/row ${
+              batchState.isRunning && batchState.selectedRows[batchState.currentIndex]?.id === row.id
+                ? "bg-[var(--accent)]/10"
+                : ""
+            }`}>
               {/* Status indicator */}
               <div className="flex justify-center">
                 {row.status === "success" ? (
@@ -532,18 +641,20 @@ export function PromptPanel({
                 <button
                   type="button"
                   onClick={() => toggleExpandRow(row.id)}
-                  className={`flex h-5 w-5 items-center justify-center rounded transition-colors ${
+                  className={`flex items-center justify-center rounded transition-colors ${
                     row.expectedResponses && row.expectedResponses.length > 0
                       ? "text-[var(--accent)]"
                       : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
                   }`}
+                  style={{ width: 20, height: 20 }}
                 >
                   {expandedRowId === row.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
-                <div className="w-px h-4 bg-[var(--border)]" />
+                <div className="w-px" style={{ height: 16 }} />
                 <button onClick={() => deleteRow(row.id)}
-                        className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-xs leading-none transition-colors">
-                  ×
+                        className="flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] transition-colors"
+                        style={{ width: 20, height: 20 }}>
+                  <X size={14} />
                 </button>
               </div>
             </div>
@@ -647,18 +758,41 @@ export function PromptPanel({
   );
 
   const buttonBar = (
-    <div className="flex items-center gap-1 text-xs">
-      <span className="shrink-0 text-[var(--text-muted)] mr-1">{lang === "zh" ? "指令" : "CMD"}</span>
-      <span className="flex-1 truncate rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] text-[11px]">
-        {lang === "zh" ? "点击左侧行按钮发送…" : "Click row button to send"}
+    <div className="flex items-center gap-2 text-xs">
+      <span className="shrink-0 text-[var(--text-muted)]">{t("batch_loop", lang)}</span>
+      <Input
+        type="number"
+        min={1}
+        max={9999}
+        value={totalLoops}
+        onChange={(e) => setTotalLoops(Math.max(1, parseInt(e.target.value) || 1))}
+        className="w-16 text-center text-[11px]"
+        disabled={batchState.isRunning}
+      />
+      <span className="text-[var(--text-muted)]">{t("batch_times", lang)}</span>
+
+      <span className="w-px h-4 bg-[var(--border)]" />
+
+      <span className="text-[var(--text-muted)]">
+        {batchState.isRunning
+          ? `${batchState.currentLoop}/${batchState.totalLoops} - ${batchState.currentIndex + 1}/${batchState.selectedRows.length}`
+          : t("batch_ready", lang)
+        }
       </span>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "预设" : "Prompt"}</Button>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">Idx</Button>
-      <Button className="rounded bg-[var(--accent)] px-3 py-1 text-white text-xs">{lang === "zh" ? "开始" : "Start"}</Button>
-      <span className="shrink-0 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] text-[11px]">
-        {lang === "zh" ? "总次数" : "Total"}: 0
-      </span>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "停止" : "Stop"}</Button>
+
+      <span className="w-px h-4 bg-[var(--border)]" />
+
+      <Button
+        onClick={batchState.isRunning ? stopBatchExecution : startBatchExecution}
+        className={`rounded px-3 py-1 text-xs ${
+          batchState.isRunning
+            ? "bg-rose-500 hover:bg-rose-600 text-white"
+            : "bg-[var(--accent)] hover:bg-[var(--accent)]/80 text-white"
+        }`}
+      >
+        {batchState.isRunning ? t("batch_stop", lang) : t("batch_start", lang)}
+      </Button>
+
       {tcpClientCount !== undefined && tcpClientCount > 0 && (
         <Button
           type="button"
