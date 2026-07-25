@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Zap, Database } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Zap, Database, Pencil } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { t } from "../../i18n.ts";
@@ -185,30 +185,15 @@ export function MockSerialSettings({ lang, mockSerial, onMockSerialChange }: Moc
         </div>
 
         {/* Response list */}
-        <div className="space-y-2 max-h-64 overflow-y-auto">
+        <div className="space-y-2 max-h-96 overflow-y-auto">
           {mockSerial.customResponses.map((r) => (
-            <div
+            <EditableResponseItem
               key={r.id}
-              className="flex items-center gap-2 p-2 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]"
-            >
-              <input
-                type="checkbox"
-                checked={r.enabled}
-                onChange={(e) => updateCustomResponse(r.id, { enabled: e.target.checked })}
-                className="rounded"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="font-mono text-xs text-[var(--text-primary)] truncate">{r.command}</div>
-                <div className="text-[10px] text-[var(--text-muted)] truncate">→ {r.response.split('\n')[0]}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeCustomResponse(r.id)}
-                className="text-rose-500 hover:text-rose-600 p-1"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
+              response={r}
+              lang={lang}
+              onUpdate={(updates) => updateCustomResponse(r.id, updates)}
+              onRemove={() => removeCustomResponse(r.id)}
+            />
           ))}
           {mockSerial.customResponses.length === 0 && (
             <div className="text-xs text-[var(--text-muted)] text-center py-4">
@@ -289,6 +274,105 @@ export function MockSerialSettings({ lang, mockSerial, onMockSerialChange }: Moc
     </div>
   );
 }
+type EditableResponseItemProps = {
+  response: MockResponse;
+  lang: Lang;
+  onUpdate: (updates: Partial<MockResponse>) => void;
+  onRemove: () => void;
+};
+
+function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableResponseItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editCommand, setEditCommand] = useState(response.command);
+  const [editResponse, setEditResponse] = useState(response.response);
+
+  function handleSave() {
+    if (editCommand.trim() && editResponse.trim()) {
+      onUpdate({ command: editCommand.trim(), response: editResponse.trim() });
+      setIsEditing(false);
+    }
+  }
+
+  function handleCancel() {
+    setEditCommand(response.command);
+    setEditResponse(response.response);
+    setIsEditing(false);
+  }
+
+  if (isEditing) {
+    return (
+      <div className="p-2 rounded-lg border border-[var(--accent)] bg-[var(--bg-surface)] space-y-2">
+        <Input
+          type="text"
+          value={editCommand}
+          onChange={(e) => setEditCommand(e.target.value)}
+          placeholder={lang === "zh" ? "AT指令" : "AT Command"}
+          className="w-full text-xs font-mono"
+        />
+        <textarea
+          value={editResponse}
+          onChange={(e) => setEditResponse(e.target.value)}
+          placeholder={lang === "zh" ? "响应内容（支持多行）" : "Response (supports multiple lines)"}
+          className="w-full text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={3}
+        />
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            onClick={handleCancel}
+            className="text-[10px] px-2 py-0.5 rounded border border-[var(--border)] text-[var(--text-muted)]"
+          >
+            {lang === "zh" ? "取消" : "Cancel"}
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={!editCommand.trim() || !editResponse.trim()}
+            className="text-[10px] px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-50"
+          >
+            {lang === "zh" ? "保存" : "Save"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2 p-2 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
+      <input
+        type="checkbox"
+        checked={response.enabled}
+        onChange={(e) => onUpdate({ enabled: e.target.checked })}
+        className="rounded mt-1"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="font-mono text-xs text-[var(--text-primary)]">{response.command}</div>
+        <div className="text-[10px] text-[var(--text-muted)] whitespace-pre-wrap break-all max-h-16 overflow-y-auto">
+          {response.response}
+        </div>
+      </div>
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className="text-[var(--text-muted)] hover:text-[var(--accent)] p-1"
+          title={lang === "zh" ? "编辑" : "Edit"}
+        >
+          <Pencil size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-rose-500 hover:text-rose-600 p-1"
+          title={lang === "zh" ? "删除" : "Delete"}
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AddResponseForm({ lang, onAdd }: { lang: Lang; onAdd: (command: string, response: string) => void }) {
   const [command, setCommand] = useState("");
   const [response, setResponse] = useState("");
