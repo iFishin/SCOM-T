@@ -1256,6 +1256,23 @@ export function PromptPanel({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => {
+                    const text = matchLog.map(e => {
+                      let s = e.detail;
+                      if (e.expected) s += `\n  EXPECT: ${e.expected}`;
+                      if (e.received) s += `\n  RECV: ${e.received}`;
+                      return s;
+                    }).join("\n\n");
+                    navigator.clipboard.writeText(text).then(() => {
+                      pushToast(lang === "zh" ? "已复制到剪贴板" : "Copied to clipboard", "success");
+                    }).catch(() => {});
+                  }}
+                  className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  {lang === "zh" ? "复制" : "Copy"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setMatchLog([])}
                   className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
