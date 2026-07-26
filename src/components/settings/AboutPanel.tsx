@@ -49,7 +49,7 @@ type NotificationItem = {
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
-export function AboutPanel({ lang, appVersion }: { lang: Lang; appVersion?: string }) {
+export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; appVersion?: string; updateAvailable?: boolean }) {
   const [version, setVersion] = useState(appVersion || "0.1.0");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clickCount, setClickCount] = useState(0);
@@ -315,6 +315,26 @@ export function AboutPanel({ lang, appVersion }: { lang: Lang; appVersion?: stri
         {updateCheck.status === "checking" && (
           <div className="mt-2 text-[11px] text-[var(--text-muted)] animate-pulse">
             {t("update_checking", lang)}
+          </div>
+        )}
+
+        {updateAvailable && updateCheck.status === "idle" && (
+          <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+              <Download size={13} />
+              {lang === "zh" ? "有新版本可用" : "New version available"}
+            </div>
+            <div className="mt-1.5 flex gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => window.open(`https://github.com/iFishin/SCOM-T/releases/latest`, "_blank")}
+                className="flex items-center gap-1 text-[10px]"
+              >
+                <Download size={11} />
+                {t("update_download", lang)}
+              </Button>
+            </div>
           </div>
         )}
 
