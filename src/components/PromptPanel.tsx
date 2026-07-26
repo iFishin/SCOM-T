@@ -122,7 +122,7 @@ export function PromptPanel({
   const batchAbortRef = useRef<boolean>(false);
   const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
   const responseSetOptionsLoaded = useRef(false);
-  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "pending" | "success" | "error"; detail: string }[]>([]);
+  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
   const [matchLogOpen, setMatchLogOpen] = useState(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
@@ -316,6 +316,11 @@ export function PromptPanel({
       // Try to match expected responses in order
       while (waiting.matchIndex < waiting.expected.length) {
         const expected = waiting.expected[waiting.matchIndex];
+        // Skip empty expected responses
+        if (!expected.trim()) {
+          waiting.matchIndex++;
+          continue;
+        }
         const isRegex = waiting.isRegex[waiting.matchIndex] ?? false;
         let matched = false;
 
@@ -346,8 +351,8 @@ export function PromptPanel({
         if (matched) {
           waiting.matchIndex++;
           setMatchLog((prev) => {
-            const next = [{ rowId, command: "", status: "pending" as const, detail: `✓ 匹配到 #${waiting.matchIndex}: ${expected.length > 30 ? expected.slice(0, 30) + "..." : expected}` }, ...prev];
-            return next.slice(0, 50);
+            const next = [{ rowId, command: "", status: "pending" as const, detail: `✓ 匹配到 #${waiting.matchIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+            return next.slice(0, 100);
           });
         } else {
           break;
@@ -361,8 +366,8 @@ export function PromptPanel({
         waitingResponsesRef.current.delete(rowId);
         waiting.onComplete?.();
         setMatchLog((prev) => {
-          const next = [{ rowId, command: "", status: "success" as const, detail: `✅ 行 ${rowId} 全部匹配成功` }, ...prev];
-          return next.slice(0, 50);
+          const next = [{ rowId, command: "", status: "success" as const, detail: `✅ 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
+          return next.slice(0, 100);
         });
       }
     });
@@ -1091,7 +1096,7 @@ export function PromptPanel({
             <span className="w-px h-3 bg-[var(--border)] mx-2" />
             <button
               type="button"
-              onClick={() => setMatchLogOpen(!matchLogOpen)}
+              onClick={() => setMatchLogOpen(true)}
               className="flex items-center gap-1 text-[10px] font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
               {matchLog.length > 0 && matchLog[0]?.status === "pending" ? (
@@ -1108,32 +1113,6 @@ export function PromptPanel({
               )}
               <span className="text-[9px] opacity-50">({matchLog.length})</span>
             </button>
-            {matchLogOpen && (
-              <div className="absolute top-full right-0 mt-1 z-50 w-72 max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] shadow-lg p-1 text-[10px]">
-                {matchLog.length === 0 ? (
-                  <div className="text-center py-2 text-[var(--text-muted)]">
-                    {lang === "zh" ? "暂无匹配记录" : "No match records"}
-                  </div>
-                ) : (
-                  matchLog.map((entry, i) => (
-                    <div key={i} className={`flex items-start gap-1.5 px-2 py-1 rounded ${
-                      entry.status === "success" ? "text-emerald-600" :
-                      entry.status === "error" ? "text-rose-500" :
-                      "text-amber-500"
-                    }`}>
-                      <span className="truncate flex-1">{entry.detail}</span>
-                    </div>
-                  ))
-                )}
-                <button
-                  type="button"
-                  onClick={() => setMatchLog([])}
-                  className="w-full text-center py-1 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] border-t border-[var(--border)] mt-1"
-                >
-                  {lang === "zh" ? "清空" : "Clear"}
-                </button>
-              </div>
-            )}
           </div>
         )}
         {activePromptTab === "batch" && (
@@ -1234,6 +1213,78 @@ export function PromptPanel({
           onApply={(result) => { setBatchText(result); setRegexCleanOpen(false); }}
           onClose={() => setRegexCleanOpen(false)}
         />
+      )}
+      {matchLogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={() => setMatchLogOpen(false)}>
+          <div className="flex max-h-[70vh] w-[600px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">{lang === "zh" ? "匹配日志" : "Match Log"}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">
+                  {matchLog.filter((e) => e.status === "success").length}/{matchLog.filter((e) => e.status === "pending" || e.status === "success" || e.status === "error").length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMatchLog([])}
+                  className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  {lang === "zh" ? "清空" : "Clear"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchLogOpen(false)}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-2 text-[11px]">
+              {matchLog.length === 0 ? (
+                <div className="text-center py-8 text-[var(--text-muted)] text-xs">
+                  {lang === "zh" ? "暂无匹配记录，发送指令后自动生成" : "No match records yet. Send a command to start."}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {matchLog.map((entry, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-lg border px-3 py-2 ${
+                        entry.status === "success" ? "border-emerald-200 bg-emerald-50/50" :
+                        entry.status === "error" ? "border-rose-200 bg-rose-50/50" :
+                        "border-amber-200 bg-amber-50/50"
+                      }`}
+                    >
+                      <div className={`text-[10px] font-semibold mb-0.5 ${
+                        entry.status === "success" ? "text-emerald-600" :
+                        entry.status === "error" ? "text-rose-600" :
+                        "text-amber-600"
+                      }`}>
+                        {entry.detail}
+                      </div>
+                      {entry.expected && (
+                        <div className="text-[9px] text-[var(--text-muted)] font-mono mt-1">
+                          <span className="opacity-60">{lang === "zh" ? "期望: " : "Expected: "}</span>
+                          {entry.expected}
+                        </div>
+                      )}
+                      {entry.received && (
+                        <div className="text-[9px] text-[var(--text-muted)] font-mono">
+                          <span className="opacity-60">{lang === "zh" ? "接收: " : "Received: "}</span>
+                          {entry.received}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
