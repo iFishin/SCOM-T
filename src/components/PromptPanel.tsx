@@ -1127,7 +1127,7 @@ export function PromptPanel({
               onClick={() => setMatchLogOpen(true)}
               className="flex items-center gap-1 text-[10px] font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
-              {matchLog.some(e => e.status === "pending") ? (
+              {waitingResponsesRef.current.size > 0 ? (
                 <span className="flex items-center gap-1 text-amber-500">
                   <Loader2 size={10} className="animate-spin" />
                 </span>
@@ -1252,8 +1252,8 @@ export function PromptPanel({
                 <span className="text-sm font-semibold">{lang === "zh" ? "匹配日志" : "Match Log"}</span>
                 <span className="text-[10px] text-[var(--text-muted)]">
                   {lang === "zh"
-                    ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 等待 ${matchLog.filter(e => e.status === "pending").length}`
-                    : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Wait ${matchLog.filter(e => e.status === "pending").length}`
+                    ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 等待 ${waitingResponsesRef.current.size}`
+                    : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Wait ${waitingResponsesRef.current.size}`
                   }
                 </span>
               </div>
