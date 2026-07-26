@@ -6,22 +6,41 @@ on:
       - 'v*'
 
 jobs:
-  build:
-    name: Build ${{ matrix.platform }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            platform: windows
-            args: --target x64
-          - os: macos-latest
-            platform: macos
-            args: --target universal
-          - os: ubuntu-latest
-            platform: linux
-            args: ''
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri (NSIS installer + Portable)
+        run: npm run tauri build -- --target x64
+
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            src-tauri/target/x64-pc-windows-msvc/release/bundle/nsis/*.exe
+            src-tauri/target/x64-pc-windows-msvc/release/SCOM-T-portable.exe
+          tag_name: ${{ github.ref_name }}
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,10 +53,39 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Install dependencies (Ubuntu)
-        if: matrix.platform == 'linux'
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri (Universal DMG)
+        run: npm run tauri build -- --target universal
+
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          tag_name: ${{ github.ref_name }}
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
@@ -45,17 +93,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Build Tauri application
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri (AppImage)
+        run: npm run tauri build
+
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v1
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Release ${{ github.ref_name }}
-          releaseBody: See the assets to download this version and install.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+          files: src-tauri/target/release/bundle/appimage/*.AppImage
+          tag_name: ${{ github.ref_name }}
+
 
 
 
