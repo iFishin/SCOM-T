@@ -548,6 +548,11 @@ export function PromptPanel({
     });
     waitingResponsesRef.current.clear();
 
+    // Interrupted mid-wait — the pending row's status won't resolve on its own, reset it.
+    setPromptRows(current => current.map(row => (
+      row.status === "pending" ? { ...row, status: "idle" as PromptRowStatus } : row
+    )));
+
     resetBatchState();
   }
 
@@ -559,12 +564,6 @@ export function PromptPanel({
       currentIndex: 0,
       selectedRows: [],
     });
-
-    setPromptRows(current => current.map(row => ({
-      ...row,
-      selected: false,
-      status: "idle" as PromptRowStatus,
-    })));
   }
 
   function handleCommandKeyDown(e: React.KeyboardEvent, row: PromptRow) {
