@@ -45,7 +45,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Build application
+      - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -77,20 +77,14 @@ jobs:
         run: npm install
 
       - name: Build Tauri app (Portable)
-        uses: tauri-apps/tauri-action@v0
+        run: npm run tauri build -- --target x64 -f portable
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Release ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: false
-          prerelease: false
-          args: --target x64 -- -f portable
 
       - name: Upload portable exe to release
         uses: softprops/action-gh-release@v1
         with:
-          files: src-tauri/target/x64-pc-windows-msvc/release/bundle/nsis/*.exe
+          files: src-tauri/target/x64-pc-windows-msvc/release/SCOM-T-portable.exe
           tag_name: ${{ github.ref_name }}
+
 
