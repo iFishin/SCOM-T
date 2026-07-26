@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, FileText, FolderOpen, Plus, Save, Trash2, List } from "lucide-react";
+import { FileText, FolderOpen, Plus, Save, Trash2, List } from "lucide-react";
 import { Button } from "./ui/Button.tsx";
 import { Input } from "./ui/Input.tsx";
 import { t } from "../i18n";
@@ -185,50 +185,35 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header bar */}
-      <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 shrink-0">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2 shrink-0">
         <Button
           type="button"
-          onClick={onClose}
-          className="rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)] flex items-center gap-1"
+          onClick={handleCreateNew}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
         >
-          <ArrowLeft size={14} />
-          {lang === "zh" ? "返回" : "Back"}
+          <Plus size={12} />
+          {lang === "zh" ? "新建" : "New"}
         </Button>
-        <div className="h-4 w-px bg-[var(--border)]" />
-        <div>
-          <div className="text-sm font-semibold">{t("response_set", lang)}</div>
-          <div className="text-xs text-[var(--text-muted)]">{t("response_set_desc", lang)}</div>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+        <Button
+          type="button"
+          onClick={() => openResponseSetsDir()}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
+        >
+          <FolderOpen size={12} />
+          {lang === "zh" ? "文件夹" : "Folder"}
+        </Button>
+        {currentSet && selectedName && (
           <Button
             type="button"
-            onClick={handleCreateNew}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
+            onClick={handleApplyAndClose}
+            disabled={!currentSet.commands.some((c) => c.command.trim() && c.expectedResponses.some((r) => r.trim()))}
+            className="ml-auto flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
           >
-            <Plus size={12} />
-            {lang === "zh" ? "新建" : "New"}
+            <List size={12} />
+            {t("response_set_apply", lang)}
           </Button>
-          <Button
-            type="button"
-            onClick={() => openResponseSetsDir()}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
-          >
-            <FolderOpen size={12} />
-            {lang === "zh" ? "文件夹" : "Folder"}
-          </Button>
-          {currentSet && selectedName && (
-            <Button
-              type="button"
-              onClick={handleApplyAndClose}
-              disabled={!currentSet.commands.some((c) => c.command.trim() && c.expectedResponses.some((r) => r.trim()))}
-              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
-            >
-              <List size={12} />
-              {t("response_set_apply", lang)}
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Main content area */}

@@ -800,7 +800,7 @@ function App() {
         style={{ WebkitAppRegion: "drag", appRegion: "drag" } as React.CSSProperties}
       >
         {/* Logo */}
-        {page !== "config" && (
+        {page === "main" && (
         <div className="flex items-center shrink-0 pl-1 pr-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg">
             <img
@@ -812,8 +812,8 @@ function App() {
         </div>
         )}
 
-        {page === "config" ? (
-          /* Config page header controls */
+        {page === "config" || page === "responseSet" ? (
+          /* Sub-page header controls — shared breadcrumb style */
           <nav className="flex items-center gap-2 flex-1 min-w-0">
             <Button
               type="button"
@@ -825,7 +825,9 @@ function App() {
               {lang === "zh" ? "返回" : "Back"}
             </Button>
             <span className="text-xs font-semibold text-[var(--text-primary)]">
-              {lang === "zh" ? "配置文件管理" : "Config File Manager"}
+              {page === "config"
+                ? (lang === "zh" ? "配置文件管理" : "Config File Manager")
+                : t("response_set", lang)}
             </span>
           </nav>
         ) : (
