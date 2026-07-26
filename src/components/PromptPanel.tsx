@@ -122,6 +122,8 @@ export function PromptPanel({
   const batchAbortRef = useRef<boolean>(false);
   const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
   const responseSetOptionsLoaded = useRef(false);
+  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "pending" | "success" | "error"; detail: string }[]>([]);
+  const [matchLogOpen, setMatchLogOpen] = useState(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -323,24 +325,31 @@ export function PromptPanel({
             const match = re.exec(waiting.receivedBuffer);
             if (match) {
               matched = true;
-              waiting.matchIndex++;
-              // Consume the matched portion, keep the rest
               waiting.receivedBuffer = waiting.receivedBuffer.slice(match.index + match[0].length);
             }
           } catch {
             // Invalid regex, fall back to text match
             matched = waiting.receivedBuffer.includes(expected);
+            if (matched) {
+              const idx = waiting.receivedBuffer.indexOf(expected);
+              waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+            }
           }
         } else {
           matched = waiting.receivedBuffer.includes(expected);
+          if (matched) {
+            const idx = waiting.receivedBuffer.indexOf(expected);
+            waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+          }
         }
 
-        if (matched && !isRegex) {
+        if (matched) {
           waiting.matchIndex++;
-          // Consume the matched content
-          const idx = waiting.receivedBuffer.indexOf(expected);
-          waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
-        } else if (!matched) {
+          setMatchLog((prev) => {
+            const next = [{ rowId, command: "", status: "pending" as const, detail: `✓ 匹配到 #${waiting.matchIndex}: ${expected.length > 30 ? expected.slice(0, 30) + "..." : expected}` }, ...prev];
+            return next.slice(0, 50);
+          });
+        } else {
           break;
         }
       }
@@ -351,6 +360,10 @@ export function PromptPanel({
         updatePromptRow(rowId, { status: "success" });
         waitingResponsesRef.current.delete(rowId);
         waiting.onComplete?.();
+        setMatchLog((prev) => {
+          const next = [{ rowId, command: "", status: "success" as const, detail: `✅ 行 ${rowId} 全部匹配成功` }, ...prev];
+          return next.slice(0, 50);
+        });
       }
     });
   }, [logs]);
@@ -409,6 +422,11 @@ export function PromptPanel({
       const timeout = row.interval ? parseInt(row.interval, 10) : 5000;
       const validTimeout = isNaN(timeout) || timeout < 100 ? 5000 : timeout;
 
+      setMatchLog((prev) => {
+        const next = [{ rowId: row.id, command: row.command, status: "pending" as const, detail: `⏳ 行 ${row.id}: 等待匹配 (${validTimeout}ms)` }, ...prev];
+        return next.slice(0, 50);
+      });
+
       const waiting: WaitingResponse = {
         rowId: row.id,
         expected: row.expectedResponses!,
@@ -421,6 +439,10 @@ export function PromptPanel({
           // Timeout — mark as error
           updatePromptRow(row.id, { status: "error" });
           waitingResponsesRef.current.delete(row.id);
+          setMatchLog((prev) => {
+            const next = [{ rowId: row.id, command: row.command, status: "error" as const, detail: `❌ 行 ${row.id}: 匹配超时 (${validTimeout}ms)` }, ...prev];
+            return next.slice(0, 50);
+          });
           resolve();
         }, validTimeout),
         onComplete: resolve,
@@ -1063,6 +1085,56 @@ export function PromptPanel({
                    onKeyDown={(e) => { if (e.key === 'Enter') handleRowCountApply(Number(rowCountInput)); }}
                    className="w-14 text-center" />
           </label>
+        )}
+        {activePromptTab === "grid" && (
+          <div className="relative flex items-center">
+            <span className="w-px h-3 bg-[var(--border)] mx-2" />
+            <button
+              type="button"
+              onClick={() => setMatchLogOpen(!matchLogOpen)}
+              className="flex items-center gap-1 text-[10px] font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              {matchLog.length > 0 && matchLog[0]?.status === "pending" ? (
+                <span className="flex items-center gap-1 text-amber-500">
+                  <Loader2 size={10} className="animate-spin" />
+                  {lang === "zh" ? "匹配中..." : "Matching..."}
+                </span>
+              ) : matchLog.length > 0 && matchLog[0]?.status === "error" ? (
+                <span className="text-rose-500">{lang === "zh" ? "匹配失败" : "Failed"}</span>
+              ) : matchLog.length > 0 && matchLog[0]?.status === "success" ? (
+                <span className="text-emerald-500">{lang === "zh" ? "匹配成功" : "Success"}</span>
+              ) : (
+                <span>{lang === "zh" ? "匹配日志" : "Match Log"}</span>
+              )}
+              <span className="text-[9px] opacity-50">({matchLog.length})</span>
+            </button>
+            {matchLogOpen && (
+              <div className="absolute top-full right-0 mt-1 z-50 w-72 max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] shadow-lg p-1 text-[10px]">
+                {matchLog.length === 0 ? (
+                  <div className="text-center py-2 text-[var(--text-muted)]">
+                    {lang === "zh" ? "暂无匹配记录" : "No match records"}
+                  </div>
+                ) : (
+                  matchLog.map((entry, i) => (
+                    <div key={i} className={`flex items-start gap-1.5 px-2 py-1 rounded ${
+                      entry.status === "success" ? "text-emerald-600" :
+                      entry.status === "error" ? "text-rose-500" :
+                      "text-amber-500"
+                    }`}>
+                      <span className="truncate flex-1">{entry.detail}</span>
+                    </div>
+                  ))
+                )}
+                <button
+                  type="button"
+                  onClick={() => setMatchLog([])}
+                  className="w-full text-center py-1 text-[9px] text-[var(--text-muted)] hover:text-[var(--text-primary)] border-t border-[var(--border)] mt-1"
+                >
+                  {lang === "zh" ? "清空" : "Clear"}
+                </button>
+              </div>
+            )}
+          </div>
         )}
         {activePromptTab === "batch" && (
           <button type="button" onClick={() => setRegexCleanOpen(true)}
