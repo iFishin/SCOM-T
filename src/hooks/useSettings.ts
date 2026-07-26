@@ -175,7 +175,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   sendPanelFileCollapsed: true,
   sendPanelHotkeysCollapsed: true,
   portFilterMode: "default",
-  cloudServerUrl: "",
+  cloudServerUrl: "https://scom-t-marketplace.ifishin.top",
   cloudAuthToken: "",
   cloudUploaderName: "",
 };
