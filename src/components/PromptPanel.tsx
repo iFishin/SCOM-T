@@ -111,6 +111,7 @@ export function PromptPanel({
   const presetsLoaded = useRef(false);
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   const waitingResponsesRef = useRef<Map<number, WaitingResponse>>(new Map());
+  const lastProcessedLogRef = useRef<number>(-1);
   const [batchState, setBatchState] = useState<BatchExecutionState>({
     isRunning: false,
     currentLoop: 0,
@@ -305,78 +306,80 @@ export function PromptPanel({
     if (waitingResponsesRef.current.size === 0) return;
     if (!logs || logs.length === 0) return;
 
-    const latestLog = logs[logs.length - 1];
-    if (latestLog?.direction !== "received") return;
+    // Process all new log entries, not just the latest one
+    for (let i = lastProcessedLogRef.current + 1; i < logs.length; i++) {
+      const log = logs[i];
+      if (log?.direction !== "received") continue;
 
-    const receivedText = latestLog.payload;
+      const receivedText = log.payload;
 
-    // Log received data
-    setMatchLog((prev) => {
-      const next = [{ rowId: 0, command: "", status: "pending" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: receivedText.length > 200 ? receivedText.slice(0, 200) + "..." : receivedText, expected: "" }, ...prev];
-      return next.slice(0, 100);
-    });
+      // Log received data
+      setMatchLog((prev) => {
+        const next = [{ rowId: 0, command: "", status: "pending" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: receivedText.length > 200 ? receivedText.slice(0, 200) + "..." : receivedText, expected: "" }, ...prev];
+        return next.slice(0, 100);
+      });
 
-    waitingResponsesRef.current.forEach((waiting, rowId) => {
-      waiting.receivedBuffer += receivedText;
+      waitingResponsesRef.current.forEach((waiting, rowId) => {
+        waiting.receivedBuffer += receivedText;
 
-      // Try to match expected responses in order
-      while (waiting.matchIndex < waiting.expected.length) {
-        const expected = waiting.expected[waiting.matchIndex];
-        // Skip empty expected responses
-        if (!expected.trim()) {
-          waiting.matchIndex++;
-          continue;
-        }
-        const isRegex = waiting.isRegex[waiting.matchIndex] ?? false;
-        let matched = false;
+        // Try to match expected responses in order
+        while (waiting.matchIndex < waiting.expected.length) {
+          const expected = waiting.expected[waiting.matchIndex];
+          if (!expected.trim()) {
+            waiting.matchIndex++;
+            continue;
+          }
+          const isRegex = waiting.isRegex[waiting.matchIndex] ?? false;
+          let matched = false;
 
-        if (isRegex) {
-          try {
-            const re = new RegExp(expected);
-            const match = re.exec(waiting.receivedBuffer);
-            if (match) {
-              matched = true;
-              waiting.receivedBuffer = waiting.receivedBuffer.slice(match.index + match[0].length);
+          if (isRegex) {
+            try {
+              const re = new RegExp(expected);
+              const match = re.exec(waiting.receivedBuffer);
+              if (match) {
+                matched = true;
+                waiting.receivedBuffer = waiting.receivedBuffer.slice(match.index + match[0].length);
+              }
+            } catch {
+              matched = waiting.receivedBuffer.includes(expected);
+              if (matched) {
+                const idx = waiting.receivedBuffer.indexOf(expected);
+                waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+              }
             }
-          } catch {
-            // Invalid regex, fall back to text match
+          } else {
             matched = waiting.receivedBuffer.includes(expected);
             if (matched) {
               const idx = waiting.receivedBuffer.indexOf(expected);
               waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
             }
           }
-        } else {
-          matched = waiting.receivedBuffer.includes(expected);
+
           if (matched) {
-            const idx = waiting.receivedBuffer.indexOf(expected);
-            waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+            waiting.matchIndex++;
+            setMatchLog((prev) => {
+              const next = [{ rowId, command: "", status: "pending" as const, detail: `[MATCH] #${waiting.matchIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+              return next.slice(0, 100);
+            });
+          } else {
+            break;
           }
         }
 
-        if (matched) {
-          waiting.matchIndex++;
+        // All expected responses matched
+        if (waiting.matchIndex >= waiting.expected.length) {
+          clearTimeout(waiting.timer);
+          updatePromptRow(rowId, { status: "success" });
+          waitingResponsesRef.current.delete(rowId);
+          waiting.onComplete?.();
           setMatchLog((prev) => {
-            const next = [{ rowId, command: "", status: "pending" as const, detail: `[MATCH] #${waiting.matchIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+            const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
             return next.slice(0, 100);
           });
-        } else {
-          break;
         }
-      }
-
-      // All expected responses matched
-      if (waiting.matchIndex >= waiting.expected.length) {
-        clearTimeout(waiting.timer);
-        updatePromptRow(rowId, { status: "success" });
-        waitingResponsesRef.current.delete(rowId);
-        waiting.onComplete?.();
-        setMatchLog((prev) => {
-          const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
-          return next.slice(0, 100);
-        });
-      }
-    });
+      });
+    }
+    lastProcessedLogRef.current = logs.length - 1;
   }, [logs]);
 
   function handleRowCountApply(newCount: number) {
