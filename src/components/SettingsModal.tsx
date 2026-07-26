@@ -10,6 +10,7 @@ import { HotkeysEditor } from "./settings/HotkeysEditor.tsx";
 import { ThemeEditor } from "./settings/ThemeEditor.tsx";
 import { LayoutEditor } from "./settings/LayoutEditor.tsx";
 import { MockSerialSettings } from "./settings/MockSerialSettings.tsx";
+import { MarketplaceSettings } from "./settings/MarketplaceSettings.tsx";
 
 // Subcomponents extracted to src/components/settings/*
 
@@ -26,6 +27,7 @@ type SettingsModalProps = {
   portFilterMode?: "default" | "all";
   cloudServerUrl?: string;
   cloudAuthToken?: string;
+  cloudUploaderName?: string;
   timestampFormat?: "time" | "datetime" | "none";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
@@ -45,6 +47,7 @@ type SettingsModalProps = {
   onPortFilterModeChange?: (mode: "default" | "all") => void;
   onCloudServerUrlChange?: (url: string) => void;
   onCloudAuthTokenChange?: (token: string) => void;
+  onCloudUploaderNameChange?: (name: string) => void;
   onMockSerialChange?: (config: MockSerialConfig) => void;
 };
 
@@ -62,6 +65,7 @@ export function SettingsModal({
   portFilterMode,
   cloudServerUrl,
   cloudAuthToken,
+  cloudUploaderName,
   timestampFormat,
   layoutMode,
   gridLayout,
@@ -81,6 +85,7 @@ export function SettingsModal({
   onPortFilterModeChange,
   onCloudServerUrlChange,
   onCloudAuthTokenChange,
+  onCloudUploaderNameChange,
   onMockSerialChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
@@ -91,6 +96,7 @@ export function SettingsModal({
     t("settings_theme", lang),
     t("settings_layout", lang),
     t("settings_mock_serial", lang),
+    t("settings_marketplace", lang),
   ];
 
 
@@ -134,7 +140,7 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} cloudServerUrl={cloudServerUrl} cloudAuthToken={cloudAuthToken} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} onCloudServerUrlChange={onCloudServerUrlChange} onCloudAuthTokenChange={onCloudAuthTokenChange} />
+              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} />
             )}
 
             {activeTab === 1 && (
@@ -231,6 +237,18 @@ export function SettingsModal({
                 lang={lang}
                 mockSerial={mockSerial}
                 onMockSerialChange={onMockSerialChange}
+              />
+            )}
+
+            {activeTab === 6 && (
+              <MarketplaceSettings
+                lang={lang}
+                cloudServerUrl={cloudServerUrl}
+                cloudAuthToken={cloudAuthToken}
+                cloudUploaderName={cloudUploaderName}
+                onCloudServerUrlChange={onCloudServerUrlChange}
+                onCloudAuthTokenChange={onCloudAuthTokenChange}
+                onCloudUploaderNameChange={onCloudUploaderNameChange}
               />
             )}
 

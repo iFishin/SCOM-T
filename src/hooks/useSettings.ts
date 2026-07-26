@@ -81,6 +81,7 @@ export type AppSettings = {
   mockSerial?: MockSerialConfig;
   cloudServerUrl?: string;
   cloudAuthToken?: string;
+  cloudUploaderName?: string;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -176,6 +177,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   portFilterMode: "default",
   cloudServerUrl: "",
   cloudAuthToken: "",
+  cloudUploaderName: "",
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -240,6 +242,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
     } : { enabled: false, responseDelay: 100, customResponses: [] },
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",
     cloudAuthToken: typeof raw.cloudAuthToken === "string" ? raw.cloudAuthToken : "",
+    cloudUploaderName: typeof raw.cloudUploaderName === "string" ? raw.cloudUploaderName : "",
   };
 }
 
@@ -458,6 +461,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, cloudAuthToken: token }));
   }
 
+  function updateCloudUploaderName(name: string) {
+    setSettings((current) => ({ ...current, cloudUploaderName: name }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -504,5 +511,6 @@ export function useSettings() {
     updateMockSerial,
     updateCloudServerUrl,
     updateCloudAuthToken,
+    updateCloudUploaderName,
   };
 }

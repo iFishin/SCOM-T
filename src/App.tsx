@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -146,7 +146,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCloudServerUrl, updateCloudAuthToken } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -787,7 +787,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} onNavigateToMarketplace={handleNavigateToMarketplace} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -864,6 +864,15 @@ function App() {
           >
             <FileText size={14} />
             <span>{t("app_logs", lang)}</span>
+          </Button>
+          <Button
+            type="button"
+            onClick={handleNavigateToMarketplace}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+            style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
+          >
+            <Cloud size={14} />
+            <span>{t("marketplace_title", lang)}</span>
           </Button>
           <span className="w-px h-4 bg-[var(--border)] mx-1" />
           <Button
@@ -990,8 +999,13 @@ function App() {
           lang={lang}
           serverUrl={settings.cloudServerUrl ?? ""}
           authToken={settings.cloudAuthToken}
+          uploaderName={settings.cloudUploaderName}
           onClose={() => setPage("main")}
           onApply={(id) => setPendingApplyResponseSet(id)}
+          onApplyPromptConfig={(name) => {
+            updateActiveConfigFile(`${name}.yaml`);
+            setPage("config");
+          }}
         />
       ) : (<>
         {aboutOpen && (
@@ -1294,7 +1308,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} onNavigateToMarketplace={handleNavigateToMarketplace} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
                 </div>
               </div>
             )}
@@ -1327,6 +1341,7 @@ function App() {
         portFilterMode={settings.portFilterMode}
         cloudServerUrl={settings.cloudServerUrl}
         cloudAuthToken={settings.cloudAuthToken}
+        cloudUploaderName={settings.cloudUploaderName}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         mockSerial={settings.mockSerial}
@@ -1345,6 +1360,7 @@ function App() {
         onPortFilterModeChange={updatePortFilterMode}
         onCloudServerUrlChange={updateCloudServerUrl}
         onCloudAuthTokenChange={updateCloudAuthToken}
+        onCloudUploaderNameChange={updateCloudUploaderName}
         onMockSerialChange={updateMockSerial}
       />
       {/* ── Notification card modal ── */}
