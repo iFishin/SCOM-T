@@ -1126,16 +1126,17 @@ export function PromptPanel({
               {matchLog.length > 0 && matchLog[0]?.status === "pending" ? (
                 <span className="flex items-center gap-1 text-amber-500">
                   <Loader2 size={10} className="animate-spin" />
-                  {lang === "zh" ? "匹配中" : "Matching"}
                 </span>
               ) : matchLog.length > 0 && matchLog[0]?.status === "error" ? (
-                <span className="text-rose-500">{lang === "zh" ? "匹配失败" : "Failed"}</span>
+                <span className="flex items-center gap-1 text-rose-500">
+                  <X size={10} />
+                </span>
               ) : matchLog.length > 0 && matchLog[0]?.status === "success" ? (
-                <span className="text-emerald-500">{lang === "zh" ? "匹配成功" : "Success"}</span>
-              ) : (
-                <span>{lang === "zh" ? "匹配日志" : "Match Log"}</span>
-              )}
-              <span className="text-[9px] opacity-50">({matchLog.length})</span>
+                <span className="flex items-center gap-1 text-emerald-500">
+                  <Check size={10} />
+                </span>
+              ) : null}
+              <span>{matchLog.length > 0 ? `${lang === "zh" ? "匹配日志" : "Match Log"} (${matchLog.length})` : (lang === "zh" ? "匹配日志" : "Match Log")}</span>
             </button>
           </div>
         )}
@@ -1286,21 +1287,36 @@ export function PromptPanel({
                         ""
                       }`}
                     >
-                      <div className={`text-[11px] ${
-                        entry.status === "success" ? "text-emerald-600" :
-                        entry.status === "error" ? "text-rose-600" :
-                        "text-[var(--text-primary)]"
-                      }`}>
-                        {entry.detail}
+                      <div className="flex items-start gap-1.5">
+                        <span className="shrink-0 mt-0.5">
+                          {entry.status === "success" ? (
+                            <Check size={12} className="text-emerald-500" />
+                          ) : entry.status === "error" ? (
+                            <X size={12} className="text-rose-500" />
+                          ) : entry.detail.startsWith("[RECV]") ? (
+                            <span className="text-[10px] text-[var(--text-muted)]">&gt;</span>
+                          ) : entry.detail.startsWith("[MATCH]") ? (
+                            <span className="text-[10px] text-amber-500">~</span>
+                          ) : (
+                            <Loader2 size={10} className="animate-spin text-amber-500" />
+                          )}
+                        </span>
+                        <span className={`text-[11px] ${
+                          entry.status === "success" ? "text-emerald-600" :
+                          entry.status === "error" ? "text-rose-600" :
+                          "text-[var(--text-primary)]"
+                        }`}>
+                          {entry.detail}
+                        </span>
                       </div>
                       {entry.expected && (
-                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 ml-5">
                           <span className="opacity-60">EXPECT: </span>
                           <span className="font-mono">{entry.expected}</span>
                         </div>
                       )}
                       {entry.received && (
-                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 ml-5">
                           <span className="opacity-60">RECV: </span>
                           <span className="font-mono break-all">{entry.received}</span>
                         </div>
