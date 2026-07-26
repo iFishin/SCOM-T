@@ -6,8 +6,7 @@ const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours
 const LAST_CHECK_KEY = "scom_t_last_version_check";
 const LAST_VERSION_KEY = "scom_t_last_checked_version";
 
-export function useVersionCheck() {
-  const [version, setVersion] = useState("0.1.0");
+export function useVersionCheck(currentVersion: string) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
   function compareVersion(a: string, b: string): number {
@@ -27,7 +26,7 @@ export function useVersionCheck() {
       if (!res.ok) return;
       const data = await res.json();
       const latestTag: string = (data.tag_name || "").replace(/^v/, "");
-      const currentVer = version.replace(/^v/, "");
+      const currentVer = currentVersion.replace(/^v/, "");
 
       if (compareVersion(latestTag, currentVer) > 0) {
         setUpdateAvailable(true);
@@ -45,18 +44,8 @@ export function useVersionCheck() {
   }
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { getVersion } = await import("@tauri-apps/api/app");
-        const v = await getVersion();
-        setVersion(v);
-      } catch {
-        // not in Tauri context (dev), keep default
-      }
-    })();
-  }, []);
+    if (!currentVersion) return;
 
-  useEffect(() => {
     // 检查距离上次检查是否已超过 CHECK_INTERVAL
     const lastCheck = localStorage.getItem(LAST_CHECK_KEY);
     const lastVersion = localStorage.getItem(LAST_VERSION_KEY);
@@ -67,13 +56,13 @@ export function useVersionCheck() {
       checkForUpdate();
       const interval = setInterval(checkForUpdate, CHECK_INTERVAL);
       return () => clearInterval(interval);
-    } else if (lastVersion && version) {
+    } else if (lastVersion && currentVersion) {
       // 如果上次检查有新版本记录，恢复该状态
-      if (compareVersion(lastVersion, version.replace(/^v/, "")) > 0) {
+      if (compareVersion(lastVersion, currentVersion.replace(/^v/, "")) > 0) {
         setUpdateAvailable(true);
       }
     }
-  }, [version]);
+  }, [currentVersion]);
 
-  return { updateAvailable, version };
+  return { updateAvailable };
 }

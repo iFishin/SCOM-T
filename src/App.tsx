@@ -112,7 +112,7 @@ function App() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [cardNotifications, setCardNotifications] = useState<any[]>([]);
   const [appVersion, setAppVersion] = useState("0.0.0");
-  const { updateAvailable } = useVersionCheck();
+  const { updateAvailable } = useVersionCheck(appVersion);
   const [signalOpen, setSignalOpen] = useState(false);
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
