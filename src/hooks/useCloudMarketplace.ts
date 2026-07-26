@@ -4,7 +4,7 @@ import { serializeToYaml, parseYamlToRows, type PromptRow } from "../utils/yamlC
 
 // ── Types ──
 
-export type MarketplaceItemType = "response_set" | "prompt_config";
+export type MarketplaceItemType = "response_set" | "prompt_config" | "command_text";
 
 export type MarketplaceItem = {
   id: string;
@@ -19,7 +19,8 @@ export type MarketplaceFetchState = "idle" | "loading" | "loaded" | "error";
 
 export type MarketplaceDownload =
   | { type: "response_set"; set: ResponseSet }
-  | { type: "prompt_config"; rows: PromptRow[] };
+  | { type: "prompt_config"; rows: PromptRow[] }
+  | { type: "command_text"; text: string };
 
 export class ItemExistsError extends Error {
   existing: { name: string; type: MarketplaceItemType; updatedAt?: string };
@@ -147,7 +148,7 @@ export function useCloudMarketplace() {
         id: item.id,
         name: item.name,
         description: typeof item.description === "string" ? item.description : undefined,
-        type: (item.type === "prompt_config" ? "prompt_config" : "response_set") as MarketplaceItemType,
+        type: (item.type === "prompt_config" ? "prompt_config" : item.type === "command_text" ? "command_text" : "response_set") as MarketplaceItemType,
         uploadedBy: typeof item.uploaded_by === "string" ? item.uploaded_by : undefined,
         updatedAt: typeof item.updated_at === "string" ? item.updated_at : undefined,
       }));
@@ -172,6 +173,10 @@ export function useCloudMarketplace() {
       return { type: "prompt_config", rows: result.rows };
     }
 
+    if (data.type === "command_text") {
+      return { type: "command_text", text: data.payload };
+    }
+
     const result = validateResponseSetPayload(id, data.payload);
     if (!result.valid) throw new Error(result.error);
     return { type: "response_set", set: result.set };
@@ -181,7 +186,7 @@ export function useCloudMarketplace() {
     serverUrl: string,
     id: string,
     type: MarketplaceItemType,
-    content: ResponseSet | PromptRow[],
+    content: ResponseSet | PromptRow[] | string,
     authToken?: string,
     overwrite?: boolean,
     uploadedBy?: string,
@@ -189,7 +194,12 @@ export function useCloudMarketplace() {
     const base = serverUrl.replace(/\/+$/, "");
     const name = type === "response_set" ? (content as ResponseSet).name : id;
     const description = type === "response_set" ? (content as ResponseSet).description : undefined;
-    const payload = type === "response_set" ? responseSetToYaml(content as ResponseSet) : serializeToYaml(content as PromptRow[]);
+    const payload =
+      type === "response_set"
+        ? responseSetToYaml(content as ResponseSet)
+        : type === "prompt_config"
+          ? serializeToYaml(content as PromptRow[])
+          : (content as string);
     const res = await fetch(`${base}/items/${encodeURIComponent(id)}`, {
       method: "PUT",
       headers: { ...authHeaders(authToken), "Content-Type": "application/json" },
@@ -200,7 +210,7 @@ export function useCloudMarketplace() {
       const existing = (body.existing ?? {}) as Record<string, unknown>;
       throw new ItemExistsError({
         name: typeof existing.name === "string" ? existing.name : id,
-        type: existing.type === "prompt_config" ? "prompt_config" : "response_set",
+        type: existing.type === "prompt_config" ? "prompt_config" : existing.type === "command_text" ? "command_text" : "response_set",
         updatedAt: typeof existing.updated_at === "string" ? existing.updated_at : undefined,
       });
     }

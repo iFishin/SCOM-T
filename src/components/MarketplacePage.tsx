@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, Download, Edit3, RefreshCw, Save, Store, Trash2, Upload } from "lucide-react";
+import { Check, Cloud, Copy, Download, Edit3, RefreshCw, Save, SlidersHorizontal, Store, Terminal, Trash2, Upload } from "lucide-react";
 import { Button } from "./ui/Button.tsx";
 import { Input } from "./ui/Input.tsx";
 import { t } from "../i18n";
@@ -29,6 +29,24 @@ type MarketplacePageProps = {
 };
 
 type TypeFilter = "all" | MarketplaceItemType;
+
+function TypeIcon({ type, size = 13 }: { type: MarketplaceItemType; size?: number }) {
+  if (type === "prompt_config") return <SlidersHorizontal size={size} />;
+  if (type === "command_text") return <Terminal size={size} />;
+  return <Cloud size={size} />;
+}
+
+function typeLabel(type: MarketplaceItemType, lang: Lang): string {
+  if (type === "prompt_config") return t("marketplace_type_prompt_config", lang);
+  if (type === "command_text") return t("marketplace_type_command_text", lang);
+  return t("marketplace_type_response_set", lang);
+}
+
+function idPrefixFor(type: MarketplaceItemType): string {
+  if (type === "prompt_config") return "pc-";
+  if (type === "command_text") return "cmd-";
+  return "rs-";
+}
 
 export function MarketplacePage({
   lang,
@@ -61,14 +79,19 @@ export function MarketplacePage({
   const [editing, setEditing] = useState(false);
   const [editedSet, setEditedSet] = useState<ResponseSet | null>(null);
   const [editedRows, setEditedRows] = useState<PromptRow[] | null>(null);
+  const [editedText, setEditedText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [localSets, setLocalSets] = useState<{ fileId: string; name: string }[]>([]);
   const [localConfigs, setLocalConfigs] = useState<string[]>([]);
   const [uploadType, setUploadType] = useState<MarketplaceItemType>("response_set");
   const [uploadTarget, setUploadTarget] = useState("");
+  const [uploadText, setUploadText] = useState("");
   const [uploadId, setUploadId] = useState("");
+  const [uploadIdAutoFilled, setUploadIdAutoFilled] = useState(true);
+
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -126,7 +149,9 @@ export function MarketplacePage({
     setEditing(false);
     setEditedSet(null);
     setEditedRows(null);
+    setEditedText(null);
     setSaveError(null);
+    setCopied(false);
     if (!selected) {
       setPreview(null);
       setPreviewState("idle");
@@ -155,7 +180,7 @@ export function MarketplacePage({
       if (preview.type === "response_set") {
         await saveResponseSet(selected.id, preview.set);
         onApply?.(selected.id);
-      } else {
+      } else if (preview.type === "prompt_config") {
         await saveConfig(selected.id, preview.rows);
         onApplyPromptConfig?.(selected.id);
       }
@@ -173,13 +198,38 @@ export function MarketplacePage({
     try {
       if (preview.type === "response_set") {
         await saveResponseSet(selected.id, preview.set);
-      } else {
+      } else if (preview.type === "prompt_config") {
         await saveConfig(selected.id, preview.rows);
+      } else {
+        await handleCopyCommands();
       }
     } catch (e) {
       setApplyError(e instanceof Error ? e.message : String(e));
     } finally {
       setDownloading(false);
+    }
+  }
+
+  function commandsAsText(): string {
+    if (!preview) return "";
+    if (preview.type === "response_set") {
+      return preview.set.commands.map((c) => c.command).join("\n");
+    }
+    if (preview.type === "command_text") {
+      return preview.text;
+    }
+    return preview.rows.map((r) => r.command).join("\n");
+  }
+
+  async function handleCopyCommands() {
+    const text = commandsAsText();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -202,8 +252,10 @@ export function MarketplacePage({
     if (!preview || !selected) return;
     if (preview.type === "response_set") {
       setEditedSet({ ...preview.set });
-    } else {
+    } else if (preview.type === "prompt_config") {
       setEditedRows([...preview.rows]);
+    } else {
+      setEditedText(preview.text);
     }
     setEditing(true);
     setSaveError(null);
@@ -213,6 +265,7 @@ export function MarketplacePage({
     setEditing(false);
     setEditedSet(null);
     setEditedRows(null);
+    setEditedText(null);
     setSaveError(null);
   }
 
@@ -227,10 +280,14 @@ export function MarketplacePage({
       } else if (preview.type === "prompt_config" && editedRows) {
         await uploadMarketplaceItem(serverUrl, selected.id, "prompt_config", editedRows, authToken, true, uploaderName);
         setPreview({ type: "prompt_config", rows: editedRows });
+      } else if (preview.type === "command_text" && editedText !== null) {
+        await uploadMarketplaceItem(serverUrl, selected.id, "command_text", editedText, authToken, true, uploaderName);
+        setPreview({ type: "command_text", text: editedText });
       }
       setEditing(false);
       setEditedSet(null);
       setEditedRows(null);
+      setEditedText(null);
       refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
@@ -240,7 +297,11 @@ export function MarketplacePage({
   }
 
   async function doUpload(overwrite: boolean) {
-    if (!uploadTarget || !uploadId.trim()) return;
+    if (uploadType === "command_text") {
+      if (!uploadText.trim() || !uploadId.trim()) return;
+    } else if (!uploadTarget || !uploadId.trim()) {
+      return;
+    }
     setUploading(true);
     setUploadError(null);
     try {
@@ -248,14 +309,18 @@ export function MarketplacePage({
         const set = await loadResponseSet(uploadTarget);
         if (!set) throw new Error(t("marketplace_upload_load_error", lang));
         await uploadMarketplaceItem(serverUrl, uploadId.trim(), "response_set", set, authToken, overwrite, uploaderName);
-      } else {
+      } else if (uploadType === "prompt_config") {
         const rows = await loadConfig(uploadTarget);
         await uploadMarketplaceItem(serverUrl, uploadId.trim(), "prompt_config", rows, authToken, overwrite, uploaderName);
+      } else {
+        await uploadMarketplaceItem(serverUrl, uploadId.trim(), "command_text", uploadText, authToken, overwrite, uploaderName);
       }
       setCollision(null);
       setShowUpload(false);
       setUploadTarget("");
+      setUploadText("");
       setUploadId("");
+      setUploadIdAutoFilled(true);
       refresh();
     } catch (e) {
       if (e instanceof ItemExistsError) {
@@ -300,7 +365,13 @@ export function MarketplacePage({
         </Button>
         <Button
           type="button"
-          onClick={() => setShowUpload((v) => !v)}
+          onClick={() =>
+            setShowUpload((v) => {
+              const next = !v;
+              if (next && uploadIdAutoFilled && !uploadId) setUploadId(idPrefixFor(uploadType));
+              return next;
+            })
+          }
           className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
         >
           <Upload size={12} />
@@ -335,15 +406,17 @@ export function MarketplacePage({
               {downloading ? <span className="animate-spin">⟳</span> : <Download size={12} />}
               {t("marketplace_download_only", lang)}
             </Button>
-            <Button
-              type="button"
-              onClick={handleDownloadAndApply}
-              disabled={applying}
-              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
-            >
-              {applying ? <span className="animate-spin">⟳</span> : <Download size={12} />}
-              {t("marketplace_download_apply", lang)}
-            </Button>
+            {selected.type !== "command_text" && (
+              <Button
+                type="button"
+                onClick={handleDownloadAndApply}
+                disabled={applying}
+                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
+              >
+                {applying ? <span className="animate-spin">⟳</span> : <Download size={12} />}
+                {t("marketplace_download_apply", lang)}
+              </Button>
+            )}
           </div>
         )}
         {selected && editing && (
@@ -381,13 +454,15 @@ export function MarketplacePage({
               onClick={() => {
                 setUploadType("response_set");
                 setUploadTarget("");
+                if (uploadIdAutoFilled) setUploadId(idPrefixFor("response_set"));
               }}
-              className={`px-2.5 py-1 text-[10px] transition-colors ${
+              className={`px-2.5 py-1 text-[10px] transition-colors flex items-center gap-1 ${
                 uploadType === "response_set"
                   ? "bg-[var(--accent)] text-white"
                   : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
               }`}
             >
+              <TypeIcon type="response_set" size={11} />
               {t("marketplace_type_response_set", lang)}
             </button>
             <button
@@ -395,38 +470,69 @@ export function MarketplacePage({
               onClick={() => {
                 setUploadType("prompt_config");
                 setUploadTarget("");
+                if (uploadIdAutoFilled) setUploadId(idPrefixFor("prompt_config"));
               }}
-              className={`px-2.5 py-1 text-[10px] transition-colors ${
+              className={`px-2.5 py-1 text-[10px] transition-colors flex items-center gap-1 ${
                 uploadType === "prompt_config"
                   ? "bg-[var(--accent)] text-white"
                   : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
               }`}
             >
+              <TypeIcon type="prompt_config" size={11} />
               {t("marketplace_type_prompt_config", lang)}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUploadType("command_text");
+                setUploadTarget("");
+                if (uploadIdAutoFilled) setUploadId(idPrefixFor("command_text"));
+              }}
+              className={`px-2.5 py-1 text-[10px] transition-colors flex items-center gap-1 ${
+                uploadType === "command_text"
+                  ? "bg-[var(--accent)] text-white"
+                  : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              <TypeIcon type="command_text" size={11} />
+              {t("marketplace_type_command_text", lang)}
+            </button>
           </div>
-          <select
-            value={uploadTarget}
-            onChange={(e) => setUploadTarget(e.target.value)}
-            className="input w-full text-xs"
-          >
-            <option value="">{t("marketplace_upload_select", lang)}</option>
-            {uploadType === "response_set"
-              ? localSets.map(({ fileId, name }) => (
-                  <option key={fileId} value={fileId}>
-                    {name}
-                  </option>
-                ))
-              : localConfigs.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-          </select>
+          {uploadType === "command_text" ? (
+            <textarea
+              value={uploadText}
+              onChange={(e) => setUploadText(e.target.value)}
+              placeholder={t("marketplace_command_text_placeholder", lang)}
+              rows={6}
+              className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-input)] p-2 font-mono text-[11px] text-[var(--text-primary)]"
+            />
+          ) : (
+            <select
+              value={uploadTarget}
+              onChange={(e) => setUploadTarget(e.target.value)}
+              className="input w-full text-xs"
+            >
+              <option value="">{t("marketplace_upload_select", lang)}</option>
+              {uploadType === "response_set"
+                ? localSets.map(({ fileId, name }) => (
+                    <option key={fileId} value={fileId}>
+                      {name}
+                    </option>
+                  ))
+                : localConfigs.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+            </select>
+          )}
           <Input
             type="text"
             value={uploadId}
-            onChange={(e) => setUploadId(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ""))}
+            onChange={(e) => {
+              setUploadId(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ""));
+              setUploadIdAutoFilled(false);
+            }}
             placeholder={t("marketplace_upload_id_placeholder", lang)}
             className="w-full text-xs"
           />
@@ -456,7 +562,7 @@ export function MarketplacePage({
           <Button
             type="button"
             onClick={handleUpload}
-            disabled={uploading || !uploadTarget || !uploadId.trim()}
+            disabled={uploading || !uploadId.trim() || (uploadType === "command_text" ? !uploadText.trim() : !uploadTarget)}
             className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
           >
             {uploading ? <span className="animate-spin">⟳</span> : <Upload size={12} />}
@@ -468,24 +574,23 @@ export function MarketplacePage({
       {/* Main content area */}
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar */}
-        <div className="w-64 shrink-0 border-r border-[var(--border)] p-3 flex flex-col">
-          <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] overflow-hidden mb-2 w-fit">
-            {(["all", "response_set", "prompt_config"] as TypeFilter[]).map((tf) => (
+        <div className="w-80 shrink-0 border-r border-[var(--border)] p-3 flex flex-col">
+          <div className="flex flex-wrap items-center gap-1 mb-2">
+            {(["all", "response_set", "prompt_config", "command_text"] as TypeFilter[]).map((tf) => (
               <button
                 key={tf}
                 type="button"
                 onClick={() => setTypeFilter(tf)}
-                className={`px-2 py-1 text-[10px] transition-colors ${
+                className={`px-2 py-1 rounded-md border text-[10px] transition-colors ${
                   typeFilter === tf
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                    ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                    : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
                 }`}
               >
-                {tf === "all"
-                  ? t("marketplace_type_all", lang)
-                  : tf === "response_set"
-                    ? t("marketplace_type_response_set", lang)
-                    : t("marketplace_type_prompt_config", lang)}
+                <span className="inline-flex items-center gap-1">
+                  {tf !== "all" && <TypeIcon type={tf} size={12} />}
+                  {tf === "all" ? t("marketplace_type_all", lang) : typeLabel(tf, lang)}
+                </span>
               </button>
             ))}
           </div>
@@ -520,10 +625,10 @@ export function MarketplacePage({
                     : "text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
                 }`}
               >
-                <Cloud size={13} />
+                <TypeIcon type={item.type} />
                 <span className="truncate flex-1">{item.name}</span>
                 <span className="shrink-0 text-[9px] opacity-70 uppercase">
-                  {item.type === "prompt_config" ? "cfg" : "set"}
+                  {item.type === "prompt_config" ? "cfg" : item.type === "command_text" ? "txt" : "set"}
                 </span>
               </button>
             ))}
@@ -534,6 +639,10 @@ export function MarketplacePage({
         <div className="flex-1 flex flex-col min-h-0">
           {selected ? (
             <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-0">
+              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                <TypeIcon type={selected.type} size={12} />
+                {typeLabel(selected.type, lang)}
+              </div>
               <Input type="text" value={selected.name} readOnly className="w-full text-sm" />
               <Input
                 type="text"
@@ -570,6 +679,33 @@ export function MarketplacePage({
               )}
               {previewState === "error" && <div className="text-xs text-rose-500">{previewError}</div>}
 
+              {previewState === "loaded" && preview && !editing && (
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      <Terminal size={12} />
+                      {t("marketplace_commands_text", lang)}
+                    </span>
+                    <Button
+                      type="button"
+                      onClick={handleCopyCommands}
+                      disabled={!commandsAsText()}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-40"
+                    >
+                      {copied ? <Check size={11} /> : <Copy size={11} />}
+                      {copied ? t("marketplace_copied", lang) : t("marketplace_copy_commands", lang)}
+                    </Button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={commandsAsText()}
+                    rows={Math.min(10, Math.max(3, commandsAsText().split("\n").length))}
+                    className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2 font-mono text-[11px] text-[var(--text-primary)]"
+                    onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                  />
+                </div>
+              )}
+
               {previewState === "loaded" && preview && (
                 <>
                   {editing ? (
@@ -579,8 +715,15 @@ export function MarketplacePage({
                         commands={editedSet.commands}
                         onChange={(commands) => setEditedSet({ ...editedSet, commands })}
                       />
-                    ) : editedRows ? (
+                    ) : preview.type === "prompt_config" && editedRows ? (
                       <PromptConfigRowEditor lang={lang} rows={editedRows} onChange={setEditedRows} />
+                    ) : preview.type === "command_text" && editedText !== null ? (
+                      <textarea
+                        value={editedText}
+                        onChange={(e) => setEditedText(e.target.value)}
+                        rows={Math.min(16, Math.max(4, editedText.split("\n").length))}
+                        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-input)] p-2 font-mono text-[11px] text-[var(--text-primary)]"
+                      />
                     ) : null
                   ) : preview.type === "response_set" ? (
                     <>
@@ -627,7 +770,7 @@ export function MarketplacePage({
                         </div>
                       )}
                     </>
-                  ) : (
+                  ) : preview.type === "prompt_config" ? (
                     <>
                       <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-1">
                         {t("marketplace_commands", lang)}
@@ -666,7 +809,7 @@ export function MarketplacePage({
                         </div>
                       )}
                     </>
-                  )}
+                  ) : null}
                 </>
               )}
 
