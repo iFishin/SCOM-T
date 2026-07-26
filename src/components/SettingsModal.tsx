@@ -24,6 +24,8 @@ type SettingsModalProps = {
   allowMultiInstance?: boolean;
   logRetentionDays?: number;
   portFilterMode?: "default" | "all";
+  cloudServerUrl?: string;
+  cloudAuthToken?: string;
   timestampFormat?: "time" | "datetime" | "none";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
@@ -41,6 +43,8 @@ type SettingsModalProps = {
   onTimestampFormatChange?: (format: "time" | "datetime" | "none") => void;
   onLogRetentionDaysChange?: (days: number) => void;
   onPortFilterModeChange?: (mode: "default" | "all") => void;
+  onCloudServerUrlChange?: (url: string) => void;
+  onCloudAuthTokenChange?: (token: string) => void;
   onMockSerialChange?: (config: MockSerialConfig) => void;
 };
 
@@ -56,6 +60,8 @@ export function SettingsModal({
   allowMultiInstance,
   logRetentionDays,
   portFilterMode,
+  cloudServerUrl,
+  cloudAuthToken,
   timestampFormat,
   layoutMode,
   gridLayout,
@@ -73,6 +79,8 @@ export function SettingsModal({
   onTimestampFormatChange,
   onLogRetentionDaysChange,
   onPortFilterModeChange,
+  onCloudServerUrlChange,
+  onCloudAuthTokenChange,
   onMockSerialChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
@@ -126,7 +134,7 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} />
+              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} cloudServerUrl={cloudServerUrl} cloudAuthToken={cloudAuthToken} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} onCloudServerUrlChange={onCloudServerUrlChange} onCloudAuthTokenChange={onCloudAuthTokenChange} />
             )}
 
             {activeTab === 1 && (

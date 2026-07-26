@@ -1,0 +1,10 @@
+name: 示例响应集
+description: 演示用的最小响应集，可作为提交模板参考
+commands:
+  - command: AT
+    expected_responses: ['OK']
+    match_mode: all
+  - command: AT+CSQ
+    expected_responses: ['\+CSQ:\s*\d+']
+    expected_responses_regex: [true]
+    match_mode: all

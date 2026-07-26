@@ -13,6 +13,7 @@ import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
 import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { ConfigPage } from "./components/ConfigPage.tsx";
 import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
+import { MarketplacePage } from "./components/MarketplacePage.tsx";
 import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
 import { CodecDialog } from "./components/tools/CodecDialog.tsx";
 import { FileSend } from "./components/FileSend.tsx";
@@ -96,7 +97,7 @@ function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
 }
 
 function App() {
-  const [page, setPage] = useState<"main" | "config" | "responseSet">("main");
+  const [page, setPage] = useState<"main" | "config" | "responseSet" | "marketplace">("main");
   const [pendingApplyResponseSet, setPendingApplyResponseSet] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -145,7 +146,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCloudServerUrl, updateCloudAuthToken } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -228,6 +229,7 @@ function App() {
 
   const handleNavigateToConfig = useCallback(() => setPage("config"), []);
   const handleNavigateToResponseSet = useCallback(() => setPage("responseSet"), []);
+  const handleNavigateToMarketplace = useCallback(() => setPage("marketplace"), []);
 
   const handleAddToPrompts = useCallback((payload: string) => {
     // Clean: trim whitespace, split by newlines, filter empties
@@ -785,7 +787,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} onNavigateToMarketplace={handleNavigateToMarketplace} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -812,7 +814,7 @@ function App() {
         </div>
         )}
 
-        {page === "config" || page === "responseSet" ? (
+        {page === "config" || page === "responseSet" || page === "marketplace" ? (
           /* Sub-page header controls — shared breadcrumb style */
           <nav className="flex items-center gap-2 flex-1 min-w-0">
             <Button
@@ -827,7 +829,9 @@ function App() {
             <span className="text-xs font-semibold text-[var(--text-primary)]">
               {page === "config"
                 ? (lang === "zh" ? "配置文件管理" : "Config File Manager")
-                : t("response_set", lang)}
+                : page === "responseSet"
+                ? t("response_set", lang)
+                : t("marketplace_title", lang)}
             </span>
           </nav>
         ) : (
@@ -981,6 +985,14 @@ function App() {
         <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
       ) : page === "responseSet" ? (
         <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
+      ) : page === "marketplace" ? (
+        <MarketplacePage
+          lang={lang}
+          serverUrl={settings.cloudServerUrl ?? ""}
+          authToken={settings.cloudAuthToken}
+          onClose={() => setPage("main")}
+          onApply={(id) => setPendingApplyResponseSet(id)}
+        />
       ) : (<>
         {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -1282,7 +1294,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} onNavigateToMarketplace={handleNavigateToMarketplace} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
                 </div>
               </div>
             )}
@@ -1313,6 +1325,8 @@ function App() {
         timestampFormat={settings.timestampFormat}
         logRetentionDays={settings.logRetentionDays}
         portFilterMode={settings.portFilterMode}
+        cloudServerUrl={settings.cloudServerUrl}
+        cloudAuthToken={settings.cloudAuthToken}
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         mockSerial={settings.mockSerial}
@@ -1329,6 +1343,8 @@ function App() {
         onTimestampFormatChange={updateTimestampFormat}
         onLogRetentionDaysChange={updateLogRetentionDays}
         onPortFilterModeChange={updatePortFilterMode}
+        onCloudServerUrlChange={updateCloudServerUrl}
+        onCloudAuthTokenChange={updateCloudAuthToken}
         onMockSerialChange={updateMockSerial}
       />
       {/* ── Notification card modal ── */}

@@ -6,7 +6,7 @@ import { t } from "../../i18n.ts";
 import type { Lang } from "../../i18n.ts";
 import type { ThemeSettings } from "../../hooks/useSettings.ts";
 
-export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, logRetentionDays, portFilterMode, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange, onLogRetentionDaysChange, onPortFilterModeChange }: {
+export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, logRetentionDays, portFilterMode, cloudServerUrl, cloudAuthToken, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange, onLogRetentionDaysChange, onPortFilterModeChange, onCloudServerUrlChange, onCloudAuthTokenChange }: {
   theme: ThemeSettings;
   lang: Lang;
   compactMode?: boolean;
@@ -14,6 +14,8 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
   allowMultiInstance?: boolean;
   logRetentionDays?: number;
   portFilterMode?: "default" | "all";
+  cloudServerUrl?: string;
+  cloudAuthToken?: string;
   onThemeChange: (t: ThemeSettings) => void;
   onLangChange: (l: Lang) => void;
   onCompactModeChange?: (v: boolean) => void;
@@ -21,6 +23,8 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
   onAllowMultiInstanceChange?: (v: boolean) => void;
   onLogRetentionDaysChange?: (days: number) => void;
   onPortFilterModeChange?: (mode: "default" | "all") => void;
+  onCloudServerUrlChange?: (url: string) => void;
+  onCloudAuthTokenChange?: (token: string) => void;
 }) {
   function handleModeChange(mode: ThemeSettings["mode"]) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
@@ -193,6 +197,25 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
             {lang === "zh" ? "多实例" : "Multi"}
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+        <div className="mb-2 text-sm font-semibold">{t("marketplace_server_url", lang)}</div>
+        <div className="text-xs text-[var(--text-muted)] mb-3">{t("marketplace_server_url_desc", lang)}</div>
+        <Input
+          type="text"
+          value={cloudServerUrl ?? ""}
+          onChange={(e) => onCloudServerUrlChange?.(e.currentTarget.value)}
+          placeholder="https://example.com/api"
+          className="w-full text-xs mb-2"
+        />
+        <Input
+          type="password"
+          value={cloudAuthToken ?? ""}
+          onChange={(e) => onCloudAuthTokenChange?.(e.currentTarget.value)}
+          placeholder={t("marketplace_auth_token", lang)}
+          className="w-full text-xs"
+        />
       </div>
     </div>
   );

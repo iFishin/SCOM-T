@@ -79,6 +79,8 @@ export type AppSettings = {
   activeConfigFile?: string;
   portFilterMode?: "default" | "all";
   mockSerial?: MockSerialConfig;
+  cloudServerUrl?: string;
+  cloudAuthToken?: string;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -172,6 +174,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   sendPanelFileCollapsed: true,
   sendPanelHotkeysCollapsed: true,
   portFilterMode: "default",
+  cloudServerUrl: "",
+  cloudAuthToken: "",
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -234,6 +238,8 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             enabled: r.enabled !== false,
           })).filter(r => r.command) : [],
     } : { enabled: false, responseDelay: 100, customResponses: [] },
+    cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",
+    cloudAuthToken: typeof raw.cloudAuthToken === "string" ? raw.cloudAuthToken : "",
   };
 }
 
@@ -444,6 +450,14 @@ export function useSettings() {
     setSettings((current) => ({ ...current, mockSerial: config }));
   }
 
+  function updateCloudServerUrl(url: string) {
+    setSettings((current) => ({ ...current, cloudServerUrl: url }));
+  }
+
+  function updateCloudAuthToken(token: string) {
+    setSettings((current) => ({ ...current, cloudAuthToken: token }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -488,5 +502,7 @@ export function useSettings() {
     updateActiveConfigFile,
     updatePortFilterMode,
     updateMockSerial,
+    updateCloudServerUrl,
+    updateCloudAuthToken,
   };
 }

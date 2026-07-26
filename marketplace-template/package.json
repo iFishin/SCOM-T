@@ -1,0 +1,11 @@
+{
+  "name": "scom-t-marketplace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build-index": "node scripts/build-index.mjs"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

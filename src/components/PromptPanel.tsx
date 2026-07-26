@@ -59,6 +59,7 @@ type PromptPanelProps = {
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
   onNavigateToConfig?: () => void;
   onNavigateToResponseSet?: () => void;
+  onNavigateToMarketplace?: () => void;
   pendingApplyResponseSet?: string | null;
   onClearPendingApply?: () => void;
   activeConfigFile?: string;
@@ -78,6 +79,7 @@ export function PromptPanel({
   pushToast,
   onNavigateToConfig,
   onNavigateToResponseSet,
+  onNavigateToMarketplace,
   pendingApplyResponseSet,
   onClearPendingApply,
   activeConfigFile = "prompts.yaml",
@@ -1035,7 +1037,8 @@ export function PromptPanel({
       <button type="button" onClick={() => handlePromptTabChange("grid")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
       <button type="button" onClick={() => onNavigateToConfig?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
       <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
-      <button type="button" onClick={() => onNavigateToResponseSet?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
+      <button type="button" onClick={() => onNavigateToResponseSet?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
+      <button type="button" onClick={() => onNavigateToMarketplace?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("marketplace_title", lang)}</button>
       {activePromptTab === "config" && (
         <>
           <span className="mx-2 text-[var(--border)]">|</span>

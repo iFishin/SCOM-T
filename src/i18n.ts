@@ -275,6 +275,21 @@ const ZH: Dict = {
   mock_serial_command: "AT指令",
   mock_serial_response: "响应内容",
   mock_serial_response_hint: "支持多行响应，使用 \\n 表示换行",
+
+  // Cloud marketplace
+  marketplace_title: "云端市场",
+  marketplace_desc: "浏览并下载共享的指令响应集",
+  marketplace_list: "市场列表",
+  marketplace_refresh: "刷新",
+  marketplace_loading: "正在加载...",
+  marketplace_empty: "暂无可用条目",
+  marketplace_fetch_error: "获取市场列表失败",
+  marketplace_no_server: "请先在设置中配置云端服务器地址",
+  marketplace_select_hint: "从左侧选择一个条目查看详情",
+  marketplace_download_apply: "下载并应用",
+  marketplace_server_url: "云端服务器地址",
+  marketplace_server_url_desc: "用于浏览和下载共享指令响应集的服务器地址",
+  marketplace_auth_token: "访问令牌（可选）",
 };
 
 const EN: Dict = {
@@ -554,6 +569,21 @@ const EN: Dict = {
   mock_serial_command: "AT Command",
   mock_serial_response: "Response",
   mock_serial_response_hint: "Supports multiple lines, use \\n for newline",
+
+  // Cloud marketplace
+  marketplace_title: "Marketplace",
+  marketplace_desc: "Browse and download shared response sets",
+  marketplace_list: "Marketplace",
+  marketplace_refresh: "Refresh",
+  marketplace_loading: "Loading...",
+  marketplace_empty: "No items available",
+  marketplace_fetch_error: "Failed to fetch marketplace list",
+  marketplace_no_server: "Please configure a cloud server URL in settings first",
+  marketplace_select_hint: "Select an item from the left to view details",
+  marketplace_download_apply: "Download & Apply",
+  marketplace_server_url: "Cloud Server URL",
+  marketplace_server_url_desc: "Server address used to browse and download shared response sets",
+  marketplace_auth_token: "Auth Token (optional)",
 };
 
 const dicts: Record<Lang, Dict> = { zh: ZH, en: EN };
