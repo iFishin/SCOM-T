@@ -57,8 +57,12 @@ export function useVersionCheck(currentVersion: string) {
       const interval = setInterval(checkForUpdate, CHECK_INTERVAL);
       return () => clearInterval(interval);
     } else if (lastVersion && currentVersion) {
-      // 如果上次检查有新版本记录，恢复该状态
-      if (compareVersion(lastVersion, currentVersion.replace(/^v/, "")) > 0) {
+      const currentVer = currentVersion.replace(/^v/, "");
+      // 如果本地版本已升级到或超过上次记录的新版本，清除更新提示
+      if (compareVersion(lastVersion, currentVer) <= 0) {
+        setUpdateAvailable(false);
+      } else {
+        // 否则恢复该状态
         setUpdateAvailable(true);
       }
     }
