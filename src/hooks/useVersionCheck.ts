@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 const GITHUB_REPO = "iFishin/SCOM-T";
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-const CHECK_INTERVAL = 1000 * 60 * 60; // 1 hour
+const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours
 
 export function useVersionCheck() {
   const [version, setVersion] = useState("0.1.0");
