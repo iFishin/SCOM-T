@@ -310,6 +310,12 @@ export function PromptPanel({
 
     const receivedText = latestLog.payload;
 
+    // Log received data
+    setMatchLog((prev) => {
+      const next = [{ rowId: 0, command: "", status: "pending" as const, detail: `📩 收到数据: ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: receivedText.length > 200 ? receivedText.slice(0, 200) + "..." : receivedText, expected: "" }, ...prev];
+      return next.slice(0, 100);
+    });
+
     waitingResponsesRef.current.forEach((waiting, rowId) => {
       waiting.receivedBuffer += receivedText;
 
@@ -430,8 +436,16 @@ export function PromptPanel({
       const validTimeout = isNaN(timeout) || timeout < 100 ? 5000 : timeout;
 
       setMatchLog((prev) => {
-        const next = [{ rowId: row.id, command: row.command, status: "pending" as const, detail: `⏳ 行 ${row.id}: 等待匹配 (${validTimeout}ms)` }, ...prev];
-        return next.slice(0, 50);
+        const expectedList = row.expectedResponses?.map((r, i) => {
+          const isRegex = row.expectedResponseRegex?.[i] ?? false;
+          return `${isRegex ? ".*" : "Abc"} ${r.length > 30 ? r.slice(0, 30) + "..." : r}`;
+        }).join(" | ") || "";
+        const next = [{
+          rowId: row.id, command: row.command, status: "pending" as const,
+          detail: `⏳ 行 ${row.id}: ${row.command} → 等待 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
+          received: "", expected: expectedList
+        }, ...prev];
+        return next.slice(0, 100);
       });
 
       const waiting: WaitingResponse = {
@@ -447,8 +461,14 @@ export function PromptPanel({
           updatePromptRow(row.id, { status: "error" });
           waitingResponsesRef.current.delete(row.id);
           setMatchLog((prev) => {
-            const next = [{ rowId: row.id, command: row.command, status: "error" as const, detail: `❌ 行 ${row.id}: 匹配超时 (${validTimeout}ms)` }, ...prev];
-            return next.slice(0, 50);
+            const buffer = waiting.receivedBuffer;
+            const next = [{
+              rowId: row.id, command: row.command, status: "error" as const,
+              detail: `❌ 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
+              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
+              expected: ""
+            }, ...prev];
+            return next.slice(0, 100);
           });
           resolve();
         }, validTimeout),
