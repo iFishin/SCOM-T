@@ -406,11 +406,13 @@ export function PromptPanel({
 
     try {
       const mode = row.isHex ? "hex" : "ascii";
-      await sendData(row.command, mode as SendMode, row.ender);
-
+      // Set up response waiting BEFORE sending, so incoming data is captured
       if (row.expectedResponses && row.expectedResponses.length > 0) {
         waitForResponse(row);  // Don't await - fire and forget for single execution
-      } else {
+      }
+      await sendData(row.command, mode as SendMode, row.ender);
+
+      if (!row.expectedResponses || row.expectedResponses.length === 0) {
         updatePromptRow(row.id, { status: "success" });
       }
     } catch (error) {
@@ -462,11 +464,13 @@ export function PromptPanel({
 
     try {
       const mode = row.isHex ? "hex" : "ascii";
-      await sendData(row.command, mode as SendMode, row.ender);
-
+      // Set up response waiting BEFORE sending, so incoming data is captured
       if (row.expectedResponses && row.expectedResponses.length > 0) {
         await waitForResponse(row);
-      } else {
+      }
+      await sendData(row.command, mode as SendMode, row.ender);
+
+      if (!row.expectedResponses || row.expectedResponses.length === 0) {
         updatePromptRow(row.id, { status: "success" });
       }
     } catch (error) {
