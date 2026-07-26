@@ -30,19 +30,23 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build -- --target x64
 
+      - name: Rename portable exe
+        run: |
+          copy "src-tauri\target\x64-pc-windows-msvc\release\SCOM-T.exe" "src-tauri\target\x64-pc-windows-msvc\release\SCOM-T-portable.exe"
+
       - name: List build output
         run: |
           echo "=== NSIS Bundle ==="
-          dir "src-tauri/target/x64-pc-windows-msvc/release/bundle/nsis/" -Recurse
+          dir "src-tauri\target\x64-pc-windows-msvc\release\bundle\nsis\"
           echo "=== Portable ==="
-          dir "src-tauri/target/x64-pc-windows-msvc/release/" -Filter "*portable*"
+          dir "src-tauri\target\x64-pc-windows-msvc\release\*.exe"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             src-tauri/target/x64-pc-windows-msvc/release/bundle/nsis/*.exe
-            src-tauri/target/x64-pc-windows-msvc/release/*.exe
+            src-tauri/target/x64-pc-windows-msvc/release/SCOM-T-portable.exe
 
   build-macos:
     name: Build macOS
@@ -98,7 +102,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install frontend dependencies
         run: npm install
