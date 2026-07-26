@@ -1023,7 +1023,7 @@ function App() {
               </Button>
             </div>
             <div className="p-4">
-              <AboutPanel lang={lang} />
+              <AboutPanel lang={lang} appVersion={appVersion} />
             </div>
           </div>
         </div>

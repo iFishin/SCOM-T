@@ -49,8 +49,8 @@ type NotificationItem = {
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
-export function AboutPanel({ lang }: { lang: Lang }) {
-  const [version, setVersion] = useState("0.1.0");
+export function AboutPanel({ lang, appVersion }: { lang: Lang; appVersion?: string }) {
+  const [version, setVersion] = useState(appVersion || "0.1.0");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clickCount, setClickCount] = useState(0);
   const [shakeKey, setShakeKey] = useState(0);
@@ -161,7 +161,10 @@ export function AboutPanel({ lang }: { lang: Lang }) {
   }
 
   useEffect(() => {
-    if (clickCount > 0) return; // already discovered — stop hinting
+    if (appVersion) setVersion(appVersion);
+  }, [appVersion]);
+
+  useEffect(() => {
 
     let timer: ReturnType<typeof setTimeout>;
 
@@ -178,17 +181,6 @@ export function AboutPanel({ lang }: { lang: Lang }) {
 
     return () => clearTimeout(timer);
   }, [clickCount]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { getVersion } = await import("@tauri-apps/api/app");
-        setVersion(await getVersion());
-      } catch {
-        // not in Tauri context (dev), keep default
-      }
-    })();
-  }, []);
 
   const handleLogoClick = () => {
     if (typingDone) return;
