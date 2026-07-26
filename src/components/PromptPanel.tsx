@@ -320,10 +320,12 @@ export function PromptPanel({
         if (isRegex) {
           try {
             const re = new RegExp(expected);
-            matched = re.test(waiting.receivedBuffer);
-            if (matched) {
-              // For regex, clear the buffer after a match
-              waiting.receivedBuffer = "";
+            const match = re.exec(waiting.receivedBuffer);
+            if (match) {
+              matched = true;
+              waiting.matchIndex++;
+              // Consume the matched portion, keep the rest
+              waiting.receivedBuffer = waiting.receivedBuffer.slice(match.index + match[0].length);
             }
           } catch {
             // Invalid regex, fall back to text match
@@ -333,14 +335,12 @@ export function PromptPanel({
           matched = waiting.receivedBuffer.includes(expected);
         }
 
-        if (matched) {
+        if (matched && !isRegex) {
           waiting.matchIndex++;
-          // For text matches, consume the matched content
-          if (!isRegex) {
-            const idx = waiting.receivedBuffer.indexOf(expected);
-            waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
-          }
-        } else {
+          // Consume the matched content
+          const idx = waiting.receivedBuffer.indexOf(expected);
+          waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+        } else if (!matched) {
           break;
         }
       }
