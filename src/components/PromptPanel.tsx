@@ -488,13 +488,16 @@ export function PromptPanel({
 
     try {
       const mode = row.isHex ? "hex" : "ascii";
-      // Set up response waiting BEFORE sending, so incoming data is captured
-      if (row.expectedResponses && row.expectedResponses.length > 0) {
-        await waitForResponse(row);
-      }
+      // Register the wait BEFORE sending (so incoming data is captured), but
+      // don't await it yet — sendData must fire immediately, not after the wait resolves.
+      const waitPromise = row.expectedResponses && row.expectedResponses.length > 0
+        ? waitForResponse(row)
+        : null;
       await sendData(row.command, mode as SendMode, row.ender);
 
-      if (!row.expectedResponses || row.expectedResponses.length === 0) {
+      if (waitPromise) {
+        await waitPromise;
+      } else {
         updatePromptRow(row.id, { status: "success" });
       }
     } catch (error) {
