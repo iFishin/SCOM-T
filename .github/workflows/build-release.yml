@@ -27,16 +27,22 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Build Tauri (NSIS installer + Portable)
+      - name: Build Tauri app
         run: npm run tauri build -- --target x64
 
-      - name: Upload assets to release
+      - name: List build output
+        run: |
+          echo "=== NSIS Bundle ==="
+          dir "src-tauri/target/x64-pc-windows-msvc/release/bundle/nsis/" -Recurse
+          echo "=== Portable ==="
+          dir "src-tauri/target/x64-pc-windows-msvc/release/" -Filter "*portable*"
+
+      - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             src-tauri/target/x64-pc-windows-msvc/release/bundle/nsis/*.exe
-            src-tauri/target/x64-pc-windows-msvc/release/SCOM-T-portable.exe
-          tag_name: ${{ github.ref_name }}
+            src-tauri/target/x64-pc-windows-msvc/release/*.exe
 
   build-macos:
     name: Build macOS
@@ -61,14 +67,18 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Build Tauri (Universal DMG)
+      - name: Build Tauri app
         run: npm run tauri build -- --target universal
 
-      - name: Upload assets to release
+      - name: List build output
+        run: |
+          echo "=== DMG Bundle ==="
+          find src-tauri/target/universal-apple-darwin/release/bundle -name "*.dmg" -o -name "*.app"
+
+      - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
           files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-          tag_name: ${{ github.ref_name }}
 
   build-linux:
     name: Build Linux
@@ -96,14 +106,19 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Build Tauri (AppImage)
+      - name: Build Tauri app
         run: npm run tauri build
 
-      - name: Upload assets to release
+      - name: List build output
+        run: |
+          echo "=== AppImage Bundle ==="
+          find src-tauri/target/release/bundle -name "*.AppImage" -o -name "*.deb"
+
+      - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
           files: src-tauri/target/release/bundle/appimage/*.AppImage
-          tag_name: ${{ github.ref_name }}
+
 
 
 
