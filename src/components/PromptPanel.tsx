@@ -123,7 +123,7 @@ export function PromptPanel({
   const batchAbortRef = useRef<boolean>(false);
   const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
   const responseSetOptionsLoaded = useRef(false);
-  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
+  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "info" | "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
   const [matchLogOpen, setMatchLogOpen] = useState(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
@@ -315,7 +315,7 @@ export function PromptPanel({
 
       // Log received data
       setMatchLog((prev) => {
-        const next = [{ rowId: 0, command: "", status: "pending" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: receivedText.length > 200 ? receivedText.slice(0, 200) + "..." : receivedText, expected: "" }, ...prev];
+        const next = [{ rowId: 0, command: "", status: "info" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: "", expected: "" }, ...prev];
         return next.slice(0, 100);
       });
 
@@ -357,8 +357,9 @@ export function PromptPanel({
 
           if (matched) {
             waiting.matchIndex++;
+            const matchedIndex = waiting.matchIndex;
             setMatchLog((prev) => {
-              const next = [{ rowId, command: "", status: "pending" as const, detail: `[MATCH] #${waiting.matchIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+              const next = [{ rowId, command: "", status: "info" as const, detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
               return next.slice(0, 100);
             });
           } else {
@@ -1126,15 +1127,15 @@ export function PromptPanel({
               onClick={() => setMatchLogOpen(true)}
               className="flex items-center gap-1 text-[10px] font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
-              {matchLog.length > 0 && matchLog[0]?.status === "pending" ? (
+              {matchLog.some(e => e.status === "pending") ? (
                 <span className="flex items-center gap-1 text-amber-500">
                   <Loader2 size={10} className="animate-spin" />
                 </span>
-              ) : matchLog.length > 0 && matchLog[0]?.status === "error" ? (
+              ) : matchLog.some(e => e.status === "error") ? (
                 <span className="flex items-center gap-1 text-rose-500">
                   <X size={10} />
                 </span>
-              ) : matchLog.length > 0 && matchLog[0]?.status === "success" ? (
+              ) : matchLog.some(e => e.status === "success") ? (
                 <span className="flex items-center gap-1 text-emerald-500">
                   <Check size={10} />
                 </span>
@@ -1251,8 +1252,8 @@ export function PromptPanel({
                 <span className="text-sm font-semibold">{lang === "zh" ? "匹配日志" : "Match Log"}</span>
                 <span className="text-[10px] text-[var(--text-muted)]">
                   {lang === "zh"
-                    ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 进行中 ${matchLog.filter(e => e.status === "pending").length}`
-                    : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Pending ${matchLog.filter(e => e.status === "pending").length}`
+                    ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 等待 ${matchLog.filter(e => e.status === "pending").length}`
+                    : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Wait ${matchLog.filter(e => e.status === "pending").length}`
                   }
                 </span>
               </div>
