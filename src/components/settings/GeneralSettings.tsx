@@ -6,19 +6,21 @@ import { t } from "../../i18n.ts";
 import type { Lang } from "../../i18n.ts";
 import type { ThemeSettings } from "../../hooks/useSettings.ts";
 
-export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, logRetentionDays, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange, onLogRetentionDaysChange }: {
+export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMultiInstance, logRetentionDays, portFilterMode, onThemeChange, onLangChange, onCompactModeChange, onCloseBehaviorChange, onAllowMultiInstanceChange, onLogRetentionDaysChange, onPortFilterModeChange }: {
   theme: ThemeSettings;
   lang: Lang;
   compactMode?: boolean;
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
   logRetentionDays?: number;
+  portFilterMode?: "default" | "all";
   onThemeChange: (t: ThemeSettings) => void;
   onLangChange: (l: Lang) => void;
   onCompactModeChange?: (v: boolean) => void;
   onCloseBehaviorChange?: (v: boolean) => void;
   onAllowMultiInstanceChange?: (v: boolean) => void;
   onLogRetentionDaysChange?: (days: number) => void;
+  onPortFilterModeChange?: (mode: "default" | "all") => void;
 }) {
   function handleModeChange(mode: ThemeSettings["mode"]) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
@@ -148,6 +150,27 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
           <span className="ml-2 text-[10px] text-[var(--text-muted)] opacity-60">
             {lang === "zh" ? "启动时自动清理" : "Cleanup on startup"}
           </span>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+        <div className="mb-2 text-sm font-semibold">{t("port_filter_mode", lang)}</div>
+        <div className="text-xs text-[var(--text-muted)] mb-3">{t("port_filter_mode_desc", lang)}</div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={() => onPortFilterModeChange?.("default")}
+            className={`rounded-lg border px-3 py-2 text-xs ${portFilterMode !== "all" ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] text-[var(--text-muted)]"}`}
+          >
+            {t("port_filter_default", lang)}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => onPortFilterModeChange?.("all")}
+            className={`rounded-lg border px-3 py-2 text-xs ${portFilterMode === "all" ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] text-[var(--text-muted)]"}`}
+          >
+            {t("port_filter_all", lang)}
+          </Button>
         </div>
       </div>
 

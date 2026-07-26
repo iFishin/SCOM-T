@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Clock, X } from "lucide-react";
 import { Button } from "./ui/Button";
-import type { HotkeyConfig, ThemeSettings, GridItemLayout } from "../hooks/useSettings.ts";
+import type { HotkeyConfig, ThemeSettings, GridItemLayout, MockSerialConfig } from "../hooks/useSettings.ts";
 import { DEFAULT_GRID_LAYOUT } from "../hooks/useSettings.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
@@ -9,6 +9,7 @@ import { GeneralSettings } from "./settings/GeneralSettings.tsx";
 import { HotkeysEditor } from "./settings/HotkeysEditor.tsx";
 import { ThemeEditor } from "./settings/ThemeEditor.tsx";
 import { LayoutEditor } from "./settings/LayoutEditor.tsx";
+import { MockSerialSettings } from "./settings/MockSerialSettings.tsx";
 
 // Subcomponents extracted to src/components/settings/*
 
@@ -22,9 +23,11 @@ type SettingsModalProps = {
   closeToTray?: boolean;
   allowMultiInstance?: boolean;
   logRetentionDays?: number;
+  portFilterMode?: "default" | "all";
   timestampFormat?: "time" | "datetime" | "none";
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
+  mockSerial?: MockSerialConfig;
   onClose: () => void;
   onHotkeysChange: (hotkeys: HotkeyConfig[]) => void;
   onThemeChange: (theme: ThemeSettings) => void;
@@ -37,6 +40,8 @@ type SettingsModalProps = {
   onGridLayoutChange?: (layout: GridItemLayout[]) => void;
   onTimestampFormatChange?: (format: "time" | "datetime" | "none") => void;
   onLogRetentionDaysChange?: (days: number) => void;
+  onPortFilterModeChange?: (mode: "default" | "all") => void;
+  onMockSerialChange?: (config: MockSerialConfig) => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -50,9 +55,11 @@ export function SettingsModal({
   closeToTray,
   allowMultiInstance,
   logRetentionDays,
+  portFilterMode,
   timestampFormat,
   layoutMode,
   gridLayout,
+  mockSerial,
   onClose,
   onHotkeysChange,
   onThemeChange,
@@ -65,6 +72,8 @@ export function SettingsModal({
   onGridLayoutChange,
   onTimestampFormatChange,
   onLogRetentionDaysChange,
+  onPortFilterModeChange,
+  onMockSerialChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -73,6 +82,7 @@ export function SettingsModal({
     t("settings_hotkeys", lang),
     t("settings_theme", lang),
     t("settings_layout", lang),
+    t("settings_mock_serial", lang),
   ];
 
 
@@ -116,7 +126,7 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} />
+              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} />
             )}
 
             {activeTab === 1 && (
@@ -206,6 +216,14 @@ export function SettingsModal({
                   />
                 )}
               </div>
+            )}
+
+            {activeTab === 5 && mockSerial && onMockSerialChange && (
+              <MockSerialSettings
+                lang={lang}
+                mockSerial={mockSerial}
+                onMockSerialChange={onMockSerialChange}
+              />
             )}
 
             </div>

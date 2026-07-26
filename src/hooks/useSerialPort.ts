@@ -4,13 +4,14 @@ import { bytesToAscii, bytesToHex, formatTimestamp, parseHexString } from "../ut
 import { appLogger } from "../utils/appLogger.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
-import { TauriSerialService, listAvailablePorts } from "../serial/SerialService.ts";
+import { TauriSerialService, MockSerialService, isMockPort, listAvailablePorts } from "../serial/SerialService.ts";
 import type { ITcpClientService } from "../tcp/TcpClientService.ts";
 import { TauriTcpClientService } from "../tcp/TcpClientService.ts";
 import type { ITcpServerService } from "../tcp/TcpServerService.ts";
 import { TauriTcpServerService } from "../tcp/TcpServerService.ts";
 import type { PortSummary, SerialLogEntry, ReceiveMode, SendMode } from "../serial/types.ts";
 import type { ConnectionType, TcpConnectionStatus, TcpServerStatus, TcpClientInfo, TcpProtocol } from "../tcp/types.ts";
+import type { MockSerialConfig } from "./useSettings.ts";
 
 // ── Re-export types from the new service layers for backward compatibility ──
 
@@ -64,15 +65,20 @@ export type SerialConfig = {
 export function useSerialPort({
   config,
   receiveMode,
+  portFilterMode = "default",
+  mockSerial,
 }: {
   config: SerialConfig;
   receiveMode: ReceiveMode;
+  portFilterMode?: "default" | "all";
+  mockSerial?: MockSerialConfig;
 }) {
   const serialRef = useRef<ISerialService | null>(null);
   const tcpClientRef = useRef<ITcpClientService | null>(null);
   const tcpServerRef = useRef<ITcpServerService | null>(null);
   const receiveModeRef = useRef(receiveMode);
   const configRef = useRef(config);
+  const mockSerialRef = useRef(mockSerial);
   // Keep configRef in sync so callback closures always read latest config
   configRef.current = config;
   const seqCounter = useRef(0);
@@ -130,6 +136,10 @@ export function useSerialPort({
     receiveModeRef.current = receiveMode;
   }, [receiveMode]);
 
+  useEffect(() => {
+    mockSerialRef.current = mockSerial;
+  }, [mockSerial]);
+
   // ── Rate calculation (every 1s) ──
   useEffect(() => {
     const interval = setInterval(() => {
@@ -186,8 +196,60 @@ export function useSerialPort({
 
   // ── Service helpers ──
 
-  function getSerial(): ISerialService {
-    if (!serialRef.current) {
+  function getSerial(portPath?: string): ISerialService {
+    // If portPath is provided and it's a mock port, use MockSerialService
+    if (portPath && isMockPort(portPath)) {
+      if (!serialRef.current || !(serialRef.current instanceof MockSerialService)) {
+        // Dispose existing service if any
+        if (serialRef.current) {
+          serialRef.current.dispose().catch(() => undefined);
+        }
+        serialRef.current = new MockSerialService(mockSerialRef.current);
+        // Wire up serial data callback
+        serialRef.current.onData((data: Uint8Array) => {
+          const bytes = Array.from(data);
+          rxBytesRef.current += bytes.length;
+
+          // Line-buffer ASCII data
+          if (receiveModeRef.current === "ascii") {
+            for (const b of bytes) {
+              lineBufferRef.current.push(b);
+              if (b === 0x0A) {
+                const payload = bytesToAscii(lineBufferRef.current);
+                lineBufferRef.current = [];
+                if (payload) {
+                  appendLog({ direction: "received", mode: "ascii", payload });
+                }
+              }
+            }
+            resetLineFlushTimer();
+          } else {
+            appendLog({
+              direction: "received",
+              mode: "hex",
+              payload: bytesToHex(bytes),
+            });
+          }
+        });
+
+        // Wire up serial disconnect callback
+        serialRef.current.onDisconnect(() => {
+          flushLineBuffer();
+          serialRef.current = null;
+          setIsConnected(false);
+          setConnectedPort(null);
+          setStatusText("模拟串口已断开");
+          setError(null);
+        });
+      }
+      return serialRef.current;
+    }
+
+    if (!serialRef.current || (serialRef.current instanceof MockSerialService)) {
+      // Dispose mock service if switching to real serial
+      if (serialRef.current) {
+        serialRef.current.dispose().catch(() => undefined);
+      }
       serialRef.current = new TauriSerialService();
       // Wire up serial data callback
       serialRef.current.onData((data: Uint8Array) => {
@@ -395,7 +457,8 @@ export function useSerialPort({
 
   async function refreshPorts(): Promise<number> {
     try {
-      const result = await listAvailablePorts();
+      const mockEnabled = mockSerialRef.current?.enabled === true;
+      const result = await listAvailablePorts(portFilterMode, mockEnabled);
       setPorts(result);
       setError(null);
       return result.length;
@@ -502,7 +565,7 @@ export function useSerialPort({
       setIsBusy(true);
       setError(null);
       try {
-        await getSerial().open({
+        await getSerial(config.path).open({
           path: config.path,
           baudRate: config.baudRate,
           dataBits: config.dataBits,
@@ -531,7 +594,7 @@ export function useSerialPort({
         throw new Error("请先选择串口。");
       }
 
-      await getSerial().open({
+      await getSerial(config.path).open({
         path: config.path,
         baudRate: config.baudRate,
         dataBits: config.dataBits,

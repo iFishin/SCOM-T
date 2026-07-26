@@ -7,6 +7,7 @@ import {
   type PortInfo,
 } from "tauri-plugin-serialplugin-api";
 import type { SerialConfig, PortSummary } from "./types.ts";
+import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import { normalizePluginPayload } from "../utils/hexConverter.ts";
 
 // ── Mapping helpers (internal) ──
@@ -220,15 +221,41 @@ export class TauriSerialService implements ISerialService {
 
 // ── Utility functions (not tied to a port instance) ──
 
-export async function listAvailablePorts(): Promise<PortSummary[]> {
+// Mock serial port path constant
+const MOCK_PORT_PATH = "__MOCK_SERIAL__";
+
+export async function listAvailablePorts(
+  filterMode: "default" | "all" = "default",
+  mockEnabled: boolean = false
+): Promise<PortSummary[]> {
   const result = await SerialPort.available_ports();
   const entries = Object.entries(result);
-  // Deduplicate: on macOS each physical port appears as both /dev/cu.* and /dev/tty.*
-  // Prefer cu.* (call-up) as it's the standard for serial communication
+
+  // macOS: each physical port appears as both /dev/cu.* and /dev/tty.*
+  // Filter based on user preference
   const seen = new Set<string>();
   const deduped = entries.filter(([portName]) => {
     const base = portName.replace(/^.*\//, ""); // last path component
-    // For macOS-style pairs, prefer cu.* over tty.*
+
+    // If showing all ports, skip deduplication logic for tty.*
+    if (filterMode === "all") {
+      // Still deduplicate cu.* vs tty.* pairs, but keep tty.* if no cu.* exists
+      if (base.startsWith("cu.")) {
+        const key = base.replace(/^cu\./, "");
+        if (seen.has(`tty.${key}`)) return false; // tty.* already seen, skip this cu.*
+        seen.add(`cu.${key}`);
+        return true;
+      }
+      if (base.startsWith("tty.")) {
+        const key = base.replace(/^tty\./, "");
+        if (seen.has(`cu.${key}`)) return false; // cu.* exists, skip this tty.*
+        seen.add(`tty.${key}`);
+        return true;
+      }
+      return true; // Non-macOS port, keep as-is
+    }
+
+    // Default mode: prefer cu.* over tty.*
     if (base.startsWith("cu.")) {
       const key = base.replace(/^cu\./, "");
       if (seen.has(key)) return false;
@@ -236,12 +263,12 @@ export async function listAvailablePorts(): Promise<PortSummary[]> {
       return true;
     }
     if (base.startsWith("tty.")) {
-      return false; // Always drop tty.*
+      return false; // Always drop tty.* in default mode
     }
-    // Non-macOS port (e.g., COM ports on Windows), keep as-is
     return true;
   });
-  return deduped.map(([portName, port]) => {
+
+  const ports: PortSummary[] = deduped.map(([portName, port]) => {
     const detail = { ...port, path: portName };
     return {
       path: portName,
@@ -249,8 +276,163 @@ export async function listAvailablePorts(): Promise<PortSummary[]> {
       detail,
     };
   });
+
+  // Add mock serial port only if enabled in settings
+  if (mockEnabled) {
+    ports.unshift({
+      path: MOCK_PORT_PATH,
+      label: "[MOCK] 模拟串口 (AT指令测试)",
+      detail: {
+        path: MOCK_PORT_PATH,
+        manufacturer: "SCOM-T",
+        product: "Mock Serial",
+        pid: "Unknown",
+        serial_number: "Unknown",
+        type: "Unknown",
+        vid: "Unknown",
+      },
+    });
+  }
+
+  return ports;
 }
 
 export async function forceClosePort(path: string): Promise<void> {
   await SerialPort.forceClose(path).catch(() => undefined);
+}
+
+// ── Mock Serial Service for testing ──
+
+// Common AT command responses for mock serial
+export const BUILTIN_MOCK_RESPONSES: Record<string, string> = {
+  "AT": "OK",
+  "ATE0": "OK",
+  "ATE1": "OK",
+  "AT+CPIN?": "+CPIN: READY\n\nOK",
+  "AT+CSQ": "+CSQ: 25,0\n\nOK",
+  "AT+CEREG?": "+CEREG: 0,1\n\nOK",
+  "AT+CREG?": "+CREG: 0,1\n\nOK",
+  "AT+CGREG?": "+CGREG: 0,1\n\nOK",
+  "AT+CGMI": "+CGMI: SIMCOM\n\nOK",
+  "AT+CGMM": "+CGMM: SIM800C\n\nOK",
+  "AT+CGMR": "+CGMR: 1308B05SIM800C\n\nOK",
+  "AT+CGSN": "+CGSN: 861234567890123\n\nOK",
+  "AT+COPS?": '+COPS: 0,0,"China Mobile"\n\nOK',
+  "AT+CGATT?": "+CGATT: 1\n\nOK",
+  "AT+CFUN?": "+CFUN: 1\n\nOK",
+  "AT+CCLK?": `+CCLK: "${new Date().toISOString().slice(2, 10)},${new Date().toTimeString().slice(0, 8)}+32"\n\nOK`,
+  "AT+CMGF=1": "OK",
+  "AT+HTTPINIT": "OK",
+  "AT+HTTPTERM": "OK",
+};
+
+export class MockSerialService implements ISerialService {
+  private _isOpen = false;
+  private _path: string | null = null;
+  private dataCallback: ((data: Uint8Array) => void) | null = null;
+  private disconnectCallback: (() => void) | null = null;
+  private responseDelay = 100;
+  private allResponses: Record<string, string> = { ...BUILTIN_MOCK_RESPONSES };
+
+  constructor(config?: MockSerialConfig) {
+    if (config) {
+      this.configure(config);
+    }
+  }
+
+  configure(config: MockSerialConfig): void {
+    this.responseDelay = config.responseDelay;
+
+    // Start with built-in responses
+    this.allResponses = { ...BUILTIN_MOCK_RESPONSES };
+
+    // Add custom responses (enabled ones override built-in)
+    if (config.customResponses) {
+      for (const r of config.customResponses) {
+        if (r.enabled && r.command) {
+          this.allResponses[r.command.toUpperCase()] = r.response;
+        }
+      }
+    }
+  }
+
+  get isOpen(): boolean {
+    return this._isOpen;
+  }
+
+  get path(): string | null {
+    return this._path;
+  }
+
+  onData(cb: ((data: Uint8Array) => void) | null): void {
+    this.dataCallback = cb;
+  }
+
+  onDisconnect(cb: (() => void) | null): void {
+    this.disconnectCallback = cb;
+  }
+
+  async open(config: SerialConfig): Promise<void> {
+    this._isOpen = true;
+    this._path = config.path;
+  }
+
+  async close(): Promise<void> {
+    const wasOpen = this._isOpen;
+    this._isOpen = false;
+    this._path = null;
+    if (wasOpen && this.disconnectCallback) {
+      this.disconnectCallback();
+    }
+  }
+
+  async sendBinary(data: number[]): Promise<void> {
+    if (!this._isOpen) return;
+
+    const text = new TextDecoder().decode(new Uint8Array(data));
+    const cmd = text.trim().replace(/\r?\n$/, "");
+
+    // Find matching response (custom responses take priority)
+    // Sort by key length descending so longer/more specific commands match first
+    let response = "OK";
+    const sortedKeys = Object.keys(this.allResponses).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+      if (cmd.toUpperCase().startsWith(key)) {
+        response = this.allResponses[key];
+        break;
+      }
+    }
+
+    // Simulate delay and send response
+    setTimeout(() => {
+      if (this.dataCallback && this._isOpen) {
+        const responseBytes = new TextEncoder().encode(response + "\r\n");
+        this.dataCallback(responseBytes);
+      }
+    }, this.responseDelay);
+  }
+
+  async sendText(text: string): Promise<void> {
+    await this.sendBinary(Array.from(new TextEncoder().encode(text)));
+  }
+
+  async setSignals(_rts: boolean, _dtr: boolean): Promise<void> {
+    // No-op for mock
+  }
+
+  async readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }> {
+    return { cts: true, dsr: true, cd: true, ri: false };
+  }
+
+  async dispose(): Promise<void> {
+    await this.close();
+  }
+}
+
+export function isMockPort(path: string): boolean {
+  return path === MOCK_PORT_PATH;
+}
+
+export function getMockPortPath(): string {
+  return MOCK_PORT_PATH;
 }

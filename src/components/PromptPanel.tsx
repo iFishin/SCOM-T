@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -10,8 +10,31 @@ import { Select } from "./ui/Select.tsx";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
+import { useResponseSet } from "../hooks/useResponseSet.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
-import type { SendMode } from "../hooks/useSerialPort.ts";
+import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
+
+type PromptRowStatus = "idle" | "pending" | "success" | "error";
+
+type WaitingResponse = {
+  rowId: number;
+  expected: string[];
+  isRegex: boolean[];
+  timeout: number;
+  startTime: number;
+  receivedBuffer: string;
+  matchIndex: number;
+  timer: ReturnType<typeof setTimeout>;
+  onComplete?: () => void;
+};
+
+type BatchExecutionState = {
+  isRunning: boolean;
+  currentLoop: number;
+  totalLoops: number;
+  currentIndex: number;
+  selectedRows: PromptRow[];
+};
 
 type PromptRow = {
   id: number;
@@ -22,6 +45,8 @@ type PromptRow = {
   interval: string;
   device?: string;
   expectedResponses?: string[];
+  expectedResponseRegex?: boolean[];
+  status?: PromptRowStatus;
 };
 
 type PromptPanelProps = {
@@ -33,6 +58,11 @@ type PromptPanelProps = {
   updatePromptRowCount: (count: number) => void;
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
   onNavigateToConfig?: () => void;
+  onNavigateToResponseSet?: () => void;
+  pendingApplyResponseSet?: string | null;
+  onClearPendingApply?: () => void;
+  activeConfigFile?: string;
+  logs?: SerialLogEntry[];
   /** TCP Server broadcast — sends data to all connected TCP clients */
   tcpServerBroadcast?: (data: number[]) => Promise<void>;
   tcpClientCount?: number;
@@ -47,6 +77,11 @@ export function PromptPanel({
   updatePromptRowCount,
   pushToast,
   onNavigateToConfig,
+  onNavigateToResponseSet,
+  pendingApplyResponseSet,
+  onClearPendingApply,
+  activeConfigFile = "prompts.yaml",
+  logs = [],
   tcpServerBroadcast,
   tcpClientCount,
 }: PromptPanelProps) {
@@ -62,6 +97,7 @@ export function PromptPanel({
       isHex: false,
       ender: "\r\n" as const,
       interval: "",
+      status: "idle" as PromptRowStatus,
     })),
   );
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -73,6 +109,22 @@ export function PromptPanel({
   const [regexCleanOpen, setRegexCleanOpen] = useState(false);
   const [quickPresets, setQuickPresets] = useState<{ name: string; pattern: string; replacement: string; mode?: string; pinned?: boolean }[]>([]);
   const presetsLoaded = useRef(false);
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+  const waitingResponsesRef = useRef<Map<number, WaitingResponse>>(new Map());
+  const lastProcessedLogRef = useRef<number>(-1);
+  const [batchState, setBatchState] = useState<BatchExecutionState>({
+    isRunning: false,
+    currentLoop: 0,
+    totalLoops: 1,
+    currentIndex: 0,
+    selectedRows: [],
+  });
+  const [totalLoops, setTotalLoops] = useState(1);
+  const batchAbortRef = useRef<boolean>(false);
+  const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
+  const responseSetOptionsLoaded = useRef(false);
+  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "info" | "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
+  const [matchLogOpen, setMatchLogOpen] = useState(false);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -85,6 +137,53 @@ export function PromptPanel({
   useEffect(() => {
     if (!regexCleanOpen) loadQuickPresets();
   }, [regexCleanOpen]);
+
+  // ── Load response set options for the row editor ──
+  useEffect(() => {
+    if (responseSetOptionsLoaded.current) return;
+    responseSetOptionsLoaded.current = true;
+    const { listResponseSets, loadResponseSet } = useResponseSet();
+    (async () => {
+      const names = await listResponseSets();
+      const options: { id: string; name: string }[] = [];
+      for (const name of names) {
+        const set = await loadResponseSet(name);
+        if (set) options.push({ id: name, name: set.name });
+      }
+      setResponseSetOptions(options);
+    })();
+  }, []);
+
+  // ── Handle pending response set apply ──
+  useEffect(() => {
+    if (!pendingApplyResponseSet || !onClearPendingApply) return;
+    const { loadResponseSet, applyToGrid } = useResponseSet();
+    (async () => {
+      const set = await loadResponseSet(pendingApplyResponseSet);
+      if (!set) {
+        pushToast(lang === "zh" ? "响应集加载失败" : "Failed to load response set", "error");
+        onClearPendingApply();
+        return;
+      }
+      const updates = applyToGrid(set, promptRows);
+      if (updates.length === 0) {
+        pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands in response set", "warn");
+      } else {
+        let matchCount = 0;
+        for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
+          updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
+          matchCount++;
+        }
+        pushToast(
+          lang === "zh"
+            ? `已从「${set.name}」应用 ${matchCount} 条指令的期望结果`
+            : `Applied ${matchCount} commands from "${set.name}"`,
+          "success"
+        );
+      }
+      onClearPendingApply();
+    })();
+  }, [pendingApplyResponseSet]);
 
   async function loadQuickPresets() {
     try {
@@ -115,23 +214,32 @@ export function PromptPanel({
   const promptRowsRef = useRef(promptRows);
   promptRowsRef.current = promptRows;
 
-  // ── Load prompts.yaml on startup ──
+  // ── Load config file on startup ──
 
   useEffect(() => {
     async function load() {
       try {
         const { join, homeDir } = await import("@tauri-apps/api/path");
         const { readTextFile } = await import("@tauri-apps/plugin-fs");
-        const path = await join(await homeDir(), "SCOM-T", "prompts.yaml");
-        const text = await readTextFile(path);
+
+        let filePath: string;
+        if (activeConfigFile === "prompts.yaml") {
+          filePath = await join(await homeDir(), "SCOM-T", "prompts.yaml");
+        } else {
+          filePath = await join(await homeDir(), "SCOM-T", "prompts", activeConfigFile);
+        }
+
+        const text = await readTextFile(filePath);
         const result = parseYamlToRows(text);
         if (result.valid && result.rows.length > 0) {
           setPromptRows(result.rows);
+          // Update promptRowCount to match the loaded config
+          updatePromptRowCount(result.rows.length);
         }
       } catch { /* file may not exist yet */ }
     }
     load();
-  }, []);
+  }, [activeConfigFile]);
 
   // Keep promptRows length in sync with promptRowCount
   useEffect(() => {
@@ -142,12 +250,12 @@ export function PromptPanel({
         const existing = current[i];
         return existing
           ? { ...existing, id: i + 1 }
-          : { id: i + 1, selected: false, command: "", isHex: false, ender: "\r\n" as const, interval: "" };
+          : { id: i + 1, selected: false, command: "", isHex: false, ender: "\r\n" as const, interval: "", status: "idle" as PromptRowStatus };
       });
     });
   }, [promptRowCount]);
 
-  // Auto-save to ~/SCOM-T/prompts.yaml
+  // Auto-save to config file
   useEffect(() => {
     if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
     promptSaveTimer.current = setTimeout(async () => {
@@ -156,12 +264,25 @@ export function PromptPanel({
         const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
         const dir = await join(await homeDir(), "SCOM-T");
         await mkdir(dir, { recursive: true }).catch(() => {});
-        const path = await join(dir, "prompts.yaml");
-        await writeTextFile(path, serializeToYaml(promptRows));
+
+        let savePath: string;
+        if (activeConfigFile === "prompts.yaml") {
+          savePath = await join(dir, "prompts.yaml");
+        } else {
+          savePath = await join(dir, "prompts", activeConfigFile);
+        }
+
+        await writeTextFile(savePath, serializeToYaml(promptRows));
+
+        // Also sync to prompts.yaml if editing a file from prompts directory
+        if (activeConfigFile !== "prompts.yaml") {
+          const mainPath = await join(dir, "prompts.yaml");
+          await writeTextFile(mainPath, serializeToYaml(promptRows));
+        }
       } catch { /* auto-save failure is non-critical */ }
     }, 800);
     return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
-  }, [promptRows]);
+  }, [promptRows, activeConfigFile]);
 
   useEffect(() => {
     function flush() { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); }
@@ -179,6 +300,88 @@ export function PromptPanel({
   useEffect(() => {
     setRowCountInput(String(promptRowCount));
   }, [promptRowCount]);
+
+  // ── Response matching: monitor logs for expected responses ──
+  useEffect(() => {
+    if (waitingResponsesRef.current.size === 0) return;
+    if (!logs || logs.length === 0) return;
+
+    // Process all new log entries, not just the latest one
+    for (let i = lastProcessedLogRef.current + 1; i < logs.length; i++) {
+      const log = logs[i];
+      if (log?.direction !== "received") continue;
+
+      const receivedText = log.payload;
+
+      // Log received data
+      setMatchLog((prev) => {
+        const next = [{ rowId: 0, command: "", status: "info" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: "", expected: "" }, ...prev];
+        return next.slice(0, 100);
+      });
+
+      waitingResponsesRef.current.forEach((waiting, rowId) => {
+        waiting.receivedBuffer += receivedText;
+
+        // Try to match expected responses in order
+        while (waiting.matchIndex < waiting.expected.length) {
+          const expected = waiting.expected[waiting.matchIndex];
+          if (!expected.trim()) {
+            waiting.matchIndex++;
+            continue;
+          }
+          const isRegex = waiting.isRegex[waiting.matchIndex] ?? false;
+          let matched = false;
+
+          if (isRegex) {
+            try {
+              const re = new RegExp(expected);
+              const match = re.exec(waiting.receivedBuffer);
+              if (match) {
+                matched = true;
+                waiting.receivedBuffer = waiting.receivedBuffer.slice(match.index + match[0].length);
+              }
+            } catch {
+              matched = waiting.receivedBuffer.includes(expected);
+              if (matched) {
+                const idx = waiting.receivedBuffer.indexOf(expected);
+                waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+              }
+            }
+          } else {
+            matched = waiting.receivedBuffer.includes(expected);
+            if (matched) {
+              const idx = waiting.receivedBuffer.indexOf(expected);
+              waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
+            }
+          }
+
+          if (matched) {
+            waiting.matchIndex++;
+            const matchedIndex = waiting.matchIndex;
+            setMatchLog((prev) => {
+              const next = [{ rowId, command: "", status: "info" as const, detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+              return next.slice(0, 100);
+            });
+          } else {
+            break;
+          }
+        }
+
+        // All expected responses matched
+        if (waiting.matchIndex >= waiting.expected.length) {
+          clearTimeout(waiting.timer);
+          updatePromptRow(rowId, { status: "success" });
+          waitingResponsesRef.current.delete(rowId);
+          waiting.onComplete?.();
+          setMatchLog((prev) => {
+            const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
+            return next.slice(0, 100);
+          });
+        }
+      });
+    }
+    lastProcessedLogRef.current = logs.length - 1;
+  }, [logs]);
 
   function handleRowCountApply(newCount: number) {
     const clamped = Math.max(1, Math.min(500, Math.floor(newCount)));
@@ -201,13 +404,164 @@ export function PromptPanel({
     setPromptRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
+  function toggleExpandRow(id: number) {
+    setExpandedRowId((prev) => (prev === id ? null : id));
+  }
+
   async function handleSendPromptRow(row: PromptRow) {
     if (!isConnected) { pushToast(t("toast_not_connected", lang), "warn"); return; }
     if (!row.command) { pushToast(`${t("prompt_sender", lang)} ${row.id}: ${t("toast_command_empty", lang)}`, "warn"); return; }
-    // Mark this row as selected
-    updatePromptRow(row.id, { selected: true });
-    const mode = row.isHex ? "hex" : "ascii";
-    await sendData(row.command, mode as SendMode, row.ender);
+
+    updatePromptRow(row.id, { selected: true, status: "pending" });
+
+    try {
+      const mode = row.isHex ? "hex" : "ascii";
+      // Set up response waiting BEFORE sending, so incoming data is captured
+      if (row.expectedResponses && row.expectedResponses.length > 0) {
+        waitForResponse(row);  // Don't await - fire and forget for single execution
+      }
+      await sendData(row.command, mode as SendMode, row.ender);
+
+      if (!row.expectedResponses || row.expectedResponses.length === 0) {
+        updatePromptRow(row.id, { status: "success" });
+      }
+    } catch (error) {
+      updatePromptRow(row.id, { status: "error" });
+    }
+  }
+
+  function waitForResponse(row: PromptRow): Promise<void> {
+    return new Promise((resolve) => {
+      // Clear existing timer for this row
+      const existing = waitingResponsesRef.current.get(row.id);
+      if (existing) clearTimeout(existing.timer);
+
+      const timeout = row.interval ? parseInt(row.interval, 10) : 5000;
+      const validTimeout = isNaN(timeout) || timeout < 100 ? 5000 : timeout;
+
+      setMatchLog((prev) => {
+        const expectedList = row.expectedResponses?.map((r, i) => {
+          const isRegex = row.expectedResponseRegex?.[i] ?? false;
+          return `${isRegex ? ".*" : "Abc"} ${r.length > 30 ? r.slice(0, 30) + "..." : r}`;
+        }).join(" | ") || "";
+        const next = [{
+          rowId: row.id, command: row.command, status: "pending" as const,
+          detail: `[WAIT] 行 ${row.id}: ${row.command} → 等待 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
+          received: "", expected: expectedList
+        }, ...prev];
+        return next.slice(0, 100);
+      });
+
+      const waiting: WaitingResponse = {
+        rowId: row.id,
+        expected: row.expectedResponses!,
+        isRegex: row.expectedResponseRegex ?? row.expectedResponses!.map(() => false),
+        timeout: validTimeout,
+        startTime: Date.now(),
+        receivedBuffer: "",
+        matchIndex: 0,
+        timer: setTimeout(() => {
+          // Timeout — mark as error
+          updatePromptRow(row.id, { status: "error" });
+          waitingResponsesRef.current.delete(row.id);
+          setMatchLog((prev) => {
+            const buffer = waiting.receivedBuffer;
+            const next = [{
+              rowId: row.id, command: row.command, status: "error" as const,
+              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
+              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
+              expected: ""
+            }, ...prev];
+            return next.slice(0, 100);
+          });
+          resolve();
+        }, validTimeout),
+        onComplete: resolve,
+      };
+
+      waitingResponsesRef.current.set(row.id, waiting);
+    });
+  }
+
+  async function executeSingleCommand(row: PromptRow) {
+    updatePromptRow(row.id, { status: "pending" });
+
+    try {
+      const mode = row.isHex ? "hex" : "ascii";
+      // Set up response waiting BEFORE sending, so incoming data is captured
+      if (row.expectedResponses && row.expectedResponses.length > 0) {
+        await waitForResponse(row);
+      }
+      await sendData(row.command, mode as SendMode, row.ender);
+
+      if (!row.expectedResponses || row.expectedResponses.length === 0) {
+        updatePromptRow(row.id, { status: "success" });
+      }
+    } catch (error) {
+      updatePromptRow(row.id, { status: "error" });
+    }
+  }
+
+  async function startBatchExecution() {
+    const selected = promptRows
+      .filter(r => r.selected && r.command.trim())
+      .sort((a, b) => a.id - b.id);
+
+    if (selected.length === 0) {
+      pushToast(t("batch_no_selected", lang), "warn");
+      return;
+    }
+
+    batchAbortRef.current = false;
+    setBatchState({
+      isRunning: true,
+      currentLoop: 0,
+      totalLoops: totalLoops,
+      currentIndex: 0,
+      selectedRows: selected,
+    });
+
+    for (let loop = 0; loop < totalLoops; loop++) {
+      if (batchAbortRef.current) break;
+
+      setBatchState(prev => ({ ...prev, currentLoop: loop + 1 }));
+
+      for (let i = 0; i < selected.length; i++) {
+        if (batchAbortRef.current) break;
+
+        setBatchState(prev => ({ ...prev, currentIndex: i }));
+        await executeSingleCommand(selected[i]);
+      }
+    }
+
+    resetBatchState();
+  }
+
+  function stopBatchExecution() {
+    batchAbortRef.current = true;
+
+    waitingResponsesRef.current.forEach((waiting) => {
+      clearTimeout(waiting.timer);
+    });
+    waitingResponsesRef.current.clear();
+
+    resetBatchState();
+  }
+
+  function resetBatchState() {
+    setBatchState({
+      isRunning: false,
+      currentLoop: 0,
+      totalLoops: 1,
+      currentIndex: 0,
+      selectedRows: [],
+    });
+
+    setPromptRows(current => current.map(row => ({
+      ...row,
+      selected: false,
+      status: "idle" as PromptRowStatus,
+    })));
   }
 
   function handleCommandKeyDown(e: React.KeyboardEvent, row: PromptRow) {
@@ -257,6 +611,7 @@ export function PromptPanel({
           isHex: existing?.isHex ?? false,
           ender: (existing?.ender ?? "\r\n") as "" | "\r\n" | "\r" | "\n",
           interval: existing?.interval ?? "",
+          status: (existing?.status ?? "idle") as PromptRowStatus,
         };
       });
     });
@@ -276,6 +631,7 @@ export function PromptPanel({
         isHex: false,
         ender: "\r\n" as const,
         interval: "",
+        status: "idle" as PromptRowStatus,
       });
       return copy.map((row, i) => ({ ...row, id: i + 1 }));
     });
@@ -355,12 +711,17 @@ export function PromptPanel({
     setConfigAction("load");
   }
 
+  function clearAllStatuses() {
+    setPromptRows((current) => current.map((row) => ({ ...row, status: "idle" as PromptRowStatus })));
+  }
+
   // ── Content blocks ──
 
   const gridContent = (
     <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
-        <div /><div className="flex justify-center">
+      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
+        <button onClick={clearAllStatuses} className="hover:text-[var(--text-primary)] transition-colors" title={lang === "zh" ? "点击清空所有状态" : "Clear all statuses"}>#</button>
+        <div className="flex justify-center">
           <Checkbox checked={allSelected} onChange={() => toggleSelectAll()} />
         </div><div>{t("send", lang)}</div><div>{t("command_placeholder", lang)}</div><div>HEX</div><div>{t("ender", lang)}</div><div>{t("interval_placeholder", lang)}</div><div />
       </div>
@@ -378,8 +739,31 @@ export function PromptPanel({
               </div>
             </div>
             {/* Row */}
-            <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_20px] items-center gap-x-1 border-b border-[var(--border)] px-1.5 py-0.5 last:border-0 hover:bg-[var(--bg-hover)] group/row">
-              <div className="flex justify-center"><span className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] text-[9px] text-[var(--text-muted)]">{row.id}</span></div>
+            <div className={`grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] px-1.5 py-0.5 last:border-0 hover:bg-[var(--bg-hover)] group/row ${
+              batchState.isRunning && batchState.selectedRows[batchState.currentIndex]?.id === row.id
+                ? "bg-[var(--accent)]/10"
+                : ""
+            }`}>
+              {/* Status indicator */}
+              <div className="flex justify-center">
+                {row.status === "success" ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
+                    <Check size={10} strokeWidth={3} />
+                  </span>
+                ) : row.status === "error" ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
+                    <X size={10} strokeWidth={3} />
+                  </span>
+                ) : row.status === "pending" ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white animate-pulse">
+                    <Loader2 size={10} className="animate-spin" />
+                  </span>
+                ) : (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[10px] font-medium text-[var(--text-muted)]">
+                    {row.id}
+                  </span>
+                )}
+              </div>
               <div className="flex justify-center"><Checkbox checked={row.selected} onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })} /></div>
               <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)} className="text-[10px] px-1.5 py-0.5">{t("prompt_sender", lang)}</Button>
               <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-[11px]" />
@@ -388,13 +772,198 @@ export function PromptPanel({
                 <option value="\r\n">{t("ender_crlf", lang)}</option><option value="">{t("ender_none", lang)}</option><option value="\n">{t("ender_lf", lang)}</option><option value="\r">{t("ender_cr", lang)}</option>
               </Select>
               <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px] placeholder:text-[11px]" />
-              <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
+              <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity gap-1">
+                <button
+                  type="button"
+                  onClick={() => toggleExpandRow(row.id)}
+                  className={`flex items-center justify-center rounded transition-colors ${
+                    row.expectedResponses && row.expectedResponses.length > 0
+                      ? "text-[var(--accent)]"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                  }`}
+                  style={{ width: 20, height: 20 }}
+                >
+                  {expandedRowId === row.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                <div className="w-px" style={{ height: 16 }} />
                 <button onClick={() => deleteRow(row.id)}
-                        className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] text-[10px] leading-none transition-colors">
-                  ×
+                        className="flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-input)] transition-colors"
+                        style={{ width: 20, height: 20 }}>
+                  <X size={14} />
                 </button>
               </div>
             </div>
+            {/* Expanded expected responses editor */}
+            {expandedRowId === row.id && (
+              <div className="border-b border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-semibold text-[var(--text-muted)]">
+                    {t("prompt_expected_responses", lang)}
+                  </label>
+                  {responseSetOptions.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          if (!selectedId) return;
+                          const { loadResponseSet, saveResponseSet } = useResponseSet();
+                          loadResponseSet(selectedId).then((set) => {
+                            if (!set) return;
+                            // Update or add the current command
+                            const cmdText = row.command.trim();
+                            if (!cmdText) {
+                              pushToast(lang === "zh" ? "当前指令行为空，无法保存" : "Command is empty, cannot save", "warn");
+                              return;
+                            }
+                            const existing = set.commands.findIndex(
+                              (c) => c.command.trim().toUpperCase() === cmdText.toUpperCase()
+                            );
+                            const newResponses = row.expectedResponses || [];
+                            const newRegex = row.expectedResponseRegex;
+                            if (existing >= 0) {
+                              set.commands[existing] = {
+                                ...set.commands[existing],
+                                expectedResponses: newResponses,
+                                expectedResponseRegex: newRegex,
+                              };
+                            } else {
+                              set.commands.push({
+                                command: cmdText,
+                                expectedResponses: newResponses,
+                                expectedResponseRegex: newRegex,
+                                matchMode: "all",
+                              });
+                            }
+                            saveResponseSet(selectedId, set).then(() => {
+                              pushToast(
+                                lang === "zh"
+                                  ? `已保存到「${set.name}」`
+                                  : `Saved to "${set.name}"`,
+                                "success"
+                              );
+                            });
+                          });
+                        }}
+                        className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-muted)] max-w-[90px]"
+                      >
+                        <option value="">{lang === "zh" ? "保存到..." : "Save to..."}</option>
+                        {responseSetOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>{opt.name}</option>
+                        ))}
+                      </select>
+                      <span className="w-px h-3 bg-[var(--border)]" />
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          if (!selectedId) return;
+                          const { loadResponseSet, applyToGrid } = useResponseSet();
+                          loadResponseSet(selectedId).then((set) => {
+                            if (!set) return;
+                            const updates = applyToGrid(set, promptRows);
+                            if (updates.length === 0) {
+                              pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands", "warn");
+                              return;
+                            }
+                            let matchCount = 0;
+                            for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
+                              updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
+                              matchCount++;
+                            }
+                            pushToast(
+                              lang === "zh"
+                                ? `已从「${set.name}」导入 ${matchCount} 条指令`
+                                : `Imported ${matchCount} commands from "${set.name}"`,
+                              "success"
+                            );
+                          });
+                        }}
+                        className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-primary)] max-w-[130px]"
+                      >
+                        <option value="">{lang === "zh" ? "从响应集导入..." : "Import from set..."}</option>
+                        {responseSetOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>{opt.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {(row.expectedResponses || []).map((resp, j) => {
+                    const isRegex = row.expectedResponseRegex?.[j] ?? false;
+                    return (
+                      <div key={j} className="flex items-start gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const regex = row.expectedResponseRegex
+                              ? [...row.expectedResponseRegex]
+                              : (row.expectedResponses || []).map(() => false);
+                            regex[j] = !regex[j];
+                            updatePromptRow(row.id, { expectedResponseRegex: regex });
+                          }}
+                          className={`shrink-0 mt-1 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
+                            isRegex
+                              ? "bg-amber-100 border-amber-300 text-amber-700"
+                              : "bg-[var(--bg-primary)] border-[var(--border)] text-[var(--text-muted)]"
+                          }`}
+                          title={isRegex
+                            ? (lang === "zh" ? "正则模式" : "Regex mode")
+                            : (lang === "zh" ? "文本模式" : "Text mode")
+                          }
+                        >
+                          {isRegex ? ".*" : "Abc"}
+                        </button>
+                        <textarea
+                          value={resp}
+                          onChange={(e) => {
+                            const responses = [...(row.expectedResponses || [])];
+                            responses[j] = e.target.value;
+                            const filtered = responses.filter((r) => r.trim() !== "");
+                            updatePromptRow(row.id, { expectedResponses: filtered.length > 0 ? filtered : undefined });
+                          }}
+                          placeholder={isRegex
+                            ? (lang === "zh" ? "正则表达式" : "Regex pattern")
+                            : (lang === "zh" ? "期望响应内容" : "Expected response")
+                          }
+                          className="flex-1 text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)] min-h-[24px]"
+                          rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const responses = (row.expectedResponses || []).filter((_, k) => k !== j);
+                            const regex = row.expectedResponseRegex?.filter((_, k) => k !== j);
+                            updatePromptRow(row.id, {
+                              expectedResponses: responses.length > 0 ? responses : undefined,
+                              expectedResponseRegex: regex && regex.length > 0 ? regex : undefined,
+                            });
+                          }}
+                          className="text-rose-400 hover:text-rose-600 p-1 mt-1"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const responses = [...(row.expectedResponses || []), ""];
+                      const regex = row.expectedResponseRegex
+                        ? [...row.expectedResponseRegex, false]
+                        : undefined;
+                      updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
+                    }}
+                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] px-1 py-0.5"
+                  >
+                    <Plus size={10} />
+                    {lang === "zh" ? "添加期望结果" : "Add Response"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
         {/* Insert after last row */}
@@ -463,7 +1032,8 @@ export function PromptPanel({
     <div className="flex items-center rounded-md border border-[var(--border)] overflow-hidden">
       <button type="button" onClick={() => handlePromptTabChange("grid")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
       <button type="button" onClick={() => onNavigateToConfig?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
-      <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
+      <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
+      <button type="button" onClick={() => onNavigateToResponseSet?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
       {activePromptTab === "config" && (
         <>
           <span className="mx-2 text-[var(--border)]">|</span>
@@ -476,18 +1046,41 @@ export function PromptPanel({
   );
 
   const buttonBar = (
-    <div className="flex items-center gap-1 text-xs">
-      <span className="shrink-0 text-[var(--text-muted)] mr-1">{lang === "zh" ? "指令" : "CMD"}</span>
-      <span className="flex-1 truncate rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] text-[11px]">
-        {lang === "zh" ? "点击左侧行按钮发送…" : "Click row button to send"}
+    <div className="flex items-center gap-2 text-xs">
+      <span className="shrink-0 text-[var(--text-muted)]">{t("batch_loop", lang)}</span>
+      <Input
+        type="number"
+        min={1}
+        max={9999}
+        value={totalLoops}
+        onChange={(e) => setTotalLoops(Math.max(1, parseInt(e.target.value) || 1))}
+        className="w-16 text-center text-[11px]"
+        disabled={batchState.isRunning}
+      />
+      <span className="text-[var(--text-muted)]">{t("batch_times", lang)}</span>
+
+      <span className="w-px h-4 bg-[var(--border)]" />
+
+      <span className="text-[var(--text-muted)]">
+        {batchState.isRunning
+          ? `${batchState.currentLoop}/${batchState.totalLoops} - ${batchState.currentIndex + 1}/${batchState.selectedRows.length}`
+          : t("batch_ready", lang)
+        }
       </span>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "预设" : "Prompt"}</Button>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">Idx</Button>
-      <Button className="rounded bg-[var(--accent)] px-3 py-1 text-white text-xs">{lang === "zh" ? "开始" : "Start"}</Button>
-      <span className="shrink-0 rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] text-[11px]">
-        {lang === "zh" ? "总次数" : "Total"}: 0
-      </span>
-      <Button className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--bg-input)] text-xs">{lang === "zh" ? "停止" : "Stop"}</Button>
+
+      <span className="w-px h-4 bg-[var(--border)]" />
+
+      <Button
+        onClick={batchState.isRunning ? stopBatchExecution : startBatchExecution}
+        className={`rounded px-3 py-1 text-xs ${
+          batchState.isRunning
+            ? "bg-rose-500 hover:bg-rose-600 text-white"
+            : "bg-[var(--accent)] hover:bg-[var(--accent)]/80 text-white"
+        }`}
+      >
+        {batchState.isRunning ? t("batch_stop", lang) : t("batch_start", lang)}
+      </Button>
+
       {tcpClientCount !== undefined && tcpClientCount > 0 && (
         <Button
           type="button"
@@ -525,6 +1118,31 @@ export function PromptPanel({
                    onKeyDown={(e) => { if (e.key === 'Enter') handleRowCountApply(Number(rowCountInput)); }}
                    className="w-14 text-center" />
           </label>
+        )}
+        {activePromptTab === "grid" && (
+          <div className="relative flex items-center">
+            <span className="w-px h-3 bg-[var(--border)] mx-2" />
+            <button
+              type="button"
+              onClick={() => setMatchLogOpen(true)}
+              className="flex items-center gap-1 text-[10px] font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              {waitingResponsesRef.current.size > 0 ? (
+                <span className="flex items-center gap-1 text-amber-500">
+                  <Loader2 size={10} className="animate-spin" />
+                </span>
+              ) : matchLog.some(e => e.status === "error") ? (
+                <span className="flex items-center gap-1 text-rose-500">
+                  <X size={10} />
+                </span>
+              ) : matchLog.some(e => e.status === "success") ? (
+                <span className="flex items-center gap-1 text-emerald-500">
+                  <Check size={10} />
+                </span>
+              ) : null}
+              <span>{matchLog.length > 0 ? `${lang === "zh" ? "匹配日志" : "Match Log"} (${matchLog.length})` : (lang === "zh" ? "匹配日志" : "Match Log")}</span>
+            </button>
+          </div>
         )}
         {activePromptTab === "batch" && (
           <button type="button" onClick={() => setRegexCleanOpen(true)}
@@ -624,6 +1242,113 @@ export function PromptPanel({
           onApply={(result) => { setBatchText(result); setRegexCleanOpen(false); }}
           onClose={() => setRegexCleanOpen(false)}
         />
+      )}
+      {matchLogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={() => setMatchLogOpen(false)}>
+          <div className="flex max-h-[75vh] w-[680px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl select-text" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold">{lang === "zh" ? "匹配日志" : "Match Log"}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">
+                  {lang === "zh"
+                    ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 等待 ${waitingResponsesRef.current.size}`
+                    : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Wait ${waitingResponsesRef.current.size}`
+                  }
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = matchLog.map(e => {
+                      let s = e.detail;
+                      if (e.expected) s += `\n  EXPECT: ${e.expected}`;
+                      if (e.received) s += `\n  RECV: ${e.received}`;
+                      return s;
+                    }).join("\n\n");
+                    navigator.clipboard.writeText(text).then(() => {
+                      pushToast(lang === "zh" ? "已复制到剪贴板" : "Copied to clipboard", "success");
+                    }).catch(() => {});
+                  }}
+                  className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  {lang === "zh" ? "复制" : "Copy"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchLog([])}
+                  className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  {lang === "zh" ? "清空" : "Clear"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchLogOpen(false)}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-2 text-xs font-mono leading-relaxed">
+              {matchLog.length === 0 ? (
+                <div className="text-center py-8 text-[var(--text-muted)] text-xs">
+                  {lang === "zh" ? "暂无匹配记录，发送指令后自动生成" : "No match records yet. Send a command to start."}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {matchLog.map((entry, i) => (
+                    <div
+                      key={i}
+                      className={`px-3 py-1.5 rounded ${
+                        entry.status === "success" ? "bg-emerald-50/50" :
+                        entry.status === "error" ? "bg-rose-50/50" :
+                        ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <span className="shrink-0 mt-0.5">
+                          {entry.status === "success" ? (
+                            <Check size={12} className="text-emerald-500" />
+                          ) : entry.status === "error" ? (
+                            <X size={12} className="text-rose-500" />
+                          ) : entry.detail.startsWith("[RECV]") ? (
+                            <span className="text-[10px] text-[var(--text-muted)]">&gt;</span>
+                          ) : entry.detail.startsWith("[MATCH]") ? (
+                            <span className="text-[10px] text-amber-500">~</span>
+                          ) : (
+                            <Loader2 size={10} className="animate-spin text-amber-500" />
+                          )}
+                        </span>
+                        <span className={`text-[11px] ${
+                          entry.status === "success" ? "text-emerald-600" :
+                          entry.status === "error" ? "text-rose-600" :
+                          "text-[var(--text-primary)]"
+                        }`}>
+                          {entry.detail}
+                        </span>
+                      </div>
+                      {entry.expected && (
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 ml-5">
+                          <span className="opacity-60">EXPECT: </span>
+                          <span className="font-mono">{entry.expected}</span>
+                        </div>
+                      )}
+                      {entry.received && (
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 ml-5">
+                          <span className="opacity-60">RECV: </span>
+                          <span className="font-mono break-all">{entry.received}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

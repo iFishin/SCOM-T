@@ -10,6 +10,7 @@ export interface PromptRow {
   interval: string;
   device?: string;
   expectedResponses?: string[];
+  expectedResponseRegex?: boolean[];
 }
 
 /* ── Type for the YAML document shape ── */
@@ -22,6 +23,7 @@ interface YamlCommand {
   is_selected?: boolean;
   device?: string;
   expected_responses?: string[];
+  expected_responses_regex?: boolean[];
 }
 
 interface YamlDoc {
@@ -45,16 +47,20 @@ const YAML_TO_ENDER: Record<string, "" | "\r\n" | "\r" | "\n"> = {
 
 /* ── Serialize ── */
 export function serializeToYaml(rows: PromptRow[]): string {
-  const commands: YamlCommand[] = (rows ?? []).map((r) => ({
-    command: r.command,
-    hex_mode: r.isHex,
-    line_ending: ENDER_TO_YAML[r.ender] ?? "CRLF",
-    timeout: Math.max(0, parseInt(r.interval) || 0),
-    order: r.id,
-    ...(r.selected ? { is_selected: true } : {}),
-    ...(r.device ? { device: r.device } : {}),
-    ...(r.expectedResponses?.length ? { expected_responses: r.expectedResponses } : {}),
-  }));
+  const commands: YamlCommand[] = (rows ?? []).map((r) => {
+    const hasRegex = r.expectedResponseRegex?.some(Boolean);
+    return {
+      command: r.command,
+      hex_mode: r.isHex,
+      line_ending: ENDER_TO_YAML[r.ender] ?? "CRLF",
+      timeout: Math.max(0, parseInt(r.interval) || 0),
+      order: r.id,
+      ...(r.selected ? { is_selected: true } : {}),
+      ...(r.device ? { device: r.device } : {}),
+      ...(r.expectedResponses?.length ? { expected_responses: r.expectedResponses } : {}),
+      ...(hasRegex ? { expected_responses_regex: r.expectedResponseRegex } : {}),
+    };
+  });
 
   return yaml.dump({ Commands: commands }, { indent: 2, lineWidth: -1, noRefs: true, quotingType: "'" });
 }
@@ -110,6 +116,7 @@ export function parseYamlToRows(
       interval: cmd.timeout > 0 ? String(cmd.timeout) : "",
       device: typeof cmd.device === "string" && cmd.device ? cmd.device : undefined,
       expectedResponses: coerceStringArray(cmd.expected_responses),
+      expectedResponseRegex: Array.isArray(cmd.expected_responses_regex) ? cmd.expected_responses_regex.map(Boolean) : undefined,
     });
   }
 
