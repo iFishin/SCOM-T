@@ -312,7 +312,7 @@ export function PromptPanel({
 
     // Log received data
     setMatchLog((prev) => {
-      const next = [{ rowId: 0, command: "", status: "pending" as const, detail: `📩 收到数据: ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: receivedText.length > 200 ? receivedText.slice(0, 200) + "..." : receivedText, expected: "" }, ...prev];
+      const next = [{ rowId: 0, command: "", status: "pending" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: receivedText.length > 200 ? receivedText.slice(0, 200) + "..." : receivedText, expected: "" }, ...prev];
       return next.slice(0, 100);
     });
 
@@ -357,7 +357,7 @@ export function PromptPanel({
         if (matched) {
           waiting.matchIndex++;
           setMatchLog((prev) => {
-            const next = [{ rowId, command: "", status: "pending" as const, detail: `✓ 匹配到 #${waiting.matchIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+            const next = [{ rowId, command: "", status: "pending" as const, detail: `[MATCH] #${waiting.matchIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
             return next.slice(0, 100);
           });
         } else {
@@ -372,7 +372,7 @@ export function PromptPanel({
         waitingResponsesRef.current.delete(rowId);
         waiting.onComplete?.();
         setMatchLog((prev) => {
-          const next = [{ rowId, command: "", status: "success" as const, detail: `✅ 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
+          const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
           return next.slice(0, 100);
         });
       }
@@ -442,7 +442,7 @@ export function PromptPanel({
         }).join(" | ") || "";
         const next = [{
           rowId: row.id, command: row.command, status: "pending" as const,
-          detail: `⏳ 行 ${row.id}: ${row.command} → 等待 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
+          detail: `[WAIT] 行 ${row.id}: ${row.command} → 等待 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
           received: "", expected: expectedList
         }, ...prev];
         return next.slice(0, 100);
@@ -464,7 +464,7 @@ export function PromptPanel({
             const buffer = waiting.receivedBuffer;
             const next = [{
               rowId: row.id, command: row.command, status: "error" as const,
-              detail: `❌ 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
+              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
               received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
               expected: ""
             }, ...prev];
@@ -1126,7 +1126,7 @@ export function PromptPanel({
               {matchLog.length > 0 && matchLog[0]?.status === "pending" ? (
                 <span className="flex items-center gap-1 text-amber-500">
                   <Loader2 size={10} className="animate-spin" />
-                  {lang === "zh" ? "匹配中..." : "Matching..."}
+                  {lang === "zh" ? "匹配中" : "Matching"}
                 </span>
               ) : matchLog.length > 0 && matchLog[0]?.status === "error" ? (
                 <span className="text-rose-500">{lang === "zh" ? "匹配失败" : "Failed"}</span>
@@ -1240,13 +1240,16 @@ export function PromptPanel({
       )}
       {matchLogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={() => setMatchLogOpen(false)}>
-          <div className="flex max-h-[70vh] w-[600px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[75vh] w-[680px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl select-text" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3 shrink-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold">{lang === "zh" ? "匹配日志" : "Match Log"}</span>
                 <span className="text-[10px] text-[var(--text-muted)]">
-                  {matchLog.filter((e) => e.status === "success").length}/{matchLog.filter((e) => e.status === "pending" || e.status === "success" || e.status === "error").length}
+                  {lang === "zh"
+                    ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 进行中 ${matchLog.filter(e => e.status === "pending").length}`
+                    : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Pending ${matchLog.filter(e => e.status === "pending").length}`
+                  }
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1267,39 +1270,39 @@ export function PromptPanel({
               </div>
             </div>
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-2 text-[11px]">
+            <div className="flex-1 overflow-y-auto p-2 text-xs font-mono leading-relaxed">
               {matchLog.length === 0 ? (
                 <div className="text-center py-8 text-[var(--text-muted)] text-xs">
                   {lang === "zh" ? "暂无匹配记录，发送指令后自动生成" : "No match records yet. Send a command to start."}
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {matchLog.map((entry, i) => (
                     <div
                       key={i}
-                      className={`rounded-lg border px-3 py-2 ${
-                        entry.status === "success" ? "border-emerald-200 bg-emerald-50/50" :
-                        entry.status === "error" ? "border-rose-200 bg-rose-50/50" :
-                        "border-amber-200 bg-amber-50/50"
+                      className={`px-3 py-1.5 rounded ${
+                        entry.status === "success" ? "bg-emerald-50/50" :
+                        entry.status === "error" ? "bg-rose-50/50" :
+                        ""
                       }`}
                     >
-                      <div className={`text-[10px] font-semibold mb-0.5 ${
+                      <div className={`text-[11px] ${
                         entry.status === "success" ? "text-emerald-600" :
                         entry.status === "error" ? "text-rose-600" :
-                        "text-amber-600"
+                        "text-[var(--text-primary)]"
                       }`}>
                         {entry.detail}
                       </div>
                       {entry.expected && (
-                        <div className="text-[9px] text-[var(--text-muted)] font-mono mt-1">
-                          <span className="opacity-60">{lang === "zh" ? "期望: " : "Expected: "}</span>
-                          {entry.expected}
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                          <span className="opacity-60">EXPECT: </span>
+                          <span className="font-mono">{entry.expected}</span>
                         </div>
                       )}
                       {entry.received && (
-                        <div className="text-[9px] text-[var(--text-muted)] font-mono">
-                          <span className="opacity-60">{lang === "zh" ? "接收: " : "Received: "}</span>
-                          {entry.received}
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                          <span className="opacity-60">RECV: </span>
+                          <span className="font-mono break-all">{entry.received}</span>
                         </div>
                       )}
                     </div>
