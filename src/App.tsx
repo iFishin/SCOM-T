@@ -31,6 +31,7 @@ import { LogViewer } from "./components/LogViewer.tsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.tsx";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useHotkeys } from "./hooks/useHotkeys.ts";
+import { useVersionCheck } from "./hooks/useVersionCheck.ts";
 import { setTimestampFormat } from "./utils/hexConverter.ts";
 import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
@@ -111,6 +112,7 @@ function App() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [cardNotifications, setCardNotifications] = useState<any[]>([]);
   const [appVersion, setAppVersion] = useState("0.0.0");
+  const { updateAvailable } = useVersionCheck();
   const [signalOpen, setSignalOpen] = useState(false);
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
@@ -934,7 +936,7 @@ function App() {
             <span className="relative inline-flex items-center justify-center gap-1.5">
               <Info size={14} />
               <span>{t("about", lang)}</span>
-              {hasUnreadNotifications && (
+              {(hasUnreadNotifications || updateAvailable) && (
                 <span className="absolute -right-2 -top-1 inline-block h-2 w-2 rounded-full bg-rose-500 ring-1 ring-[var(--bg-surface)]" />
               )}
             </span>
