@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { FileText, FolderOpen, Plus, Save, Trash2, List } from "lucide-react";
+import { ArrowLeft, Copy, FileText, FolderOpen, Plus, Save, Trash2, List, Import } from "lucide-react";
 import { Button } from "./ui/Button.tsx";
 import { Input } from "./ui/Input.tsx";
 import { t } from "../i18n";
 import type { Lang } from "../i18n";
 import { useResponseSet, type ResponseSet } from "../hooks/useResponseSet";
 import { ResponseSetCommandEditor } from "./ResponseSetCommandEditor.tsx";
+import { RESPONSE_TEMPLATE_GROUPS } from "../serial/mockTemplates.ts";
 
 type ResponseSetPageProps = {
   lang: Lang;
@@ -73,11 +74,58 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
 
   function handleDelete() {
     if (!selectedName || !currentSet) return;
+    const msg = lang === "zh"
+      ? `确定删除响应集「${currentSet.name}」吗？\n此操作不可恢复。`
+      : `Delete response set "${currentSet.name}"?\nThis cannot be undone.`;
+    if (!window.confirm(msg)) return;
     deleteResponseSet(selectedName).then(() => {
       setSetNames((prev) => prev.filter((n) => n !== selectedName));
       setSelectedName(null);
       setCurrentSet(null);
     });
+  }
+
+  async function handleDuplicate() {
+    if (!currentSet || !selectedName) return;
+    const baseName = lang === "zh" ? `${currentSet.name}_副本` : `${currentSet.name}_copy`;
+    const newName = `${baseName}_${Date.now()}`;
+    const newSet: ResponseSet = {
+      id: newName,
+      name: baseName,
+      description: currentSet.description,
+      commands: JSON.parse(JSON.stringify(currentSet.commands)),
+    };
+    await saveResponseSet(newName, newSet);
+    setSetNames((prev) => [...prev, newName].sort());
+    setDisplayNames((prev) => ({ ...prev, [newName]: baseName }));
+    setSelectedName(newName);
+  }
+
+  function handleImportFromTemplate() {
+    if (!currentSet) return;
+    const groups = RESPONSE_TEMPLATE_GROUPS;
+    const names = groups.map((g) => lang === "zh" ? g.name : g.nameEn);
+    const choice = window.prompt(
+      lang === "zh"
+        ? `选择要导入的模板组 (0-${groups.length - 1}):\n${names.map((n, i) => `${i}: ${n}`).join("\n")}`
+        : `Select template group (0-${groups.length - 1}):\n${names.map((n, i) => `${i}: ${n}`).join("\n")}`,
+      "0"
+    );
+    if (choice === null) return;
+    const idx = parseInt(choice, 10);
+    if (isNaN(idx) || idx < 0 || idx >= groups.length) return;
+    const group = groups[idx];
+    const newCommands = group.responses.map((tpl) => ({
+      command: tpl.command,
+      expectedResponses: [tpl.response],
+      matchMode: "all" as const,
+    }));
+    const merged = [...currentSet.commands];
+    for (const nc of newCommands) {
+      const exists = merged.some((c) => c.command.toUpperCase() === nc.command.toUpperCase());
+      if (!exists) merged.push(nc);
+    }
+    updateCommands(merged);
   }
 
   async function handleSave() {
@@ -114,6 +162,15 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2 shrink-0">
         <Button
           type="button"
+          onClick={onClose}
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+        >
+          <ArrowLeft size={14} />
+          {lang === "zh" ? "返回" : "Back"}
+        </Button>
+        <div className="h-4 w-px bg-[var(--border)]" />
+        <Button
+          type="button"
           onClick={handleCreateNew}
           className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
         >
@@ -129,15 +186,33 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
           {lang === "zh" ? "文件夹" : "Folder"}
         </Button>
         {currentSet && selectedName && (
-          <Button
-            type="button"
-            onClick={handleApplyAndClose}
-            disabled={!currentSet.commands.some((c) => c.command.trim() && c.expectedResponses.some((r) => r.trim()))}
-            className="ml-auto flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
-          >
-            <List size={12} />
-            {t("response_set_apply", lang)}
-          </Button>
+          <>
+            <Button
+              type="button"
+              onClick={handleDuplicate}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
+            >
+              <Copy size={11} />
+              {lang === "zh" ? "复制" : "Copy"}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleImportFromTemplate}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)]"
+            >
+              <Import size={11} />
+              {lang === "zh" ? "导入模板" : "Template"}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleApplyAndClose}
+              disabled={!currentSet.commands.some((c) => c.command.trim() && c.expectedResponses.some((r) => r.trim()))}
+              className="ml-auto flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-40"
+            >
+              <List size={12} />
+              {t("response_set_apply", lang)}
+            </Button>
+          </>
         )}
       </div>
 
