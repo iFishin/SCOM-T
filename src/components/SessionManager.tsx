@@ -57,46 +57,52 @@ function SessionContent({
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
   onConfigChange: (config: SerialConfig) => void;
-  onDataRef: React.MutableRefObject<((data: ActiveSessionData) => void) | null>;
+  onDataRef: React.MutableRefObject<ActiveSessionData | null>;
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
 
-  // Sync data to parent via ref (no stale closure issues)
-  const dataRef = useRef(serial);
-  dataRef.current = serial;
-  const data = dataRef.current;
-
-  onDataRef.current = useCallback(() => {
-    return {
-      logs: data.logs,
-      isConnected: data.isConnected,
-      isBusy: data.isBusy,
-      statusText: data.statusText,
-      connectedPort: data.connectedPort,
-      error: data.error,
-      fileSendProgress: data.fileSendProgress,
-      logCapWarning: data.logCapWarning,
-      ports: data.ports,
-      tcpConnectionStatus: data.tcpConnectionStatus,
-      tcpServerStatus: data.tcpServerStatus,
-      tcpServerClients: data.tcpServerClients,
-      latencyMs: data.latencyMs,
-      tcpServerBroadcast: data.tcpServerBroadcast,
-      txBytes: data.txBytes,
-      rxBytes: data.rxBytes,
-      txRate: data.txRate,
-      rxRate: data.rxRate,
-      latencyHistory: data.latencyHistory,
-      signalStates: { ...data.signalStates, rts: config.rts, dtr: config.dtr },
-      sendData: data.sendData,
-      sendFile: data.sendFile,
-      closePort: data.closePort,
-      clearLogs: (t: "all" | "received" | "sent") => data.clearLogs(t),
-      refreshPorts: data.refreshPorts,
-      setSignals: data.setSignals,
-      getSignalHistory: data.getSignalHistory,
-    } as ActiveSessionData;
-  }, []);
+  // Keep the ref up-to-date with the latest serial data
+  useEffect(() => {
+    onDataRef.current = {
+      logs: serial.logs,
+      isConnected: serial.isConnected,
+      isBusy: serial.isBusy,
+      statusText: serial.statusText,
+      connectedPort: serial.connectedPort,
+      error: serial.error,
+      fileSendProgress: serial.fileSendProgress,
+      logCapWarning: serial.logCapWarning,
+      ports: serial.ports,
+      tcpConnectionStatus: serial.tcpConnectionStatus,
+      tcpServerStatus: serial.tcpServerStatus,
+      tcpServerClients: serial.tcpServerClients,
+      latencyMs: serial.latencyMs,
+      tcpServerBroadcast: serial.tcpServerBroadcast,
+      txBytes: serial.txBytes,
+      rxBytes: serial.rxBytes,
+      txRate: serial.txRate,
+      rxRate: serial.rxRate,
+      latencyHistory: serial.latencyHistory,
+      signalStates: { ...serial.signalStates, rts: config.rts, dtr: config.dtr },
+      sendData: serial.sendData,
+      sendFile: serial.sendFile,
+      closePort: serial.closePort,
+      clearLogs: (t: "all" | "received" | "sent") => serial.clearLogs(t),
+      refreshPorts: serial.refreshPorts,
+      setSignals: serial.setSignals,
+      getSignalHistory: serial.getSignalHistory,
+    };
+  }, [
+    serial.logs, serial.isConnected, serial.isBusy, serial.statusText,
+    serial.connectedPort, serial.error, serial.fileSendProgress,
+    serial.logCapWarning, serial.ports, serial.tcpConnectionStatus,
+    serial.tcpServerStatus, serial.tcpServerClients, serial.latencyMs,
+    serial.tcpServerBroadcast, serial.txBytes, serial.rxBytes,
+    serial.txRate, serial.rxRate, serial.latencyHistory, serial.signalStates,
+    serial.sendData, serial.sendFile, serial.closePort, serial.clearLogs,
+    serial.refreshPorts, serial.setSignals, serial.getSignalHistory,
+    config.rts, config.dtr, onDataRef,
+  ]);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -158,7 +164,7 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
   } = useSessionManager();
 
   // Store per-session data refs, only the active one is synced to App.tsx
-  const sessionDataRefs = useRef<Record<string, React.MutableRefObject<(() => ActiveSessionData) | null>>>({});
+  const sessionDataRefs = useRef<Record<string, { current: ActiveSessionData | null }>>({});
 
   const handleConfigChange = useCallback((sessionId: string, newConfig: SerialConfig) => {
     updateSessionConfig(sessionId, newConfig);
@@ -171,8 +177,7 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
   useEffect(() => {
     const ref = sessionDataRefs.current[activeSessionId];
     if (ref?.current) {
-      const data = ref.current();
-      syncRef.current?.(data);
+      syncRef.current?.(ref.current);
     }
   });
 
