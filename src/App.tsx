@@ -689,8 +689,12 @@ function App() {
                 receiveMode={receiveMode}
                 portFilterMode={settings.portFilterMode ?? "default"}
                 mockSerial={settings.mockSerial}
-                config={config}
-                onConfigChange={setConfig}
+                onActiveSessionData={(data) => {
+                  const cp = data.connectedPort;
+                  if (cp) {
+                    setConfig((prev) => ({ ...prev, path: cp.path, baudRate: cp.baudRate }));
+                  }
+                }}
               />
             </div>
 
@@ -1123,8 +1127,6 @@ function App() {
                     receiveMode={receiveMode}
                     portFilterMode={settings.portFilterMode ?? "default"}
                     mockSerial={settings.mockSerial}
-                    config={config}
-                    onConfigChange={setConfig}
                   />
                 </div>
               )}
