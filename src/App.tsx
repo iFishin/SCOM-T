@@ -195,6 +195,14 @@ function App() {
     });
   }, [settings.logRetentionDays]);
 
+  const handleActiveSessionData = useCallback((data: ActiveSessionData) => {
+    setSessionData(data);
+    const cp = data.connectedPort;
+    if (cp) {
+      setConfig((prev) => ({ ...prev, path: cp.path, baudRate: cp.baudRate }));
+    }
+  }, []);
+
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
     if (!appLogger.ready) {
@@ -704,13 +712,7 @@ function App() {
                 receiveMode={receiveMode}
                 portFilterMode={settings.portFilterMode ?? "default"}
                 mockSerial={settings.mockSerial}
-                onActiveSessionData={(data) => {
-                  setSessionData(data);
-                  const cp = data.connectedPort;
-                  if (cp) {
-                    setConfig((prev) => ({ ...prev, path: cp.path, baudRate: cp.baudRate }));
-                  }
-                }}
+                onActiveSessionData={handleActiveSessionData}
               />
             </div>
 
@@ -1143,6 +1145,7 @@ function App() {
                     receiveMode={receiveMode}
                     portFilterMode={settings.portFilterMode ?? "default"}
                     mockSerial={settings.mockSerial}
+                    onActiveSessionData={handleActiveSessionData}
                   />
                 </div>
               )}
