@@ -996,7 +996,8 @@ export function PromptPanel({
           <button key={i} type="button" onClick={() => {
             const text = batchText;
             try {
-              let flags = "g";
+              let flags = "";
+              if (p.mode !== "keep" && p.mode !== "drop") flags += "g";
               let pat = p.pattern;
               const m = pat.match(/^\(\?([imsx-]+)\)/);
               if (m) { flags += m[1]; pat = pat.slice(m[0].length); }
