@@ -63,7 +63,7 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
         onCreate={createSession}
         onRename={renameSession}
       />
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="min-h-0 overflow-y-auto shrink-0">
         <ConfigPanel
           ports={serial.ports}
           config={config}
@@ -83,6 +83,8 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
           onClose={serial.closePort}
           onSetSignals={serial.setSignals}
         />
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <ReceiveLog
           logs={serial.logs}
           lang={lang}
