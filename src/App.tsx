@@ -10,7 +10,6 @@ import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
-import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { ConfigPage } from "./components/ConfigPage.tsx";
 import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
 import { MarketplacePage } from "./components/MarketplacePage.tsx";
@@ -38,10 +37,6 @@ import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
 import { t } from "./i18n.ts";
 import {
-  BAUD_RATES,
-  DATA_BITS_OPTIONS,
-  PARITY_OPTIONS,
-  STOP_BITS_OPTIONS,
   useSerialPort,
   type SerialConfig,
 } from "./hooks/useSerialPort.ts";
@@ -159,10 +154,10 @@ function App() {
     0.5,
   );
   const {
-    ports, logs, isConnected, isBusy, statusText, connectedPort,
+    logs, isConnected, isBusy, statusText, connectedPort,
     error, fileSendProgress, logCapWarning,
-    refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
-    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals, tcpServerBroadcast,
+    refreshPorts, closePort, sendData, sendFile, clearLogs,
+    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, tcpServerBroadcast,
     txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates, getSignalHistory,
   } = useSerialPort({ config, receiveMode, portFilterMode: settings.portFilterMode, mockSerial: settings.mockSerial });
 
@@ -596,12 +591,6 @@ function App() {
     ],
     [lang],
   );
-
-  async function handleRefreshPorts() {
-    const count = await refreshPorts();
-    if (count === 0) pushToast(t("status_no_ports", lang), "warn");
-    else pushToast(t("status_find_ports", lang, count), "success");
-  }
 
   async function handleFileSelect() {
     const selected = await open({ multiple: false, directory: false });
@@ -1128,66 +1117,18 @@ function App() {
                   </div>
                 </div>
               ) : (
-                <div id="tour-config" className="shrink-0 rounded-lg bg-[var(--bg-surface)]">
-                  <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-                    {lang === "zh" ? "配置" : "Config"}
-                  </div>
-                  <ConfigPanel
-                    ports={ports}
-                    config={config}
-                    baudRates={BAUD_RATES}
-                    dataBitsOptions={DATA_BITS_OPTIONS}
-                    parityOptions={PARITY_OPTIONS}
-                    stopBitsOptions={STOP_BITS_OPTIONS}
-                    isConnected={isConnected}
-                    isBusy={isBusy}
+                <div id="tour-config" className="flex flex-col min-h-0 flex-1 rounded-lg bg-[var(--bg-surface)] overflow-hidden">
+                  <SessionManager
                     lang={lang}
-                    tcpConnectionStatus={tcpConnectionStatus}
-                    tcpServerStatus={tcpServerStatus}
-                    tcpServerClients={tcpServerClients}
-                    onRefresh={handleRefreshPorts}
+                    receiveMode={receiveMode}
+                    portFilterMode={settings.portFilterMode ?? "default"}
+                    mockSerial={settings.mockSerial}
+                    config={config}
                     onConfigChange={setConfig}
-                    onOpen={openPort}
-                    onClose={closePort}
-                    onSetSignals={setSignals}
                   />
                 </div>
               )}
 
-              {/* Collapse divider for config card — only when expanded */}
-              {!topCollapsed && (
-                <div className="group relative flex h-4 shrink-0 items-center justify-center">
-                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-[var(--border)]" />
-                  <button
-                    type="button"
-                    onClick={() => updateTopCollapsed(true)}
-                    className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                    title={lang === "zh" ? "折叠配置" : "Collapse Config"}
-                  >
-                    <ChevronUp size={10} />
-                  </button>
-                </div>
-              )}
-
-              {/* Receive log */}
-              <div id="tour-receive" className="min-h-0 flex-1 flex flex-col pt-2">
-                <ReceiveLog
-                  logs={logs}
-                  lang={lang}
-                  savePath={logFile.savePath}
-                  realTimeLog={logFile.realTime}
-                  logCapWarning={logCapWarning}
-                  onClearAll={() => clearLogs("all")}
-                  onClearReceived={() => clearLogs("received")}
-                  onClearSent={() => clearLogs("sent")}
-                  displayMode={settings.displayMode ?? "card"}
-                  onDisplayModeChange={updateDisplayMode}
-                  onSelectLogFile={logFile.selectLogFile}
-                  onToggleRealTime={() => logFile.setRealTime((v) => !v)}
-                  onFlushLogs={() => logFile.flushAll(logs)}
-                  onCloseLogFile={logFile.closeLogFile}
-                />
-              </div>
             </div>
 
             {/* Drag handle + collapse button for right column */}
