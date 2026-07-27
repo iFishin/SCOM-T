@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const GITHUB_REPO = "iFishin/SCOM-T";
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -8,6 +8,10 @@ const LAST_VERSION_KEY = "scom_t_last_checked_version";
 
 export function useVersionCheck(currentVersion: string) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const versionRef = useRef(currentVersion);
+
+  // Keep versionRef in sync with currentVersion
+  versionRef.current = currentVersion;
 
   function compareVersion(a: string, b: string): number {
     const pa = a.split(".").map(Number);
@@ -21,22 +25,29 @@ export function useVersionCheck(currentVersion: string) {
   }
 
   async function checkForUpdate() {
+    // Skip if version is the placeholder
+    const ver = versionRef.current.replace(/^v/, "");
+    if (!ver || ver === "0.0.0") return;
+
     try {
       const res = await fetch(GITHUB_API);
       if (!res.ok) return;
       const data = await res.json();
       const latestTag: string = (data.tag_name || "").replace(/^v/, "");
-      const currentVer = currentVersion.replace(/^v/, "");
 
-      if (compareVersion(latestTag, currentVer) > 0) {
+      // Only update if the version hasn't changed during the fetch
+      if (versionRef.current.replace(/^v/, "") !== ver) return;
+
+      if (compareVersion(latestTag, ver) > 0) {
         setUpdateAvailable(true);
-        // 记录已检查的版本和时间
         try {
           localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
           localStorage.setItem(LAST_VERSION_KEY, latestTag);
         } catch {
           // ignore quota exceeded
         }
+      } else {
+        setUpdateAvailable(false);
       }
     } catch {
       // silently ignore
