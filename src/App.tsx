@@ -45,6 +45,7 @@ import {
   useSerialPort,
   type SerialConfig,
 } from "./hooks/useSerialPort.ts";
+import { SessionManager } from "./components/SessionManager.tsx";
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
@@ -693,24 +694,14 @@ function App() {
               )
             : undefined}
           >
-            <div key="config" id="tour-config" className="overflow-hidden rounded-lg">
-              <ConfigPanel
-                ports={ports}
-                config={config}
-                baudRates={BAUD_RATES}
-                dataBitsOptions={DATA_BITS_OPTIONS}
-                parityOptions={PARITY_OPTIONS}
-                stopBitsOptions={STOP_BITS_OPTIONS}
-                isConnected={isConnected}
-                isBusy={isBusy}
+            <div key="config" id="tour-config" className="overflow-hidden rounded-lg flex flex-col">
+              <SessionManager
                 lang={lang}
-                tcpConnectionStatus={tcpConnectionStatus}
-                tcpServerStatus={tcpServerStatus}
-                tcpServerClients={tcpServerClients}
-                onRefresh={handleRefreshPorts}
+                receiveMode={receiveMode}
+                portFilterMode={settings.portFilterMode ?? "default"}
+                mockSerial={settings.mockSerial}
+                config={config}
                 onConfigChange={setConfig}
-                onOpen={openPort}
-                onClose={closePort}
               />
             </div>
 
@@ -1340,7 +1331,7 @@ function App() {
         allowMultiInstance={settings.allowMultiInstance}
         timestampFormat={settings.timestampFormat}
         logRetentionDays={settings.logRetentionDays}
-        portFilterMode={settings.portFilterMode}
+        portFilterMode={settings.portFilterMode ?? "default"}
         cloudServerUrl={settings.cloudServerUrl}
         cloudAuthToken={settings.cloudAuthToken}
         cloudUploaderName={settings.cloudUploaderName}

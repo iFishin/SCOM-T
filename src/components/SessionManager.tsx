@@ -1,53 +1,23 @@
 import { useCallback } from "react";
-import type { SerialConfig, ReceiveMode, SendMode, SerialLogEntry, PortSummary, TcpClientInfo, TcpConnectionStatus, TcpServerStatus } from "../hooks/useSerialPort.ts";
+import { ConfigPanel } from "./ConfigPanel.tsx";
+import { ReceiveLog } from "./ReceiveLog.tsx";
+import { useSerialPort, BAUD_RATES, DATA_BITS_OPTIONS, PARITY_OPTIONS, STOP_BITS_OPTIONS } from "../hooks/useSerialPort.ts";
+import type { ReceiveMode, SerialConfig } from "../hooks/useSerialPort.ts";
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import type { Lang } from "../i18n.ts";
 import { useSessionManager } from "../hooks/useSessionManager.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
-import { SessionPanel } from "./SessionPanel.tsx";
-
-export type SessionData = {
-  ports: PortSummary[];
-  logs: SerialLogEntry[];
-  isConnected: boolean;
-  isBusy: boolean;
-  statusText: string;
-  connectedPort: { path: string; baudRate: number } | null;
-  error: string | null;
-  fileSendProgress: number | null;
-  logCapWarning: boolean;
-  config: SerialConfig;
-  connectionType: string;
-  tcpConnectionStatus: TcpConnectionStatus;
-  tcpServerStatus: TcpServerStatus;
-  tcpServerClients: TcpClientInfo[];
-  latencyMs: number | null;
-  signalStates: { rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean };
-  txBytes: number;
-  rxBytes: number;
-  txRate: number;
-  rxRate: number;
-  latencyHistory: number[];
-  refreshPorts: () => Promise<number>;
-  openPort: () => Promise<void>;
-  closePort: () => Promise<void>;
-  sendData: (value: string, sendMode: SendMode, appendNewline: "" | "\r\n" | "\r" | "\n") => Promise<void>;
-  sendFile: (filePath: string) => Promise<number | void>;
-  clearLogs: () => void;
-  tcpServerBroadcast?: (data: number[]) => Promise<void>;
-  setSignals: (rts: boolean, dtr: boolean) => Promise<void>;
-  getSignalHistory: () => { rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[];
-};
 
 type SessionManagerProps = {
   lang: Lang;
   receiveMode: ReceiveMode;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
-  onSessionData: (data: SessionData) => void;
+  onConfigChange?: (config: SerialConfig) => void;
+  config: SerialConfig;
 };
 
-export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, onSessionData }: SessionManagerProps) {
+export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, onConfigChange, config }: SessionManagerProps) {
   const {
     sessions,
     activeSessionId,
@@ -59,16 +29,27 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
     maxSessions,
   } = useSessionManager();
 
-  const handleSessionData = useCallback((id: string, data: SessionData) => {
-    if (id === activeSessionId) {
-      onSessionData(data);
-    }
-  }, [activeSessionId, onSessionData]);
+  const serial = useSerialPort({
+    config,
+    receiveMode,
+    portFilterMode,
+    mockSerial,
+  });
 
-  // Notify App.tsx of the active session's config changes
-  const handleConfigChange = useCallback((config: SerialConfig) => {
-    updateSessionConfig(activeSessionId, config);
-  }, [activeSessionId, updateSessionConfig]);
+  // Sync config changes from ConfigPanel to session manager
+  const handleConfigChange = useCallback((newConfig: SerialConfig) => {
+    updateSessionConfig(activeSessionId, newConfig);
+    onConfigChange?.(newConfig);
+  }, [activeSessionId, updateSessionConfig, onConfigChange]);
+
+  // When active session changes, update the config in App.tsx
+  const handleSelectSession = useCallback((id: string) => {
+    const session = sessions.find((s) => s.id === id);
+    if (session) {
+      setActive(id);
+      onConfigChange?.(session.config);
+    }
+  }, [sessions, setActive, onConfigChange]);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -77,29 +58,39 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
         activeSessionId={activeSessionId}
         maxSessions={maxSessions}
         lang={lang}
-        onSelect={setActive}
+        onSelect={handleSelectSession}
         onClose={closeSession}
         onCreate={createSession}
         onRename={renameSession}
       />
-      <div className="flex-1 min-h-0 relative">
-        {sessions.map((session) => (
-          <div
-            key={session.id}
-            className="absolute inset-0 flex flex-col min-h-0"
-            style={{ display: session.id === activeSessionId ? "flex" : "none" }}
-          >
-            <SessionPanel
-              session={session}
-              lang={lang}
-              receiveMode={receiveMode}
-              portFilterMode={portFilterMode}
-              mockSerial={mockSerial}
-              onConfigChange={handleConfigChange}
-              onData={(data) => handleSessionData(session.id, data)}
-            />
-          </div>
-        ))}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <ConfigPanel
+          ports={serial.ports}
+          config={config}
+          baudRates={BAUD_RATES}
+          dataBitsOptions={DATA_BITS_OPTIONS}
+          parityOptions={PARITY_OPTIONS}
+          stopBitsOptions={STOP_BITS_OPTIONS}
+          isConnected={serial.isConnected}
+          isBusy={serial.isBusy}
+          lang={lang}
+          tcpConnectionStatus={serial.tcpConnectionStatus}
+          tcpServerStatus={serial.tcpServerStatus}
+          tcpServerClients={serial.tcpServerClients}
+          onRefresh={() => { serial.refreshPorts(); return Promise.resolve(); }}
+          onConfigChange={handleConfigChange}
+          onOpen={serial.openPort}
+          onClose={serial.closePort}
+          onSetSignals={serial.setSignals}
+        />
+        <ReceiveLog
+          logs={serial.logs}
+          lang={lang}
+          logCapWarning={serial.logCapWarning}
+          onClearAll={() => serial.clearLogs("all")}
+          onClearReceived={() => serial.clearLogs("received")}
+          onClearSent={() => serial.clearLogs("sent")}
+        />
       </div>
     </div>
   );
