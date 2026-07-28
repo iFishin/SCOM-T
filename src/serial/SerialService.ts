@@ -9,6 +9,7 @@ import {
 import type { SerialConfig, PortSummary } from "./types.ts";
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import { normalizePluginPayload } from "../utils/hexConverter.ts";
+import { appLogger } from "../utils/appLogger.ts";
 
 // ── Mapping helpers (internal) ──
 
@@ -97,6 +98,7 @@ export class TauriSerialService implements ISerialService {
   private disconnectCallback: (() => void) | null = null;
   /** internal listener reference for cleanup */
   private unlistenData: (() => void) | null = null;
+  private writeQueue: Promise<void> = Promise.resolve();
 
   get isOpen(): boolean {
     return this.port !== null;
@@ -197,14 +199,46 @@ export class TauriSerialService implements ISerialService {
     this._path = null;
   }
 
+  private enqueueWrite(operation: () => Promise<void>): Promise<void> {
+    const queued = this.writeQueue.then(operation, operation);
+    this.writeQueue = queued.catch(() => undefined);
+    return queued;
+  }
+
+  private async writeAll(data: number[]): Promise<void> {
+    const port = this.port;
+    if (!port) throw new Error("串口未打开，无法发送数据。");
+
+    const startedAt = performance.now();
+    let offset = 0;
+    let calls = 0;
+
+    while (offset < data.length) {
+      const remaining = data.length - offset;
+      const written = await port.writeBinary(data.slice(offset));
+      calls += 1;
+      if (!Number.isInteger(written) || written <= 0 || written > remaining) {
+        throw new Error(`串口写入异常：第 ${calls} 次写入返回 ${written}，进度 ${offset}/${data.length} 字节。`);
+      }
+      offset += written;
+    }
+
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    if (calls > 1) {
+      appLogger.warn("Serial", `Partial write recovered: ${data.length} bytes in ${calls} writes (${elapsedMs} ms)`);
+    } else {
+      appLogger.debug("Serial", `Wrote ${data.length} bytes (${elapsedMs} ms)`);
+    }
+  }
+
   async sendBinary(data: number[]): Promise<void> {
     if (!this.port) throw new Error("串口未打开，无法发送数据。");
-    await this.port.writeBinary(data);
+    await this.enqueueWrite(() => this.writeAll(data));
   }
 
   async sendText(text: string): Promise<void> {
-    if (!this.port) throw new Error("串口未打开，无法发送数据。");
-    await this.port.write(text);
+    const bytes = Array.from(new TextEncoder().encode(text));
+    await this.sendBinary(bytes);
   }
 
   async setSignals(rts: boolean, dtr: boolean): Promise<void> {

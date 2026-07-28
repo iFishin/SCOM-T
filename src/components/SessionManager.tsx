@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { ConfigPanel } from "./ConfigPanel.tsx";
 import { ReceiveLog } from "./ReceiveLog.tsx";
 import { useSerialPort, BAUD_RATES, DATA_BITS_OPTIONS, PARITY_OPTIONS, STOP_BITS_OPTIONS } from "../hooks/useSerialPort.ts";
-import type { ReceiveMode, SendMode, SerialConfig } from "../hooks/useSerialPort.ts";
+import type { LogDisplayMode, ReceiveMode, SendMode, SerialConfig } from "../hooks/useSerialPort.ts";
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import type { Lang } from "../i18n.ts";
 import { useSessionManager } from "../hooks/useSessionManager.ts";
@@ -47,6 +47,8 @@ function SessionContent({
   config,
   lang,
   receiveMode,
+  displayMode,
+  onDisplayModeChange,
   portFilterMode,
   mockSerial,
   onConfigChange,
@@ -57,6 +59,8 @@ function SessionContent({
   config: SerialConfig;
   lang: Lang;
   receiveMode: ReceiveMode;
+  displayMode: LogDisplayMode;
+  onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
   onConfigChange: (config: SerialConfig) => void;
@@ -137,6 +141,8 @@ function SessionContent({
         logs={serial.logs}
         lang={lang}
         logCapWarning={serial.logCapWarning}
+        displayMode={displayMode}
+        onDisplayModeChange={onDisplayModeChange}
         onClearAll={() => serial.clearLogs("all")}
         onClearReceived={() => serial.clearLogs("received")}
         onClearSent={() => serial.clearLogs("sent")}
@@ -150,12 +156,22 @@ function SessionContent({
 type SessionManagerProps = {
   lang: Lang;
   receiveMode: ReceiveMode;
+  displayMode: LogDisplayMode;
+  onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
   onActiveSessionData?: (data: ActiveSessionData) => void;
 };
 
-export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, onActiveSessionData }: SessionManagerProps) {
+export function SessionManager({
+  lang,
+  receiveMode,
+  displayMode,
+  onDisplayModeChange,
+  portFilterMode,
+  mockSerial,
+  onActiveSessionData,
+}: SessionManagerProps) {
   const {
     sessions,
     activeSessionId,
@@ -212,6 +228,8 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
                 config={session.config}
                 lang={lang}
                 receiveMode={receiveMode}
+                displayMode={displayMode}
+                onDisplayModeChange={onDisplayModeChange}
                 portFilterMode={portFilterMode}
                 mockSerial={mockSerial}
                 onConfigChange={(config) => handleConfigChange(session.id, config)}

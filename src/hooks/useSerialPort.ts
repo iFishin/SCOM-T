@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { bytesToAscii, bytesToHex, formatTimestamp, parseHexString } from "../utils/hexConverter.ts";
+import { bytesToAscii, bytesToHex, formatTimestamp } from "../utils/hexConverter.ts";
+import { encodeSendPayload } from "../utils/sendPayload.ts";
 import { appLogger } from "../utils/appLogger.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
@@ -751,55 +752,28 @@ export function useSerialPort({
 
     const s = serialRef.current;
     if (!s) {
-      setError("串口未打开，无法发送数据。");
-      return;
+      const notOpenError = new Error("串口未打开，无法发送数据。");
+      setError(notOpenError.message);
+      throw notOpenError;
     }
 
     setIsBusy(true);
     setError(null);
 
     try {
-      if (sendMode === "hex") {
-        const newlineBytes = appendNewline
-          ? Array.from(new TextEncoder().encode(appendNewline))
-          : [];
-        let bytes: number[] = [];
-
-        const hasPayload = (value || "").replace(/\s+/g, "") !== "";
-        if (hasPayload) {
-          const parsed = parseHexString(value);
-          bytes = parsed.concat(newlineBytes);
-        } else if (newlineBytes.length > 0) {
-          bytes = newlineBytes;
-        }
-
-        if (!bytes || bytes.length === 0) {
-          throw new Error("发送内容不能为空。");
-        }
-
-        appendLog({
-          direction: "sent",
-          mode: sendMode,
-          payload: bytesToHex(bytes),
-        });
-        txBytesRef.current += bytes.length;
-        await s.sendBinary(bytes);
-      } else {
-        const finalValue = `${value}${appendNewline}`;
-        if (!finalValue) {
-          throw new Error("发送内容不能为空。");
-        }
-
-        appendLog({
-          direction: "sent",
-          mode: sendMode,
-          payload: finalValue,
-        });
-        txBytesRef.current += new TextEncoder().encode(finalValue).length;
-        await s.sendText(finalValue);
-      }
+      const bytes = encodeSendPayload(value, sendMode, appendNewline);
+      await s.sendBinary(bytes);
+      txBytesRef.current += bytes.length;
+      appendLog({
+        direction: "sent",
+        mode: sendMode,
+        payload: sendMode === "hex"
+          ? bytesToHex(bytes)
+          : new TextDecoder().decode(new Uint8Array(bytes)),
+      });
     } catch (sendError) {
       setError(`发送失败：${toMessage(sendError)}`);
+      throw sendError;
     } finally {
       setIsBusy(false);
     }
@@ -812,43 +786,24 @@ export function useSerialPort({
   ) {
     setError(null);
     try {
-      let bytes: number[];
-
-      if (sendMode === "hex") {
-        const newlineBytes = appendNewline
-          ? Array.from(new TextEncoder().encode(appendNewline))
-          : [];
-        const hasPayload = (value || "").replace(/\s+/g, "") !== "";
-        if (hasPayload) {
-          bytes = parseHexString(value).concat(newlineBytes);
-        } else if (newlineBytes.length > 0) {
-          bytes = newlineBytes;
-        } else {
-          throw new Error("发送内容不能为空。");
-        }
-      } else {
-        const finalValue = `${value}${appendNewline}`;
-        if (!finalValue) throw new Error("发送内容不能为空。");
-        bytes = Array.from(new TextEncoder().encode(finalValue));
-      }
-
-      appendLog({
-        direction: "sent",
-        mode: sendMode,
-        payload:
-          sendMode === "hex"
-            ? bytesToHex(bytes)
-            : new TextDecoder().decode(new Uint8Array(bytes)),
-      });
+      const bytes = encodeSendPayload(value, sendMode, appendNewline);
 
       if (!tcpClientRef.current) {
         throw new Error("TCP 未连接");
       }
       lastTcpSendRef.current = Date.now();
-      txBytesRef.current += bytes.length;
       await tcpClientRef.current.send(bytes);
+      txBytesRef.current += bytes.length;
+      appendLog({
+        direction: "sent",
+        mode: sendMode,
+        payload: sendMode === "hex"
+          ? bytesToHex(bytes)
+          : new TextDecoder().decode(new Uint8Array(bytes)),
+      });
     } catch (err) {
       setError(`TCP发送失败：${toMessage(err)}`);
+      throw err;
     }
   }
 
@@ -872,14 +827,17 @@ export function useSerialPort({
         throw new Error("文件内容为空。");
       }
 
-      const CHUNK_SIZE = 16;
+      const CHUNK_SIZE = 256;
+      let lastReportedPct = -1;
       for (let offset = 0; offset < total; offset += CHUNK_SIZE) {
-        const chunk = Array.from(bytes.slice(offset, offset + CHUNK_SIZE));
+        const chunk = Array.from(bytes.slice(offset, Math.min(offset + CHUNK_SIZE, total)));
         await s.sendBinary(chunk);
         txBytesRef.current += chunk.length;
-        setFileSendProgress(
-          Math.min(100, Math.round(((offset + CHUNK_SIZE) / total) * 100)),
-        );
+        const pct = Math.min(100, Math.round(((offset + CHUNK_SIZE) / total) * 100));
+        if (pct !== lastReportedPct) {
+          lastReportedPct = pct;
+          setFileSendProgress(pct);
+        }
       }
 
       setFileSendProgress(100);

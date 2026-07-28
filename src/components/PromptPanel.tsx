@@ -321,6 +321,10 @@ export function PromptPanel({
 
       waitingResponsesRef.current.forEach((waiting, rowId) => {
         waiting.receivedBuffer += receivedText;
+        // Cap buffer at 64 KiB to bound memory; keep trailing suffix for cross-chunk matches
+        if (waiting.receivedBuffer.length > 65536) {
+          waiting.receivedBuffer = waiting.receivedBuffer.slice(-4096);
+        }
 
         // Try to match expected responses in order
         while (waiting.matchIndex < waiting.expected.length) {
@@ -426,6 +430,13 @@ export function PromptPanel({
         updatePromptRow(row.id, { status: "success" });
       }
     } catch (error) {
+      // Remove any pending response wait so it does not linger or false-mark success
+      const existing = waitingResponsesRef.current.get(row.id);
+      if (existing) {
+        clearTimeout(existing.timer);
+        waitingResponsesRef.current.delete(row.id);
+        existing.onComplete?.();
+      }
       updatePromptRow(row.id, { status: "error" });
     }
   }
