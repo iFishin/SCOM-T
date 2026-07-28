@@ -10,7 +10,6 @@ import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
-import { ConfigPanel } from "./components/ConfigPanel.tsx";
 import { ConfigPage } from "./components/ConfigPage.tsx";
 import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
 import { MarketplacePage } from "./components/MarketplacePage.tsx";
@@ -38,13 +37,11 @@ import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
 import { t } from "./i18n.ts";
 import {
-  BAUD_RATES,
-  DATA_BITS_OPTIONS,
-  PARITY_OPTIONS,
-  STOP_BITS_OPTIONS,
   useSerialPort,
   type SerialConfig,
 } from "./hooks/useSerialPort.ts";
+import { SessionManager } from "./components/SessionManager.tsx";
+import type { ActiveSessionData } from "./components/SessionManager.tsx";
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
@@ -138,6 +135,7 @@ function App() {
     tcpPort: 23,
     tcpProtocol: "rfc2217",
   });
+  const [sessionData, setSessionData] = useState<ActiveSessionData | null>(null);
 
   const { toasts, pushToast: rawPushToast, removeToast } = useToast();
 
@@ -158,16 +156,29 @@ function App() {
     0.5,
   );
   const {
-    ports, logs, isConnected, isBusy, statusText, connectedPort,
+    logs, isConnected, isBusy, statusText, connectedPort,
     error, fileSendProgress, logCapWarning,
-    refreshPorts, openPort, closePort, sendData, sendFile, clearLogs,
-    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, setSignals, tcpServerBroadcast,
+    refreshPorts, closePort, sendData, sendFile, clearLogs,
+    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, tcpServerBroadcast,
     txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates, getSignalHistory,
   } = useSerialPort({ config, receiveMode, portFilterMode: settings.portFilterMode, mockSerial: settings.mockSerial });
 
+  // ── Use active session data when available (overrides useSerialPort values) ──
+  const activeLogs = sessionData?.logs ?? logs;
+  const activeIsConnected = sessionData?.isConnected ?? isConnected;
+  const activeConnectedPort = sessionData?.connectedPort ?? connectedPort;
+  const activeSendData = sessionData?.sendData ?? sendData;
+  const activeSendFile = (filePath: string) => {
+    const f = sessionData?.sendFile ?? sendFile;
+    return f(filePath) as Promise<void>;
+  };
+  const activeTcpServerBroadcast = sessionData?.tcpServerBroadcast ?? tcpServerBroadcast;
+  const activeTcpClients = sessionData?.tcpServerClients ?? tcpServerClients;
+  const activeError = sessionData?.error ?? error;
+
   const logFile = useLogFile();
   // Sync logs to log file hook via ref (no re-render trigger)
-  useEffect(() => { logFile.syncLogs(logs); }, [logs]);
+  useEffect(() => { logFile.syncLogs(activeLogs); }, [logs]);
 
   // ── Sync timestamp format setting ──
   useEffect(() => {
@@ -183,6 +194,14 @@ function App() {
       appLogger.cleanupOldFiles(days);
     });
   }, [settings.logRetentionDays]);
+
+  const handleActiveSessionData = useCallback((data: ActiveSessionData) => {
+    setSessionData(data);
+    const cp = data.connectedPort;
+    if (cp) {
+      setConfig((prev) => ({ ...prev, path: cp.path, baudRate: cp.baudRate }));
+    }
+  }, []);
 
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
@@ -324,7 +343,7 @@ function App() {
 
   const prevError = useRef<string | null>(null);
   useEffect(() => {
-    if (error && error !== prevError.current) pushToast(error, "error");
+    if (activeError && activeError !== prevError.current) pushToast(activeError, "error");
     prevError.current = error;
   }, [error]);
 
@@ -596,12 +615,6 @@ function App() {
     [lang],
   );
 
-  async function handleRefreshPorts() {
-    const count = await refreshPorts();
-    if (count === 0) pushToast(t("status_no_ports", lang), "warn");
-    else pushToast(t("status_find_ports", lang, count), "success");
-  }
-
   async function handleFileSelect() {
     const selected = await open({ multiple: false, directory: false });
     if (typeof selected === "string" && selected) setFilePath(selected);
@@ -693,24 +706,13 @@ function App() {
               )
             : undefined}
           >
-            <div key="config" id="tour-config" className="overflow-hidden rounded-lg">
-              <ConfigPanel
-                ports={ports}
-                config={config}
-                baudRates={BAUD_RATES}
-                dataBitsOptions={DATA_BITS_OPTIONS}
-                parityOptions={PARITY_OPTIONS}
-                stopBitsOptions={STOP_BITS_OPTIONS}
-                isConnected={isConnected}
-                isBusy={isBusy}
+            <div key="config" id="tour-config" className="overflow-hidden rounded-lg flex flex-col">
+              <SessionManager
                 lang={lang}
-                tcpConnectionStatus={tcpConnectionStatus}
-                tcpServerStatus={tcpServerStatus}
-                tcpServerClients={tcpServerClients}
-                onRefresh={handleRefreshPorts}
-                onConfigChange={setConfig}
-                onOpen={openPort}
-                onClose={closePort}
+                receiveMode={receiveMode}
+                portFilterMode={settings.portFilterMode ?? "default"}
+                mockSerial={settings.mockSerial}
+                onActiveSessionData={handleActiveSessionData}
               />
             </div>
 
@@ -720,7 +722,7 @@ function App() {
                 sendMode={sendMode}
                 appendNewline={appendNewline}
                 receiveMode={receiveMode}
-                isConnected={isConnected}
+                isConnected={activeIsConnected}
                 isBusy={isBusy}
                 hotkeys={settings.hotkeys}
                 filePath={filePath}
@@ -731,10 +733,10 @@ function App() {
                 onSendModeChange={updateSendMode}
                 onReceiveModeChange={updateReceiveMode}
                 onAppendNewlineChange={updateAppendNewline}
-                onSend={() => sendData(message, sendMode, appendNewline)}
+                onSend={() => activeSendData(message, sendMode, appendNewline)}
                 onClearSent={() => clearLogs("sent")}
                 onFileSelect={handleFileSelect}
-                onFileSend={() => sendFile(filePath)}
+                onFileSend={() => activeSendFile(filePath)}
                 onHotkeySend={handleHotkeySend}
                 onPushToast={pushToast}
                 sendPanelExpanded={settings.sendPanelExpanded}
@@ -743,10 +745,10 @@ function App() {
                 onSendPanelExpandedChange={updateSendPanelExpanded}
                 onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
                 onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
-                tcpClientCount={tcpServerClients.length}
+                tcpClientCount={activeTcpClients.length}
                 onBroadcastToClients={(text) => {
                   const bytes = Array.from(new TextEncoder().encode(text));
-                  tcpServerBroadcast?.(bytes);
+                  activeTcpServerBroadcast?.(bytes);
                 }}
               />
             </div>
@@ -757,9 +759,9 @@ function App() {
                 fileSendProgress={fileSendProgress}
                 isBusy={isBusy}
                 lang={lang}
-                isConnected={isConnected}
+                isConnected={activeIsConnected}
                 onFileSelect={handleFileSelect}
-                onFileSend={() => sendFile(filePath)}
+                onFileSend={() => activeSendFile(filePath)}
                 onPushToast={pushToast}
               />
             </div>
@@ -770,7 +772,7 @@ function App() {
 
             <div key="receive" id="tour-receive" className="overflow-hidden flex flex-col rounded-lg">
               <ReceiveLog
-                logs={logs}
+                logs={activeLogs}
                 lang={lang}
                 savePath={logFile.savePath}
                 realTimeLog={logFile.realTime}
@@ -789,7 +791,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -1032,7 +1034,7 @@ function App() {
       {signalOpen && (
         <SignalDialog
           lang={lang}
-          isConnected={isConnected}
+          isConnected={activeIsConnected}
           config={config}
           signalStates={signalStates}
           onClose={() => setSignalOpen(false)}
@@ -1041,7 +1043,7 @@ function App() {
       {trafficOpen && (
         <TrafficDialog
           lang={lang}
-          isConnected={isConnected}
+          isConnected={activeIsConnected}
           txBytes={txBytes}
           rxBytes={rxBytes}
           txRate={txRate}
@@ -1052,18 +1054,18 @@ function App() {
       {healthOpen && (
         <HealthDialog
           lang={lang}
-          isConnected={isConnected}
+          isConnected={activeIsConnected}
           connectionType={config.connectionType}
           latencyMs={latencyMs}
           latencyHistory={latencyHistory}
-          connectedPort={connectedPort}
+          connectedPort={activeConnectedPort}
           onClose={() => setHealthOpen(false)}
         />
       )}
       {waveformOpen && (
         <WaveformDialog
           lang={lang}
-          isConnected={isConnected}
+          isConnected={activeIsConnected}
           getSignalHistory={getSignalHistory}
           onClose={() => setWaveformOpen(false)}
         />
@@ -1137,66 +1139,17 @@ function App() {
                   </div>
                 </div>
               ) : (
-                <div id="tour-config" className="shrink-0 rounded-lg bg-[var(--bg-surface)]">
-                  <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-                    {lang === "zh" ? "配置" : "Config"}
-                  </div>
-                  <ConfigPanel
-                    ports={ports}
-                    config={config}
-                    baudRates={BAUD_RATES}
-                    dataBitsOptions={DATA_BITS_OPTIONS}
-                    parityOptions={PARITY_OPTIONS}
-                    stopBitsOptions={STOP_BITS_OPTIONS}
-                    isConnected={isConnected}
-                    isBusy={isBusy}
+                <div id="tour-config" className="flex flex-col min-h-0 flex-1 rounded-lg bg-[var(--bg-surface)] overflow-hidden">
+                  <SessionManager
                     lang={lang}
-                    tcpConnectionStatus={tcpConnectionStatus}
-                    tcpServerStatus={tcpServerStatus}
-                    tcpServerClients={tcpServerClients}
-                    onRefresh={handleRefreshPorts}
-                    onConfigChange={setConfig}
-                    onOpen={openPort}
-                    onClose={closePort}
-                    onSetSignals={setSignals}
+                    receiveMode={receiveMode}
+                    portFilterMode={settings.portFilterMode ?? "default"}
+                    mockSerial={settings.mockSerial}
+                    onActiveSessionData={handleActiveSessionData}
                   />
                 </div>
               )}
 
-              {/* Collapse divider for config card — only when expanded */}
-              {!topCollapsed && (
-                <div className="group relative flex h-4 shrink-0 items-center justify-center">
-                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-[var(--border)]" />
-                  <button
-                    type="button"
-                    onClick={() => updateTopCollapsed(true)}
-                    className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                    title={lang === "zh" ? "折叠配置" : "Collapse Config"}
-                  >
-                    <ChevronUp size={10} />
-                  </button>
-                </div>
-              )}
-
-              {/* Receive log */}
-              <div id="tour-receive" className="min-h-0 flex-1 flex flex-col pt-2">
-                <ReceiveLog
-                  logs={logs}
-                  lang={lang}
-                  savePath={logFile.savePath}
-                  realTimeLog={logFile.realTime}
-                  logCapWarning={logCapWarning}
-                  onClearAll={() => clearLogs("all")}
-                  onClearReceived={() => clearLogs("received")}
-                  onClearSent={() => clearLogs("sent")}
-                  displayMode={settings.displayMode ?? "card"}
-                  onDisplayModeChange={updateDisplayMode}
-                  onSelectLogFile={logFile.selectLogFile}
-                  onToggleRealTime={() => logFile.setRealTime((v) => !v)}
-                  onFlushLogs={() => logFile.flushAll(logs)}
-                  onCloseLogFile={logFile.closeLogFile}
-                />
-              </div>
             </div>
 
             {/* Drag handle + collapse button for right column */}
@@ -1247,7 +1200,7 @@ function App() {
                       sendMode={sendMode}
                       appendNewline={appendNewline}
                       receiveMode={receiveMode}
-                      isConnected={isConnected}
+                      isConnected={activeIsConnected}
                       isBusy={isBusy}
                       hotkeys={settings.hotkeys}
                       filePath={filePath}
@@ -1258,10 +1211,10 @@ function App() {
                       onSendModeChange={updateSendMode}
                       onReceiveModeChange={updateReceiveMode}
                       onAppendNewlineChange={updateAppendNewline}
-                      onSend={() => sendData(message, sendMode, appendNewline)}
+                      onSend={() => activeSendData(message, sendMode, appendNewline)}
                       onClearSent={() => clearLogs("sent")}
                       onFileSelect={handleFileSelect}
-                      onFileSend={() => sendFile(filePath)}
+                      onFileSend={() => activeSendFile(filePath)}
                       onHotkeySend={handleHotkeySend}
                       onPushToast={pushToast}
                       sendPanelExpanded={settings.sendPanelExpanded}
@@ -1270,10 +1223,10 @@ function App() {
                       onSendPanelExpandedChange={updateSendPanelExpanded}
                       onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
                       onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
-                      tcpClientCount={tcpServerClients.length}
+                      tcpClientCount={activeTcpClients.length}
                       onBroadcastToClients={(text) => {
                         const bytes = Array.from(new TextEncoder().encode(text));
-                        tcpServerBroadcast?.(bytes);
+                        activeTcpServerBroadcast?.(bytes);
                       }}
                     />
                   )}
@@ -1310,7 +1263,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={isConnected} sendData={sendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={logs} tcpServerBroadcast={tcpServerBroadcast} tcpClientCount={tcpServerClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}
@@ -1321,7 +1274,7 @@ function App() {
       {/* ── Status bar ── */}
       <div className="shrink-0 px-2 pb-2">
         <StatusBar
-          isConnected={isConnected}
+          isConnected={activeIsConnected}
           statusText={statusText}
           currentPortLabel={currentPortLabel}
           latencyMs={latencyMs}
@@ -1340,7 +1293,7 @@ function App() {
         allowMultiInstance={settings.allowMultiInstance}
         timestampFormat={settings.timestampFormat}
         logRetentionDays={settings.logRetentionDays}
-        portFilterMode={settings.portFilterMode}
+        portFilterMode={settings.portFilterMode ?? "default"}
         cloudServerUrl={settings.cloudServerUrl}
         cloudAuthToken={settings.cloudAuthToken}
         cloudUploaderName={settings.cloudUploaderName}
