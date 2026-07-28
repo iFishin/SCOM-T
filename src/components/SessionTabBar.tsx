@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { Lang } from "../i18n";
 import type { SerialSession } from "../hooks/useSessionManager";
@@ -26,6 +26,7 @@ export function SessionTabBar({
   onRename,
 }: SessionTabBarProps) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
 
   function handleContextMenu(e: React.MouseEvent, sessionId: string) {
     e.preventDefault();
@@ -37,14 +38,7 @@ export function SessionTabBar({
       id: "rename",
       label: lang === "zh" ? "重命名" : "Rename",
       onClick: () => {
-        const session = sessions.find((s) => s.id === ctxMenu.sessionId);
-        if (session) {
-          const newName = window.prompt(
-            lang === "zh" ? `重命名会话「${session.name}」:` : `Rename session "${session.name}":`,
-            session.name
-          );
-          if (newName && newName.trim()) onRename(ctxMenu.sessionId, newName.trim());
-        }
+        setEditingSessionId(ctxMenu.sessionId);
         setCtxMenu(null);
       },
     },
@@ -70,7 +64,13 @@ export function SessionTabBar({
           lang={lang}
           onSelect={() => onSelect(session.id)}
           onClose={() => onClose(session.id)}
-          onRename={(name) => onRename(session.id, name)}
+          isEditing={editingSessionId === session.id}
+          onStartRename={() => setEditingSessionId(session.id)}
+          onCommitRename={(name) => {
+            onRename(session.id, name);
+            setEditingSessionId(null);
+          }}
+          onCancelRename={() => setEditingSessionId(null)}
           onContextMenu={(e) => handleContextMenu(e, session.id)}
         />
       ))}
@@ -103,7 +103,10 @@ function SessionTab({
   lang,
   onSelect,
   onClose,
-  onRename,
+  isEditing,
+  onStartRename,
+  onCommitRename,
+  onCancelRename,
   onContextMenu,
 }: {
   session: SerialSession;
@@ -112,9 +115,35 @@ function SessionTab({
   lang: Lang;
   onSelect: () => void;
   onClose: () => void;
-  onRename: (name: string) => void;
+  isEditing: boolean;
+  onStartRename: () => void;
+  onCommitRename: (name: string) => void;
+  onCancelRename: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
+  const [draftName, setDraftName] = useState(session.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    cancelledRef.current = false;
+    setDraftName(session.name);
+    requestAnimationFrame(() => inputRef.current?.select());
+  }, [isEditing, session.name]);
+
+  function commitRename() {
+    if (cancelledRef.current) return;
+    cancelledRef.current = true;
+    const name = draftName.trim();
+    if (name) onCommitRename(name);
+    else onCancelRename();
+  }
+
+  function stopEditEvent(e: React.SyntheticEvent) {
+    e.stopPropagation();
+  }
+
   return (
     <div
       className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors shrink-0 border-r border-[var(--border)] ${
@@ -122,18 +151,39 @@ function SessionTab({
           ? "bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold"
           : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
       }`}
-      onClick={onSelect}
+      onClick={() => { if (!isEditing) onSelect(); }}
       onContextMenu={onContextMenu}
-      onDoubleClick={() => {
-        const newName = window.prompt(
-          lang === "zh" ? `重命名会话「${session.name}」:` : `Rename session "${session.name}":`,
-          session.name
-        );
-        if (newName && newName.trim()) onRename(newName.trim());
-      }}
+      onDoubleClick={() => { if (!isEditing) onStartRename(); }}
     >
-      <span className="truncate max-w-[80px]">{session.name}</span>
-      {canClose && (
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={draftName}
+          autoFocus
+          aria-label={lang === "zh" ? "重命名会话" : "Rename session"}
+          onChange={(e) => setDraftName(e.currentTarget.value)}
+          onMouseDown={stopEditEvent}
+          onClick={stopEditEvent}
+          onDoubleClick={stopEditEvent}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitRename();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancelledRef.current = true;
+              onCancelRename();
+            }
+          }}
+          className="h-5 w-20 min-w-10 rounded border border-[var(--border-focus)] bg-[var(--bg-input)] px-1 text-[11px] font-semibold text-[var(--text-primary)] outline-none shadow-[var(--shadow-focus)]"
+        />
+      ) : (
+        <span className="truncate max-w-[80px]" title={session.name}>{session.name}</span>
+      )}
+      {canClose && !isEditing && (
         <button
           type="button"
           onClick={(e) => {

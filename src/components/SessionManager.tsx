@@ -11,6 +11,7 @@ import { SessionTabBar } from "./SessionTabBar.tsx";
 // ── Types ──
 
 export type ActiveSessionData = {
+  config: SerialConfig;
   logs: import("../hooks/useSerialPort.ts").SerialLogEntry[];
   isConnected: boolean;
   isBusy: boolean;
@@ -37,7 +38,7 @@ export type ActiveSessionData = {
   clearLogs: (target: "all" | "received" | "sent") => void;
   refreshPorts: () => Promise<number>;
   setSignals: (rts: boolean, dtr: boolean) => Promise<void>;
-  getSignalHistory: () => { rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[];
+  getSignalHistory: () => { time: number; rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[];
 };
 
 // ── SessionContent: each session has its own serial port ──
@@ -50,6 +51,8 @@ function SessionContent({
   mockSerial,
   onConfigChange,
   onDataRef,
+  isActive,
+  onActiveData,
 }: {
   config: SerialConfig;
   lang: Lang;
@@ -58,12 +61,15 @@ function SessionContent({
   mockSerial?: MockSerialConfig;
   onConfigChange: (config: SerialConfig) => void;
   onDataRef: React.MutableRefObject<ActiveSessionData | null>;
+  isActive: boolean;
+  onActiveData?: (data: ActiveSessionData) => void;
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
 
   // Keep the ref up-to-date with the latest serial data
   useEffect(() => {
-    onDataRef.current = {
+    const data: ActiveSessionData = {
+      config,
       logs: serial.logs,
       isConnected: serial.isConnected,
       isBusy: serial.isBusy,
@@ -92,16 +98,16 @@ function SessionContent({
       setSignals: serial.setSignals,
       getSignalHistory: serial.getSignalHistory,
     };
+    onDataRef.current = data;
+    if (isActive) onActiveData?.(data);
   }, [
-    serial.logs, serial.isConnected, serial.isBusy, serial.statusText,
+    config, serial.logs, serial.isConnected, serial.isBusy, serial.statusText,
     serial.connectedPort, serial.error, serial.fileSendProgress,
     serial.logCapWarning, serial.ports, serial.tcpConnectionStatus,
     serial.tcpServerStatus, serial.tcpServerClients, serial.latencyMs,
-    serial.tcpServerBroadcast, serial.txBytes, serial.rxBytes,
-    serial.txRate, serial.rxRate, serial.latencyHistory, serial.signalStates,
-    serial.sendData, serial.sendFile, serial.closePort, serial.clearLogs,
-    serial.refreshPorts, serial.setSignals, serial.getSignalHistory,
-    config.rts, config.dtr, onDataRef,
+    serial.txBytes, serial.rxBytes, serial.txRate, serial.rxRate,
+    serial.latencyHistory, serial.signalStates, isActive, onActiveData,
+    onDataRef,
   ]);
 
   return (
@@ -127,16 +133,14 @@ function SessionContent({
           onSetSignals={serial.setSignals}
         />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <ReceiveLog
-          logs={serial.logs}
-          lang={lang}
-          logCapWarning={serial.logCapWarning}
-          onClearAll={() => serial.clearLogs("all")}
-          onClearReceived={() => serial.clearLogs("received")}
-          onClearSent={() => serial.clearLogs("sent")}
-        />
-      </div>
+      <ReceiveLog
+        logs={serial.logs}
+        lang={lang}
+        logCapWarning={serial.logCapWarning}
+        onClearAll={() => serial.clearLogs("all")}
+        onClearReceived={() => serial.clearLogs("received")}
+        onClearSent={() => serial.clearLogs("sent")}
+      />
     </div>
   );
 }
@@ -212,6 +216,8 @@ export function SessionManager({ lang, receiveMode, portFilterMode, mockSerial, 
                 mockSerial={mockSerial}
                 onConfigChange={(config) => handleConfigChange(session.id, config)}
                 onDataRef={sessionDataRefs.current[session.id]}
+                isActive={session.id === activeSessionId}
+                onActiveData={onActiveSessionData}
               />
             </div>
           );

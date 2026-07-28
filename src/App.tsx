@@ -36,14 +36,18 @@ import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
 import { t } from "./i18n.ts";
-import {
-  useSerialPort,
-  type SerialConfig,
-} from "./hooks/useSerialPort.ts";
+import type { SerialConfig } from "./hooks/useSerialPort.ts";
 import { SessionManager } from "./components/SessionManager.tsx";
 import type { ActiveSessionData } from "./components/SessionManager.tsx";
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
+const EMPTY_SIGNAL_STATES = { rts: false, dtr: false, cts: false, dsr: false, cd: false, ri: false };
+const noopAsync = async () => {};
+const noopRefresh = async () => 0;
+const noopClearLogs = () => {};
+const noopSendData = async (_value: string, _sendMode: import("./hooks/useSerialPort.ts").SendMode, _appendNewline: "" | "\r\n" | "\r" | "\n") => {};
+const noopSendFile = async (_filePath: string): Promise<number | void> => {};
+const noopSignalHistory = () => [];
 
 function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
   const [tick, setTick] = useState(0);
@@ -121,20 +125,6 @@ function App() {
   const [codecOpen, setCodecOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [filePath, setFilePath] = useState("");
-  const [config, setConfig] = useState<SerialConfig>({
-    path: "",
-    baudRate: 115200,
-    dataBits: "8",
-    parity: "none",
-    stopBits: "1",
-    flowControl: "none",
-    rts: false,
-    dtr: false,
-    connectionType: "serial",
-    tcpHost: "",
-    tcpPort: 23,
-    tcpProtocol: "rfc2217",
-  });
   const [sessionData, setSessionData] = useState<ActiveSessionData | null>(null);
 
   const { toasts, pushToast: rawPushToast, removeToast } = useToast();
@@ -155,30 +145,51 @@ function App() {
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
     0.5,
   );
-  const {
-    logs, isConnected, isBusy, statusText, connectedPort,
-    error, fileSendProgress, logCapWarning,
-    refreshPorts, closePort, sendData, sendFile, clearLogs,
-    tcpConnectionStatus, tcpServerStatus, tcpServerClients, latencyMs, tcpServerBroadcast,
-    txBytes, rxBytes, txRate, rxRate, latencyHistory, signalStates, getSignalHistory,
-  } = useSerialPort({ config, receiveMode, portFilterMode: settings.portFilterMode, mockSerial: settings.mockSerial });
-
-  // ── Use active session data when available (overrides useSerialPort values) ──
-  const activeLogs = sessionData?.logs ?? logs;
-  const activeIsConnected = sessionData?.isConnected ?? isConnected;
-  const activeConnectedPort = sessionData?.connectedPort ?? connectedPort;
-  const activeSendData = sessionData?.sendData ?? sendData;
-  const activeSendFile = (filePath: string) => {
-    const f = sessionData?.sendFile ?? sendFile;
-    return f(filePath) as Promise<void>;
+  // ── The active tab is the only app-level serial data source ──
+  const config: SerialConfig = sessionData?.config ?? {
+    path: "", baudRate: 115200, dataBits: "8", parity: "none", stopBits: "1",
+    flowControl: "none", rts: false, dtr: false, connectionType: "serial",
+    tcpHost: "", tcpPort: 23, tcpProtocol: "rfc2217",
   };
-  const activeTcpServerBroadcast = sessionData?.tcpServerBroadcast ?? tcpServerBroadcast;
-  const activeTcpClients = sessionData?.tcpServerClients ?? tcpServerClients;
-  const activeError = sessionData?.error ?? error;
+  const logs = sessionData?.logs ?? [];
+  const isConnected = sessionData?.isConnected ?? false;
+  const isBusy = sessionData?.isBusy ?? false;
+  const statusText = sessionData?.statusText ?? "未连接";
+  const connectedPort = sessionData?.connectedPort ?? null;
+  const error = sessionData?.error ?? null;
+  const fileSendProgress = sessionData?.fileSendProgress ?? null;
+  const logCapWarning = sessionData?.logCapWarning ?? false;
+  const refreshPorts = sessionData?.refreshPorts ?? noopRefresh;
+  const closePort = sessionData?.closePort ?? noopAsync;
+  const sendData = sessionData?.sendData ?? noopSendData;
+  const sendFile = sessionData?.sendFile ?? noopSendFile;
+  const clearLogs = sessionData?.clearLogs ?? noopClearLogs;
+  const tcpConnectionStatus = sessionData?.tcpConnectionStatus ?? "disconnected";
+  const tcpServerStatus = sessionData?.tcpServerStatus ?? "stopped";
+  const tcpServerClients = sessionData?.tcpServerClients ?? [];
+  const latencyMs = sessionData?.latencyMs ?? null;
+  const tcpServerBroadcast = sessionData?.tcpServerBroadcast;
+  const txBytes = sessionData?.txBytes ?? 0;
+  const rxBytes = sessionData?.rxBytes ?? 0;
+  const txRate = sessionData?.txRate ?? 0;
+  const rxRate = sessionData?.rxRate ?? 0;
+  const latencyHistory = sessionData?.latencyHistory ?? [];
+  const signalStates = sessionData?.signalStates ?? EMPTY_SIGNAL_STATES;
+  const getSignalHistory = sessionData?.getSignalHistory ?? noopSignalHistory;
+
+  const activeLogs = logs;
+  const activeIsConnected = isConnected;
+  const activeConnectedPort = connectedPort;
+  const activeSendData = sendData;
+  const activeSendFile = async (selectedFilePath: string): Promise<void> => {
+    await sendFile(selectedFilePath);
+  };
+  const activeTcpServerBroadcast = tcpServerBroadcast;
+  const activeTcpClients = tcpServerClients;
+  const activeError = error;
 
   const logFile = useLogFile();
-  // Sync logs to log file hook via ref (no re-render trigger)
-  useEffect(() => { logFile.syncLogs(activeLogs); }, [logs]);
+  useEffect(() => { logFile.syncLogs(activeLogs); }, [activeLogs]);
 
   // ── Sync timestamp format setting ──
   useEffect(() => {
@@ -197,10 +208,6 @@ function App() {
 
   const handleActiveSessionData = useCallback((data: ActiveSessionData) => {
     setSessionData(data);
-    const cp = data.connectedPort;
-    if (cp) {
-      setConfig((prev) => ({ ...prev, path: cp.path, baudRate: cp.baudRate }));
-    }
   }, []);
 
   // ── Log viewer ──
@@ -344,8 +351,8 @@ function App() {
   const prevError = useRef<string | null>(null);
   useEffect(() => {
     if (activeError && activeError !== prevError.current) pushToast(activeError, "error");
-    prevError.current = error;
-  }, [error]);
+    prevError.current = activeError;
+  }, [activeError, pushToast]);
 
   // ── Native event prevention & custom context menu ──
 
@@ -624,19 +631,19 @@ function App() {
     if (hotkey.actionType === "builtin") {
       switch (hotkey.builtinAction) {
         case "clear_log":
-          clearLogs("all");
+          clearLogs?.("all");
           return;
         case "clear_sent":
-          clearLogs("sent");
+          clearLogs?.("sent");
           return;
         case "clear_received":
-          clearLogs("received");
+          clearLogs?.("received");
           return;
         case "refresh_ports":
-          void refreshPorts().then((count) => pushToast(t("status_find_ports", lang, count), "success"));
+          void refreshPorts?.().then((count) => pushToast(t("status_find_ports", lang, count), "success"));
           return;
         case "close_port":
-          if (isConnected) closePort();
+          if (isConnected) void closePort?.();
           return;
         default:
           pushToast(`${hotkey.label}: ${t("hotkey_no_action", lang)}`, "warn");
@@ -649,7 +656,7 @@ function App() {
       return;
     }
 
-    void sendData(hotkey.command, hotkey.sendMode, hotkey.appendNewline);
+    void sendData?.(hotkey.command, hotkey.sendMode, hotkey.appendNewline);
   }
 
   // ── Window controls for custom title bar ──
@@ -733,7 +740,7 @@ function App() {
                 onSendModeChange={updateSendMode}
                 onReceiveModeChange={updateReceiveMode}
                 onAppendNewlineChange={updateAppendNewline}
-                onSend={() => activeSendData(message, sendMode, appendNewline)}
+                onSend={() => activeSendData?.(message, sendMode, appendNewline)}
                 onClearSent={() => clearLogs("sent")}
                 onFileSelect={handleFileSelect}
                 onFileSend={() => activeSendFile(filePath)}
@@ -1211,7 +1218,7 @@ function App() {
                       onSendModeChange={updateSendMode}
                       onReceiveModeChange={updateReceiveMode}
                       onAppendNewlineChange={updateAppendNewline}
-                      onSend={() => activeSendData(message, sendMode, appendNewline)}
+                      onSend={() => activeSendData?.(message, sendMode, appendNewline)}
                       onClearSent={() => clearLogs("sent")}
                       onFileSelect={handleFileSelect}
                       onFileSend={() => activeSendFile(filePath)}

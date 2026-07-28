@@ -60,6 +60,23 @@ export type SerialConfig = {
   tcpProtocol: TcpProtocol;
 };
 
+// A plugin read event is keyed only by serial path, so only one hook may own a
+// real port at a time. Mock ports are independent and do not use this registry.
+const serialPortOwners = new Map<string, symbol>();
+
+function claimSerialPort(path: string, owner: symbol): boolean {
+  const currentOwner = serialPortOwners.get(path);
+  if (currentOwner && currentOwner !== owner) return false;
+  serialPortOwners.set(path, owner);
+  return true;
+}
+
+function releaseSerialPort(path: string | null, owner: symbol): void {
+  if (path && serialPortOwners.get(path) === owner) {
+    serialPortOwners.delete(path);
+  }
+}
+
 // ── Hook ──
 
 export function useSerialPort({
@@ -74,6 +91,8 @@ export function useSerialPort({
   mockSerial?: MockSerialConfig;
 }) {
   const serialRef = useRef<ISerialService | null>(null);
+  const portOwnerRef = useRef(Symbol("serial-session"));
+  const claimedPortRef = useRef<string | null>(null);
   const tcpClientRef = useRef<ITcpClientService | null>(null);
   const tcpServerRef = useRef<ITcpServerService | null>(null);
   const receiveModeRef = useRef(receiveMode);
@@ -308,6 +327,7 @@ export function useSerialPort({
       serialRef.current.onDisconnect(() => {
         flushLineBuffer(); // flush any remaining buffered data
         serialRef.current = null;
+        releaseClaimedPort();
         setIsConnected(false);
         setConnectedPort(null);
         setStatusText("串口已断开");
@@ -432,6 +452,21 @@ export function useSerialPort({
     return tcpServerRef.current;
   }
 
+  function releaseClaimedPort() {
+    releaseSerialPort(claimedPortRef.current, portOwnerRef.current);
+    claimedPortRef.current = null;
+  }
+
+  function claimConfiguredPort(path: string): boolean {
+    if (isMockPort(path)) return true;
+    if (claimedPortRef.current && claimedPortRef.current !== path) {
+      releaseClaimedPort();
+    }
+    if (!claimSerialPort(path, portOwnerRef.current)) return false;
+    claimedPortRef.current = path;
+    return true;
+  }
+
   function cleanupServices() {
     flushPendingLogs(); // flush any pending log entries before cleanup
     // Flush and clean up line buffer
@@ -451,6 +486,7 @@ export function useSerialPort({
       serialRef.current.dispose().catch(() => undefined);
       serialRef.current = null;
     }
+    releaseClaimedPort();
   }
 
   // ── Port scanning ──
@@ -565,6 +601,12 @@ export function useSerialPort({
       setIsBusy(true);
       setError(null);
       try {
+        if (!config.path) {
+          throw new Error("请先选择串口。");
+        }
+        if (!claimConfiguredPort(config.path)) {
+          throw new Error(`串口 ${config.path} 已被其他标签占用，请先关闭该标签中的连接。`);
+        }
         await getSerial(config.path).open({
           path: config.path,
           baudRate: config.baudRate,
@@ -579,6 +621,14 @@ export function useSerialPort({
           await getTcpServer().start(config.tcpPort, config.tcpProtocol);
         }
       } catch (err) {
+        if (serialRef.current) {
+          await serialRef.current.close().catch(() => undefined);
+          serialRef.current = null;
+        }
+        releaseClaimedPort();
+        setIsConnected(false);
+        setConnectedPort(null);
+        setTcpServerStatus("stopped");
         setError(`启动失败：${toMessage(err)}`);
       } finally {
         setIsBusy(false);
@@ -592,6 +642,9 @@ export function useSerialPort({
     try {
       if (!config.path) {
         throw new Error("请先选择串口。");
+      }
+      if (!claimConfiguredPort(config.path)) {
+        throw new Error(`串口 ${config.path} 已被其他标签占用，请先关闭该标签中的连接。`);
       }
 
       await getSerial(config.path).open({
@@ -609,6 +662,7 @@ export function useSerialPort({
       setConnectedPort({ path: config.path, baudRate: config.baudRate });
       setStatusText("已连接");
     } catch (openError) {
+      releaseClaimedPort();
       serialRef.current = null;
       setIsConnected(false);
       setConnectedPort(null);
@@ -653,6 +707,7 @@ export function useSerialPort({
       } catch (err) {
         setError(`停止失败：${toMessage(err)}`);
       } finally {
+        releaseClaimedPort();
         setTcpServerStatus("stopped");
         setIsConnected(false);
         setConnectedPort(null);
@@ -670,6 +725,7 @@ export function useSerialPort({
         await serialRef.current.close();
       }
       serialRef.current = null;
+      releaseClaimedPort();
       setIsConnected(false);
       setConnectedPort(null);
       setStatusText("未连接");

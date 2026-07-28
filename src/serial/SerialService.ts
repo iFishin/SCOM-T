@@ -133,35 +133,47 @@ export class TauriSerialService implements ISerialService {
       timeout: 50,
     });
 
-    await serial.open();
+    try {
+      await serial.open();
 
-    // Apply RTS/DTR signals
-    await serial.writeRequestToSend(config.rts).catch(() => undefined);
-    await serial.writeDataTerminalReady(config.dtr).catch(() => undefined);
+      // Apply RTS/DTR signals
+      await serial.writeRequestToSend(config.rts).catch(() => undefined);
+      await serial.writeDataTerminalReady(config.dtr).catch(() => undefined);
 
-    // Start listening and attach data handler
-    await serial.startListening();
-    this.unlistenData = await serial.listen(
-      (payload: unknown) => {
-        if (this.dataCallback) {
-          const bytes = normalizePluginPayload(payload);
-          this.dataCallback(new Uint8Array(bytes));
+      // Start listening and attach data handler
+      await serial.startListening();
+      this.unlistenData = await serial.listen(
+        (payload: unknown) => {
+          if (this.dataCallback) {
+            const bytes = normalizePluginPayload(payload);
+            this.dataCallback(new Uint8Array(bytes));
+          }
+        },
+        false,
+      );
+
+      await serial.disconnected(() => {
+        this.port = null;
+        this._path = null;
+        if (this.disconnectCallback) {
+          this.disconnectCallback();
         }
-      },
-      false,
-    );
+      });
 
-    // Attach disconnect handler (fire-and-forget, cleaned via cancelAllListeners)
-    await serial.disconnected(() => {
+      this.port = serial;
+      this._path = config.path;
+    } catch (error) {
+      if (this.unlistenData) {
+        this.unlistenData();
+        this.unlistenData = null;
+      }
+      await serial.stopListening().catch(() => undefined);
+      await serial.cancelAllListeners().catch(() => undefined);
+      await serial.close().catch(() => undefined);
       this.port = null;
       this._path = null;
-      if (this.disconnectCallback) {
-        this.disconnectCallback();
-      }
-    });
-
-    this.port = serial;
-    this._path = config.path;
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
