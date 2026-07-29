@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 import { t } from "../../i18n";
 import type { Lang } from "../../i18n";
 import { NotificationHistory } from "./NotificationHistory.tsx";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 const BUILD_TIME = __BUILD_TIME__;
 
@@ -276,7 +277,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
       {/* ── GitHub button ── */}
       <Button
         variant="primary"
-        onClick={() => window.open("https://github.com/iFishin/SCOM-T", "_blank")}
+        onClick={() => { openUrl("https://github.com/iFishin/SCOM-T"); }}
         className="w-full justify-center gap-2"
       >
         <ExternalLink size={14} />
@@ -335,7 +336,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => window.open(`https://github.com/iFishin/SCOM-T/releases/latest`, "_blank")}
+                onClick={() => { openUrl(`https://github.com/iFishin/SCOM-T/releases/latest`); }}
                 className="flex items-center gap-1 text-[10px]"
               >
                 <Download size={11} />
@@ -363,7 +364,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
             </div>
             <button
               type="button"
-              onClick={() => window.open(`https://github.com/${GITHUB_REPO}/releases/latest`, "_blank")}
+              onClick={() => { openUrl(`https://github.com/${GITHUB_REPO}/releases/latest`); }}
               className="text-[10px] text-emerald-600 underline hover:text-emerald-700"
             >
               {lang === "zh" ? "查看" : "View"}
@@ -386,7 +387,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => window.open(updateCheck.url, "_blank")}
+                onClick={() => { openUrl(updateCheck.url || `https://github.com/${GITHUB_REPO}/releases/latest`); }}
                 className="flex items-center gap-1 text-[10px]"
               >
                 <Download size={11} />
