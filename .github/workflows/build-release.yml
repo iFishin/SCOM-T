@@ -30,23 +30,40 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
 
-      - name: Rename portable exe
+      - name: Locate and verify portable exe
+        shell: pwsh
         run: |
-          copy "src-tauri\target\release\SCOM-T.exe" "src-tauri\target\release\SCOM-T-portable.exe"
+          $exe = "src-tauri\target\release\SCOM-T.exe"
+          if (Test-Path $exe) {
+            Copy-Item $exe "src-tauri\target\release\SCOM-T-portable.exe"
+            Write-Host "Portable exe created: $(Get-Item 'src-tauri\target\release\SCOM-T-portable.exe' | Select-Object Length)"
+          } else {
+            # Try alternate name (Tauri 2 fallback)
+            $alt = Get-ChildItem "src-tauri\target\release\*.exe" | Where-Object { $_.Name -notlike "*setup*" } | Select-Object -First 1
+            if ($alt) {
+              Copy-Item $alt.FullName "src-tauri\target\release\SCOM-T-portable.exe"
+              Write-Host "Found alternate exe: $($alt.Name)"
+            } else {
+              Write-Error "No release exe found!"
+              exit 1
+            }
+          }
 
       - name: List build output
+        shell: pwsh
         run: |
-          echo "=== NSIS Bundle ==="
-          dir "src-tauri\target\release\bundle\nsis\"
-          echo "=== Portable ==="
-          dir "src-tauri\target\release\*.exe"
+          Write-Host "=== Bundle ==="
+          Get-ChildItem -Recurse "src-tauri\target\release\bundle\" | Select-Object FullName, Length
+          Write-Host "=== Portable ==="
+          Get-ChildItem "src-tauri\target\release\SCOM-T-portable.exe" | Select-Object FullName, Length
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/SCOM-T-portable.exe
+          generate_release_notes: true
 
   build-macos:
     name: Build macOS
@@ -80,9 +97,10 @@ jobs:
           find src-tauri/target/universal-apple-darwin/release/bundle -name "*.dmg" -o -name "*.app"
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          generate_release_notes: true
 
   build-linux:
     name: Build Linux
@@ -119,9 +137,10 @@ jobs:
           find src-tauri/target/release/bundle -name "*.AppImage" -o -name "*.deb"
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: src-tauri/target/release/bundle/appimage/*.AppImage
+          generate_release_notes: true
 
 
 
