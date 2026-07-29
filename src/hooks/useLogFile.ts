@@ -67,7 +67,7 @@ export function useLogFile() {
 
     if (result) {
       setSavePath(result);
-      setRealTime(false);
+      setRealTime(true);
       lastSeqRef.current = 0;
       logCountRef.current = 0;
     }
