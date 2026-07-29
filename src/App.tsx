@@ -22,7 +22,6 @@ import { SendPanel } from "./components/SendPanel.tsx";
 import { ReceiveLog, formatLogsAsText } from "./components/ReceiveLog.tsx";
 import { StatusBar } from "./components/ui/StatusBar.tsx";
 import { Button } from "./components/ui/Button.tsx";
-import { Modal } from "./components/ui/Modal.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
@@ -33,7 +32,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useHotkeys } from "./hooks/useHotkeys.ts";
 import { useVersionCheck } from "./hooks/useVersionCheck.ts";
 import { setTimestampFormat } from "./utils/hexConverter.ts";
-import { encodeSendPayload, SendCancelledError } from "./utils/sendPayload.ts";
 import { appLogger } from "./utils/appLogger.ts";
 import { useSettings, type HotkeyConfig } from "./hooks/useSettings.ts";
 import { useLogFile } from "./hooks/useLogFile.ts";
@@ -128,10 +126,6 @@ function App() {
   const [message, setMessage] = useState("");
   const [filePath, setFilePath] = useState("");
   const [sessionData, setSessionData] = useState<ActiveSessionData | null>(null);
-  const [longSendPrompt, setLongSendPrompt] = useState<{
-    byteLength: number;
-    resolve: (confirmed: boolean) => void;
-  } | null>(null);
 
   const { toasts, pushToast: rawPushToast, removeToast } = useToast();
 
@@ -186,26 +180,7 @@ function App() {
   const activeLogs = logs;
   const activeIsConnected = isConnected;
   const activeConnectedPort = connectedPort;
-  const LONG_SEND_WARNING_BYTES = 256;
-  const confirmLongSend = useCallback((byteLength: number): Promise<boolean> => {
-    if (byteLength < LONG_SEND_WARNING_BYTES) return Promise.resolve(true);
-    return new Promise((resolve) => setLongSendPrompt({ byteLength, resolve }));
-  }, []);
-  const closeLongSendPrompt = useCallback((confirmed: boolean) => {
-    setLongSendPrompt((current) => {
-      current?.resolve(confirmed);
-      return null;
-    });
-  }, []);
-  const activeSendData = useCallback(async (
-    value: string,
-    mode: import("./hooks/useSerialPort.ts").SendMode,
-    ender: "" | "\r\n" | "\r" | "\n",
-  ) => {
-    const byteLength = encodeSendPayload(value, mode, ender).length;
-    if (!(await confirmLongSend(byteLength))) throw new SendCancelledError();
-    await sendData(value, mode, ender);
-  }, [confirmLongSend, sendData]);
+  const activeSendData = sendData;
   const activeSendFile = async (selectedFilePath: string): Promise<void> => {
     await sendFile(selectedFilePath);
   };
@@ -689,9 +664,7 @@ function App() {
     }
 
     void activeSendData(hotkey.command, hotkey.sendMode, hotkey.appendNewline).catch((sendError) => {
-      if (!(sendError instanceof SendCancelledError)) {
-        appLogger.error("Serial", `Hotkey send failed: ${String(sendError)}`);
-      }
+      appLogger.error("Serial", `Hotkey send failed: ${String(sendError)}`);
     });
   }
 
@@ -1057,33 +1030,6 @@ function App() {
           }}
         />
       ) : (<>
-        <Modal
-          open={longSendPrompt !== null}
-          onClose={() => closeLongSendPrompt(false)}
-          title={t("long_send_title", lang)}
-          size="sm"
-          footer={
-            <div className="ml-auto flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => closeLongSendPrompt(false)}>
-                {t("cancel", lang)}
-              </Button>
-              <Button type="button" variant="primary" onClick={() => closeLongSendPrompt(true)}>
-                {t("long_send_continue", lang)}
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-3 text-sm text-[var(--text-primary)]">
-            <p>{t("long_send_desc", lang, longSendPrompt?.byteLength ?? 0)}</p>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {t(
-                "long_send_wire_time",
-                lang,
-                (((longSendPrompt?.byteLength ?? 0) * 10 * 1000) / Math.max(config.baudRate, 1)).toFixed(1),
-              )}
-            </div>
-          </div>
-        </Modal>
         {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="flex max-h-[80vh] w-[640px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl">
