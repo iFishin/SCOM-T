@@ -6,6 +6,7 @@ import type { LogDisplayMode, ReceiveMode, SendMode, SerialConfig } from "../hoo
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import type { Lang } from "../i18n.ts";
 import { useSessionManager } from "../hooks/useSessionManager.ts";
+import { useLogFile } from "../hooks/useLogFile.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 
 // ── Types ──
@@ -55,7 +56,6 @@ function SessionContent({
   onDataRef,
   isActive,
   onActiveData,
-  logFileProps,
   onAddToPrompts,
 }: {
   config: SerialConfig;
@@ -69,17 +69,10 @@ function SessionContent({
   onDataRef: React.MutableRefObject<ActiveSessionData | null>;
   isActive: boolean;
   onActiveData?: (data: ActiveSessionData) => void;
-  logFileProps?: {
-    savePath: string | null | undefined;
-    realTimeLog: boolean | undefined;
-    onSelectLogFile: (() => void) | undefined;
-    onToggleRealTime: (() => void) | undefined;
-    onFlushLogs: (() => void) | undefined;
-    onCloseLogFile: (() => void) | undefined;
-  };
   onAddToPrompts?: (payload: string) => void;
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
+  const logFile = useLogFile();
 
   // Keep the ref up-to-date with the latest serial data
   useEffect(() => {
@@ -125,6 +118,11 @@ function SessionContent({
     onDataRef,
   ]);
 
+  // Per-tab log file sync
+  useEffect(() => {
+    logFile.syncLogs(serial.logs);
+  }, [serial.logs, logFile]);
+
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <div className="min-h-0 overflow-y-auto shrink-0">
@@ -157,12 +155,12 @@ function SessionContent({
         onClearAll={() => serial.clearLogs("all")}
         onClearReceived={() => serial.clearLogs("received")}
         onClearSent={() => serial.clearLogs("sent")}
-        savePath={logFileProps?.savePath}
-        realTimeLog={logFileProps?.realTimeLog}
-        onSelectLogFile={logFileProps?.onSelectLogFile}
-        onToggleRealTime={logFileProps?.onToggleRealTime}
-        onFlushLogs={logFileProps?.onFlushLogs}
-        onCloseLogFile={logFileProps?.onCloseLogFile}
+        savePath={logFile.savePath}
+        realTimeLog={logFile.realTime}
+        onSelectLogFile={logFile.selectLogFile}
+        onToggleRealTime={() => logFile.setRealTime((v) => !v)}
+        onFlushLogs={() => logFile.flushAll(serial.logs)}
+        onCloseLogFile={logFile.closeLogFile}
         onAddToPrompts={onAddToPrompts}
       />
     </div>
@@ -179,14 +177,6 @@ type SessionManagerProps = {
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
   onActiveSessionData?: (data: ActiveSessionData) => void;
-  logFileProps?: {
-    savePath: string | null | undefined;
-    realTimeLog: boolean | undefined;
-    onSelectLogFile: (() => void) | undefined;
-    onToggleRealTime: (() => void) | undefined;
-    onFlushLogs: (() => void) | undefined;
-    onCloseLogFile: ((() => void) | undefined);
-  };
   onAddToPrompts?: (payload: string) => void;
 };
 
@@ -198,7 +188,6 @@ export function SessionManager({
   portFilterMode,
   mockSerial,
   onActiveSessionData,
-  logFileProps,
   onAddToPrompts,
 }: SessionManagerProps) {
   const {
@@ -265,7 +254,6 @@ export function SessionManager({
                 onDataRef={sessionDataRefs.current[session.id]}
                 isActive={session.id === activeSessionId}
                 onActiveData={onActiveSessionData}
-                logFileProps={logFileProps}
                 onAddToPrompts={onAddToPrompts}
               />
             </div>

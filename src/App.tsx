@@ -731,14 +731,6 @@ function App() {
                 portFilterMode={settings.portFilterMode ?? "default"}
                 mockSerial={settings.mockSerial}
                 onActiveSessionData={handleActiveSessionData}
-                logFileProps={{
-                  savePath: logFile.savePath,
-                  realTimeLog: logFile.realTime,
-                  onSelectLogFile: logFile.selectLogFile,
-                  onToggleRealTime: () => logFile.setRealTime((v) => !v),
-                  onFlushLogs: () => logFile.flushAll(activeLogs),
-                  onCloseLogFile: logFile.closeLogFile,
-                }}
                 onAddToPrompts={handleAddToPrompts}
               />
             </div>
@@ -1175,14 +1167,6 @@ function App() {
                     portFilterMode={settings.portFilterMode ?? "default"}
                     mockSerial={settings.mockSerial}
                     onActiveSessionData={handleActiveSessionData}
-                    logFileProps={{
-                      savePath: logFile.savePath,
-                      realTimeLog: logFile.realTime,
-                      onSelectLogFile: logFile.selectLogFile,
-                      onToggleRealTime: () => logFile.setRealTime((v) => !v),
-                      onFlushLogs: () => logFile.flushAll(activeLogs),
-                      onCloseLogFile: logFile.closeLogFile,
-                    }}
                     onAddToPrompts={handleAddToPrompts}
                   />
                 </div>
