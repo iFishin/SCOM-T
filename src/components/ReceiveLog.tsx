@@ -461,6 +461,15 @@ export function ReceiveLog({
         ref={containerRef}
         onScroll={handleScroll}
         tabIndex={0}
+        onCopy={(e) => {
+          // Override copy with clean formatted text regardless of visual selection
+          if (logs.length === 0) return;
+          const text = formatLogsAsText(logs);
+          if (text) {
+            e.preventDefault();
+            e.clipboardData.setData("text/plain", text);
+          }
+        }}
         onKeyDown={(e) => {
           if (e.ctrlKey && e.key === "a") {
             e.preventDefault();
