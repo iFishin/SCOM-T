@@ -113,7 +113,7 @@ function App() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [cardNotifications, setCardNotifications] = useState<any[]>([]);
   const [appVersion, setAppVersion] = useState("0.0.0");
-  const { updateAvailable } = useVersionCheck(appVersion);
+  const { updateAvailable, checkForUpdate } = useVersionCheck(appVersion);
   const [signalOpen, setSignalOpen] = useState(false);
   const [trafficOpen, setTrafficOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
@@ -958,7 +958,7 @@ function App() {
           <span className="w-px h-4 bg-[var(--border)] mx-1" />
           <Button
             type="button"
-            onClick={() => { setAboutOpen(true); setHasUnreadNotifications(false); }}
+            onClick={() => { setAboutOpen(true); setHasUnreadNotifications(false); void checkForUpdate(); }}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >

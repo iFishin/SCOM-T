@@ -79,5 +79,5 @@ export function useVersionCheck(currentVersion: string) {
     }
   }, [currentVersion]);
 
-  return { updateAvailable };
+  return { updateAvailable, checkForUpdate };
 }
