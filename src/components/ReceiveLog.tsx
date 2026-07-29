@@ -672,9 +672,6 @@ export function ReceiveLog({
       {logEditorOpen && (
         <div
           className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLogEditorOpen(false);
-          }}
         >
           <LogEditor
             initialContent={logEditorContent}
