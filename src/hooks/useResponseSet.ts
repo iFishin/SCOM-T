@@ -8,6 +8,9 @@ import yaml from "js-yaml";
 export type ResponseSetCommand = {
   command: string;
   commandRegex?: boolean;
+  isHex?: boolean;
+  group?: string;
+  description?: string;
   expectedResponses: string[];
   expectedResponseRegex?: boolean[];
   matchMode: "all" | "any";
@@ -28,6 +31,9 @@ interface YamlResponseSet {
   commands: {
     command: string;
     command_regex?: boolean;
+    is_hex?: boolean;
+    group?: string;
+    description?: string;
     expected_responses?: string[];
     expected_responses_regex?: boolean[];
     match_mode?: "all" | "any";
@@ -92,6 +98,9 @@ export function useResponseSet() {
               return {
                 command: c.command || "",
                 commandRegex: c.command_regex === true,
+                isHex: c.is_hex === true,
+                group: typeof c.group === "string" ? c.group : undefined,
+                description: typeof c.description === "string" ? c.description : undefined,
                 expectedResponses: responses,
                 expectedResponseRegex: regex.length === responses.length ? regex : undefined,
                 matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
@@ -114,6 +123,9 @@ export function useResponseSet() {
         return {
           command: c.command,
           command_regex: c.commandRegex || undefined,
+          is_hex: c.isHex || undefined,
+          group: c.group || undefined,
+          description: c.description || undefined,
           expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
           expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
           match_mode: c.matchMode === "any" ? "any" : undefined,

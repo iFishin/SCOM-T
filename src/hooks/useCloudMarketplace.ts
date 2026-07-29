@@ -72,6 +72,10 @@ function validateResponseSetPayload(id: string, text: string): ValidationResult 
       : [];
     commands.push({
       command: c.command,
+      commandRegex: c.command_regex === true,
+      isHex: c.is_hex === true,
+      group: typeof c.group === "string" ? c.group : undefined,
+      description: typeof c.description === "string" ? c.description : undefined,
       expectedResponses: responses,
       expectedResponseRegex: regex.length === responses.length ? regex : undefined,
       matchMode: c.match_mode === "any" ? "any" : "all",
@@ -97,6 +101,10 @@ function responseSetToYaml(set: ResponseSet): string {
       const hasRegex = c.expectedResponseRegex?.some(Boolean);
       return {
         command: c.command,
+        command_regex: c.commandRegex || undefined,
+        is_hex: c.isHex || undefined,
+        group: c.group || undefined,
+        description: c.description || undefined,
         expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
         expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
         match_mode: c.matchMode === "any" ? "any" : undefined,
