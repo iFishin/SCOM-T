@@ -13,7 +13,7 @@ function formatLogEntry(log: SerialLogEntry): string {
 
 export function useLogFile() {
   const [savePath, setSavePath] = useState<string | null>(null);
-  const [realTime, setRealTime] = useState(false);
+  const [realTime, setRealTime] = useState(true);
   const lastSeqRef = useRef(0);
   const writingRef = useRef(false);
   const logCountRef = useRef(0);
