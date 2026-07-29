@@ -7,6 +7,7 @@ import { SearchReplace } from "./SearchReplace.tsx";
 import {
   buildSearchRegex,
   searchInText,
+  highlightText,
   type SearchOptions,
   type MatchRange,
 } from "../hooks/useSearch.ts";
@@ -39,22 +40,6 @@ type ReceiveLogProps = {
 
 const SCROLL_THRESHOLD = 32;
 const LOG_SEPARATOR = "\n";
-
-/** Split text into highlighted segments for a given regex */
-function highlightSegments(text: string, regex: RegExp | null): { text: string; match: boolean }[] {
-  if (!regex) return [{ text, match: false }];
-  const segments: { text: string; match: boolean }[] = [];
-  let lastIdx = 0;
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(text)) !== null) {
-    if (m.index > lastIdx) segments.push({ text: text.slice(lastIdx, m.index), match: false });
-    segments.push({ text: m[0], match: true });
-    lastIdx = m.index + m[0].length;
-    if (m.index === regex.lastIndex) regex.lastIndex++;
-  }
-  if (lastIdx < text.length) segments.push({ text: text.slice(lastIdx), match: false });
-  return segments.length ? segments : [{ text, match: false }];
-}
 
 /** Group adjacent log entries with the same timestamp + direction + source + mode into one block (card view only, RX direction). Leaves TX entries and text-mode rendering alone. */
 function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
@@ -518,7 +503,7 @@ export function ReceiveLog({
           </div>
         ) : displayMode === "text" ? (
           <div className="space-y-0">
-            {logs.map((log) => {
+            {logs.map((log, logIdx) => {
               const isReceived = log.direction === "received";
               const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
               const tagColor =
@@ -534,6 +519,13 @@ export function ReceiveLog({
               const rowBg = !isReceived
                 ? "bg-sky-50/40 dark:bg-sky-950/15"
                 : "";
+              const payTrim = log.payload.trimStart();
+              // Compute offset for current-match detection relative to this payload
+              const logOffset = logIdx * LOG_SEPARATOR.length + logs.slice(0, logIdx).reduce((s, l) => s + l.payload.trimStart().length, 0);
+              const curStart = searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].start - logOffset : undefined;
+              const curEnd = curStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].end - logOffset : undefined;
+              const inRange = curStart !== undefined && curEnd !== undefined && curStart >= 0 && curEnd <= payTrim.length;
+              const hlMatch = searchRegex ? highlightText(payTrim, searchRegex, inRange ? curStart : undefined, inRange ? curEnd : undefined) : null;
               return (
                 <div key={log.id} data-seq={log.seq} className={"flex items-baseline gap-1 px-1 py-px leading-relaxed " + rowBg}>
                   <span className={`shrink-0 font-bold ${tagColor}`}>
@@ -543,9 +535,11 @@ export function ReceiveLog({
                     {ts}
                   </span>
                   <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
-                    {searchRegex ? highlightSegments(log.payload.trimStart(), searchRegex).map((seg, si) =>
-                      seg.match ? <mark key={si} className="hl-search-match">{seg.text}</mark> : <span key={si}>{seg.text}</span>
-                    ) : log.payload.trimStart()}
+                    {hlMatch ? hlMatch.map((seg, si) =>
+                      seg.current ? <mark key={si} className="hl-search-current">{seg.text}</mark>
+                        : seg.match ? <mark key={si} className="hl-search-match">{seg.text}</mark>
+                          : <span key={si}>{seg.text}</span>
+                    ) : payTrim}
                   </span>
                 </div>
               );
@@ -610,7 +604,22 @@ export function ReceiveLog({
           <div className="space-y-0.5">
             {cardGroups.map((group) => {
               const first = group.entries[0];
-              const segments = searchRegex ? highlightSegments(group.mergedPayload, searchRegex) : [];
+              // Compute offset of this group's mergedPayload in the full logText
+              const firstLogIdx = logs.indexOf(first);
+              const groupOffset = firstLogIdx >= 0
+                ? firstLogIdx * LOG_SEPARATOR.length + logs.slice(0, firstLogIdx).reduce((s, l) => s + l.payload.trimStart().length, 0)
+                : 0;
+              const gCurStart = searchIndex >= 0 && searchIndex < searchMatches.length
+                ? searchMatches[searchIndex].start - groupOffset
+                : undefined;
+              const gCurEnd = gCurStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length
+                ? searchMatches[searchIndex].end - groupOffset
+                : undefined;
+              const gInRange = gCurStart !== undefined && gCurEnd !== undefined
+                && gCurStart >= 0 && gCurEnd <= group.mergedPayload.length;
+              const cardSegments = searchRegex
+                ? highlightText(group.mergedPayload, searchRegex, gInRange ? gCurStart : undefined, gInRange ? gCurEnd : undefined)
+                : [];
               return (
                 <div
                   key={group.key}
@@ -641,12 +650,12 @@ export function ReceiveLog({
                     )}
                   </div>
                   <div className="break-all whitespace-pre-wrap leading-tight text-[var(--text-primary)]">
-                    {segments.length > 0
-                      ? segments.map((seg, si) =>
-                          seg.match ? (
-                            <mark key={si} className="hl-search-match">
-                              {seg.text}
-                            </mark>
+                    {cardSegments.length > 0
+                      ? cardSegments.map((seg, si) =>
+                          seg.current ? (
+                            <mark key={si} className="hl-search-current">{seg.text}</mark>
+                          ) : seg.match ? (
+                            <mark key={si} className="hl-search-match">{seg.text}</mark>
                           ) : (
                             <span key={si}>{seg.text}</span>
                           ),
