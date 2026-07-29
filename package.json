@@ -1,7 +1,7 @@
 {
   "name": "scom-t",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.36",
   "type": "module",
   "scripts": {
     "dev": "vite",
