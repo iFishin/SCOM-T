@@ -55,6 +55,7 @@ function SessionContent({
   onDataRef,
   isActive,
   onActiveData,
+  logFileProps,
 }: {
   config: SerialConfig;
   lang: Lang;
@@ -67,6 +68,14 @@ function SessionContent({
   onDataRef: React.MutableRefObject<ActiveSessionData | null>;
   isActive: boolean;
   onActiveData?: (data: ActiveSessionData) => void;
+  logFileProps?: {
+    savePath: string | null | undefined;
+    realTimeLog: boolean | undefined;
+    onSelectLogFile: (() => void) | undefined;
+    onToggleRealTime: (() => void) | undefined;
+    onFlushLogs: (() => void) | undefined;
+    onCloseLogFile: (() => void) | undefined;
+  };
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
 
@@ -146,6 +155,12 @@ function SessionContent({
         onClearAll={() => serial.clearLogs("all")}
         onClearReceived={() => serial.clearLogs("received")}
         onClearSent={() => serial.clearLogs("sent")}
+        savePath={logFileProps?.savePath}
+        realTimeLog={logFileProps?.realTimeLog}
+        onSelectLogFile={logFileProps?.onSelectLogFile}
+        onToggleRealTime={logFileProps?.onToggleRealTime}
+        onFlushLogs={logFileProps?.onFlushLogs}
+        onCloseLogFile={logFileProps?.onCloseLogFile}
       />
     </div>
   );
@@ -161,6 +176,14 @@ type SessionManagerProps = {
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
   onActiveSessionData?: (data: ActiveSessionData) => void;
+  logFileProps?: {
+    savePath: string | null | undefined;
+    realTimeLog: boolean | undefined;
+    onSelectLogFile: (() => void) | undefined;
+    onToggleRealTime: (() => void) | undefined;
+    onFlushLogs: (() => void) | undefined;
+    onCloseLogFile: (() => void) | undefined;
+  };
 };
 
 export function SessionManager({
@@ -171,6 +194,7 @@ export function SessionManager({
   portFilterMode,
   mockSerial,
   onActiveSessionData,
+  logFileProps,
 }: SessionManagerProps) {
   const {
     sessions,
@@ -236,6 +260,7 @@ export function SessionManager({
                 onDataRef={sessionDataRefs.current[session.id]}
                 isActive={session.id === activeSessionId}
                 onActiveData={onActiveSessionData}
+                logFileProps={logFileProps}
               />
             </div>
           );
