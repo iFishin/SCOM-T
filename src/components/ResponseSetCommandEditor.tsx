@@ -128,11 +128,9 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
     const placeholders = extractPlaceholders(cmd.command);
     return (
       <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 space-y-2">
-        {/* ── Header row ── */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* ── Row 1: command + quick toggles ── */}
+        <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--text-muted)] font-mono w-5 shrink-0">#{i + 1}</span>
-
-          {/* Command input */}
           <Input
             type="text"
             value={cmd.command}
@@ -140,71 +138,47 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
             placeholder={cmd.commandRegex
               ? (lang === "zh" ? "正则模式，如 AT\\+CSQ" : "Regex pattern, e.g. AT\\\\+CSQ")
               : (lang === "zh" ? "AT指令" : "AT Command")}
-            className="flex-1 min-w-[120px] text-xs font-mono"
+            className="flex-1 min-w-0 text-xs font-mono"
           />
+          <div className="flex items-center gap-1 shrink-0">
+            <button type="button" onClick={() => updateField(i, { commandRegex: !cmd.commandRegex })}
+              className={`px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${cmd.commandRegex ? "bg-amber-100 border-amber-300 text-amber-700" : "bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-muted)]"}`}
+              title={cmd.commandRegex ? (lang === "zh" ? "正则模式" : "Regex mode") : (lang === "zh" ? "文本模式" : "Text mode")}>
+              {cmd.commandRegex ? ".*" : "Abc"}
+            </button>
+            <label className="flex items-center gap-0.5 text-[10px] text-[var(--text-muted)] cursor-pointer select-none">
+              <input type="checkbox" checked={cmd.isHex || false} onChange={(e) => updateField(i, { isHex: e.target.checked })} className="w-3 h-3 accent-[var(--accent)]" />
+              <span>{t("response_set_is_hex", lang)}</span>
+            </label>
+            <button type="button" onClick={() => removeCommand(i)} className="text-rose-400 hover:text-rose-600 p-0.5" title={lang === "zh" ? "删除" : "Delete"}><Trash2 size={11} /></button>
+          </div>
+        </div>
 
-          {/* Regex toggle */}
-          <button
-            type="button"
-            onClick={() => updateField(i, { commandRegex: !cmd.commandRegex })}
-            className={`shrink-0 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
-              cmd.commandRegex
-                ? "bg-amber-100 border-amber-300 text-amber-700"
-                : "bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-muted)]"
-            }`}
-            title={cmd.commandRegex
-              ? (lang === "zh" ? "正则模式" : "Regex mode")
-              : (lang === "zh" ? "文本模式" : "Text mode")}
-          >
-            {cmd.commandRegex ? ".*" : "Abc"}
-          </button>
-
-          {/* HEX checkbox */}
-          <label className="flex items-center gap-0.5 shrink-0 text-[10px] text-[var(--text-muted)] cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={cmd.isHex || false}
-              onChange={(e) => updateField(i, { isHex: e.target.checked })}
-              className="w-3 h-3 accent-[var(--accent)]"
-            />
-            {t("response_set_is_hex", lang)}
-          </label>
-
-          {/* Group input + datalist */}
-          <input
-            type="text"
-            value={cmd.group || ""}
-            onChange={(e) => updateField(i, { group: e.target.value || undefined })}
-            list="response-set-groups"
-            placeholder={t("response_set_group_placeholder", lang)}
-            className="w-28 shrink-0 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[10px] text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
-          />
-
-          {/* ↑↓ */}
-          <button type="button" onClick={() => moveCommand(i, -1)} disabled={i === 0} className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 disabled:cursor-not-allowed" title={t("response_set_move_up", lang)}><ArrowUp size={10} /></button>
-          <button type="button" onClick={() => moveCommand(i, 1)} disabled={i === commands.length - 1} className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 disabled:cursor-not-allowed" title={t("response_set_move_down", lang)}><ArrowDown size={10} /></button>
-
-          {/* Delete */}
-          <button type="button" onClick={() => removeCommand(i)} className="text-rose-400 hover:text-rose-600 p-0.5 shrink-0" title={lang === "zh" ? "删除" : "Delete"}><Trash2 size={11} /></button>
+        {/* ── Row 2: group + move + description ── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-0.5 rounded border border-[var(--border)] px-1 py-0.5 bg-[var(--bg-input)]">
+            <input type="text" value={cmd.group || ""} onChange={(e) => updateField(i, { group: e.target.value || undefined })} list="response-set-groups"
+              placeholder={t("response_set_group_placeholder", lang)}
+              className="w-20 text-[10px] text-[var(--text-primary)] bg-transparent outline-none" />
+            <svg className="w-3 h-3 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+          <div className="flex items-center gap-0.5">
+            <button type="button" onClick={() => moveCommand(i, -1)} disabled={i === 0}
+              className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 disabled:cursor-not-allowed" title={t("response_set_move_up", lang)}><ArrowUp size={11} /></button>
+            <button type="button" onClick={() => moveCommand(i, 1)} disabled={i === commands.length - 1}
+              className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 disabled:cursor-not-allowed" title={t("response_set_move_down", lang)}><ArrowDown size={11} /></button>
+          </div>
+          <input type="text" value={cmd.description || ""} onChange={(e) => updateField(i, { description: e.target.value || undefined })}
+            placeholder={t("response_set_desc_placeholder", lang)}
+            className="flex-1 min-w-[100px] rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-[10px] text-[var(--text-muted)] outline-none focus:border-[var(--accent)]" />
         </div>
 
         {/* ── Placeholder hint ── */}
         {placeholders.length > 0 && (
-          <div className="text-[9px] text-amber-600 bg-amber-50 rounded px-2 py-1">
-            {t("response_set_placeholders", lang, placeholders.join(", "))}
-          </div>
+          <div className="text-[9px] text-amber-600 bg-amber-50 rounded px-2 py-1">{t("response_set_placeholders", lang, placeholders.join(", "))}</div>
         )}
 
-        {/* ── Description ── */}
-        <input
-          type="text"
-          value={cmd.description || ""}
-          onChange={(e) => updateField(i, { description: e.target.value || undefined })}
-          placeholder={t("response_set_desc_placeholder", lang)}
-          className="w-full rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1 text-[10px] text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
-        />
-
-        {/* ── Match mode + expected responses ── */}
+        {/* ── Row 3: match mode + expected responses ── */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
             <span>
@@ -214,13 +188,9 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
             </span>
             <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] overflow-hidden">
               <button type="button" onClick={() => updateField(i, { matchMode: "all" })}
-                className={`px-2 py-0.5 text-[9px] transition-colors ${cmd.matchMode === "all" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}>
-                {t("response_set_match_all", lang)}
-              </button>
+                className={`px-2 py-0.5 text-[9px] transition-colors ${cmd.matchMode === "all" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}>{t("response_set_match_all", lang)}</button>
               <button type="button" onClick={() => updateField(i, { matchMode: "any" })}
-                className={`px-2 py-0.5 text-[9px] transition-colors ${cmd.matchMode === "any" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}>
-                {t("response_set_match_any", lang)}
-              </button>
+                className={`px-2 py-0.5 text-[9px] transition-colors ${cmd.matchMode === "any" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}>{t("response_set_match_any", lang)}</button>
             </div>
           </div>
           {cmd.expectedResponses.map((resp, j) => {
@@ -228,21 +198,13 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
             return (
               <div key={j} className="flex items-start gap-1.5">
                 <button type="button" onClick={() => toggleExpectedResponseRegex(i, j)}
-                  className={`shrink-0 mt-1 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
-                    isRegex ? "bg-amber-100 border-amber-300 text-amber-700" : "bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)]"}`}
-                  title={isRegex ? (lang === "zh" ? "正则模式" : "Regex mode") : (lang === "zh" ? "文本模式" : "Text mode")}>
-                  {isRegex ? ".*" : "Abc"}
-                </button>
+                  className={`shrink-0 mt-1 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${isRegex ? "bg-amber-100 border-amber-300 text-amber-700" : "bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)]"}`}
+                  title={isRegex ? (lang === "zh" ? "正则模式" : "Regex mode") : (lang === "zh" ? "文本模式" : "Text mode")}>{isRegex ? ".*" : "Abc"}</button>
                 <textarea value={resp} onChange={(e) => updateExpectedResponse(i, j, e.target.value)}
-                  placeholder={isRegex
-                    ? (lang === "zh" ? "正则表达式，如 \\\\+CSQ:\\\\s+\\\\d+" : "Regex pattern, e.g. \\\\+CSQ:\\\\s+\\\\d+")
-                    : (lang === "zh" ? "输入期望响应内容..." : "Enter expected response text...")}
+                  placeholder={isRegex ? (lang === "zh" ? "正则表达式，如 \\\\+CSQ:\\\\s+\\\\d+" : "Regex pattern, e.g. \\\\+CSQ:\\\\s+\\\\d+") : (lang === "zh" ? "输入期望响应内容..." : "Enter expected response text...")}
                   className="flex-1 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 resize-y outline-none focus:ring-1 focus:ring-[var(--accent)] font-mono min-h-[28px]"
                   rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)} />
-                <button type="button" onClick={() => removeExpectedResponse(i, j)}
-                  className="text-rose-400 hover:text-rose-600 p-1 mt-1" title={lang === "zh" ? "删除" : "Remove"}>
-                  <Trash2 size={10} />
-                </button>
+                <button type="button" onClick={() => removeExpectedResponse(i, j)} className="text-rose-400 hover:text-rose-600 p-1 mt-1" title={lang === "zh" ? "删除" : "Remove"}><Trash2 size={10} /></button>
               </div>
             );
           })}
