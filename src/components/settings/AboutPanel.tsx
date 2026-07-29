@@ -49,7 +49,7 @@ type NotificationItem = {
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
-export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; appVersion?: string; updateAvailable?: boolean }) {
+export function AboutPanel({ lang, appVersion, updateAvailable, onRefreshVersionCheck }: { lang: Lang; appVersion?: string; updateAvailable?: boolean; onRefreshVersionCheck?: () => void }) {
   const [version, setVersion] = useState(appVersion || "0.1.0");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clickCount, setClickCount] = useState(0);
@@ -63,6 +63,17 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
   const [nudging, setNudging] = useState(false);
 
   const [updateCheck, setUpdateCheck] = useState<CheckState>({ status: "idle" });
+
+  // Trigger parent version check when About panel opens
+  useEffect(() => {
+    setUpdateCheck({ status: "checking" });
+    onRefreshVersionCheck?.();
+    // After a timeout, if the check hasn't resolved, show idle
+    const timer = setTimeout(() => {
+      setUpdateCheck((prev) => (prev.status === "checking" ? { status: "idle" } : prev));
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const [rawItems, setRawItems] = useState<NotificationItem[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(() => {
@@ -312,13 +323,8 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
           </Button>
         </div>
 
-        {updateCheck.status === "checking" && (
-          <div className="mt-2 text-[11px] text-[var(--text-muted)] animate-pulse">
-            {t("update_checking", lang)}
-          </div>
-        )}
-
-        {updateAvailable && updateCheck.status === "idle" && (
+        {/* Watch for parent updateAvailable to sync UI */}
+        {updateCheck.status === "idle" && updateAvailable && (
           <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
               <Download size={13} />
@@ -335,6 +341,12 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
                 {t("update_download", lang)}
               </Button>
             </div>
+          </div>
+        )}
+
+        {updateCheck.status === "checking" && (
+          <div className="mt-2 text-[11px] text-[var(--text-muted)] animate-pulse">
+            {t("update_checking", lang)}
           </div>
         )}
 

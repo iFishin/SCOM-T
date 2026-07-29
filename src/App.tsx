@@ -1052,7 +1052,7 @@ function App() {
               </Button>
             </div>
             <div className="p-4">
-              <AboutPanel lang={lang} appVersion={appVersion} updateAvailable={updateAvailable} />
+              <AboutPanel lang={lang} appVersion={appVersion} updateAvailable={updateAvailable} onRefreshVersionCheck={checkForUpdate} />
             </div>
           </div>
         </div>
