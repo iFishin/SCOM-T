@@ -9,6 +9,7 @@ export interface PromptRow {
   ender: "" | "\r\n" | "\r" | "\n";
   interval: string;
   device?: string;
+  note?: string;
   expectedResponses?: string[];
   expectedResponseRegex?: boolean[];
 }
@@ -22,6 +23,7 @@ interface YamlCommand {
   order: number;
   is_selected?: boolean;
   device?: string;
+  note?: string;
   expected_responses?: string[];
   expected_responses_regex?: boolean[];
 }
@@ -57,6 +59,7 @@ export function serializeToYaml(rows: PromptRow[]): string {
       order: r.id,
       ...(r.selected ? { is_selected: true } : {}),
       ...(r.device ? { device: r.device } : {}),
+      ...(r.note ? { note: r.note } : {}),
       ...(r.expectedResponses?.length ? { expected_responses: r.expectedResponses } : {}),
       ...(hasRegex ? { expected_responses_regex: r.expectedResponseRegex } : {}),
     };
@@ -115,6 +118,7 @@ export function parseYamlToRows(
       ender,
       interval: cmd.timeout > 0 ? String(cmd.timeout) : "",
       device: typeof cmd.device === "string" && cmd.device ? cmd.device : undefined,
+      note: typeof cmd.note === "string" && cmd.note ? cmd.note : undefined,
       expectedResponses: coerceStringArray(cmd.expected_responses),
       expectedResponseRegex: Array.isArray(cmd.expected_responses_regex) ? cmd.expected_responses_regex.map(Boolean) : undefined,
     });

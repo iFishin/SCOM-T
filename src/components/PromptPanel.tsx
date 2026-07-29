@@ -9,6 +9,7 @@ import { Input } from "./ui/Input.tsx";
 import { Select } from "./ui/Select.tsx";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
+import { Modal } from "./ui/Modal.tsx";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { useResponseSet } from "../hooks/useResponseSet.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
@@ -44,6 +45,7 @@ type PromptRow = {
   ender: "" | "\r\n" | "\r" | "\n";
   interval: string;
   device?: string;
+  note?: string;
   expectedResponses?: string[];
   expectedResponseRegex?: boolean[];
   status?: PromptRowStatus;
@@ -126,6 +128,10 @@ export function PromptPanel({
   const responseSetOptionsLoaded = useRef(false);
   const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "info" | "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
   const [matchLogOpen, setMatchLogOpen] = useState(false);
+  const [placeholderModal, setPlaceholderModal] = useState<{
+    vars: Record<string, string>;
+    onConfirm: (values: Record<string, string>) => void;
+  } | null>(null);
 
   // Load quick presets from the same file used by RegexCleanDialog
   useEffect(() => {
@@ -158,7 +164,7 @@ export function PromptPanel({
   // ── Handle pending response set apply ──
   useEffect(() => {
     if (!pendingApplyResponseSet || !onClearPendingApply) return;
-    const { loadResponseSet, applyToGrid } = useResponseSet();
+    const { loadResponseSet } = useResponseSet();
     (async () => {
       const set = await loadResponseSet(pendingApplyResponseSet);
       if (!set) {
@@ -166,22 +172,7 @@ export function PromptPanel({
         onClearPendingApply();
         return;
       }
-      const updates = applyToGrid(set, promptRows);
-      if (updates.length === 0) {
-        pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands in response set", "warn");
-      } else {
-        let matchCount = 0;
-        for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
-          updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
-          matchCount++;
-        }
-        pushToast(
-          lang === "zh"
-            ? `已从「${set.name}」应用 ${matchCount} 条指令的期望结果`
-            : `Applied ${matchCount} commands from "${set.name}"`,
-          "success"
-        );
-      }
+      importResponseSet(set);
       onClearPendingApply();
     })();
   }, [pendingApplyResponseSet]);
@@ -203,6 +194,81 @@ export function PromptPanel({
   const [configAction, setConfigAction] = useState<null | "save" | "load">(null);
   const [configName, setConfigName] = useState("");
   const [savedConfigs, setSavedConfigs] = useState<string[]>([]);
+
+  // ── Import response set with placeholder resolution ──
+  const PLACEHOLDER_RE = /\{(\w+)\}/g;
+  function collectPlaceholders(commands: string[]): string[] {
+    const names = new Set<string>();
+    for (const cmd of commands) {
+      let m: RegExpExecArray | null;
+      while ((m = PLACEHOLDER_RE.exec(cmd)) !== null) names.add(m[1]);
+    }
+    return [...names];
+  }
+  function expandPlaceholders(cmd: string, values: Record<string, string>): string {
+    return cmd.replace(PLACEHOLDER_RE, (_, name) => values[name] ?? `{${name}}`);
+  }
+  function importResponseSet(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }) {
+    const allVars = collectPlaceholders(set.commands.map((c) => c.command));
+    if (allVars.length > 0) {
+      // Restore last-used values from localStorage
+      let saved: Record<string, string> = {};
+      try { saved = JSON.parse(localStorage.getItem("scom_t_prompt_vars") || "{}"); } catch { saved = {}; }
+      const initial: Record<string, string> = {};
+      for (const v of allVars) initial[v] = saved[v] || "";
+      setPlaceholderModal({
+        vars: initial,
+        onConfirm: (values: Record<string, string>) => {
+          try { localStorage.setItem("scom_t_prompt_vars", JSON.stringify(values)); } catch { /* ignore */ }
+          applyImportedCommands(set, values);
+          setPlaceholderModal(null);
+        },
+      });
+    } else {
+      applyImportedCommands(set, {});
+    }
+  }
+
+  function applyImportedCommands(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }, placeholders: Record<string, string>) {
+    const { applyToGrid } = useResponseSet();
+    // Map response set commands to the format applyToGrid expects (just command for matching)
+    const matchRows = promptRows;
+    const updates = applyToGrid(set as any, matchRows);
+    if (updates.length === 0) {
+      // No existing rows matched — try to add new rows for unmatched commands
+      for (const cmd of set.commands) {
+        const expanded = expandPlaceholders(cmd.command, placeholders);
+        const existing = promptRows.find((r) => r.command.trim().toUpperCase() === expanded.trim().toUpperCase());
+        if (existing) continue;
+        // Add new row
+        const newId = promptRows.length + 1;
+        const newRow: PromptRow = {
+          id: newId,
+          selected: false,
+          command: expanded,
+          isHex: cmd.isHex || false,
+          ender: "\r\n",
+          interval: "",
+          note: cmd.description || undefined,
+          expectedResponses: [...cmd.expectedResponses],
+          expectedResponseRegex: cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : undefined,
+          status: "idle",
+        };
+        setPromptRows((prev) => [...prev, newRow]);
+      }
+    } else {
+      // Apply expected responses to matched rows
+      for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
+        updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
+      }
+    }
+    pushToast(
+      lang === "zh"
+        ? `已导入「${set.name}」`
+        : `Imported "${set.name}"`,
+      "success"
+    );
+  }
 
   const allSelected = promptRows.length > 0 && promptRows.every((r) => r.selected);
   function toggleSelectAll() {
@@ -876,25 +942,10 @@ export function PromptPanel({
                         onChange={(e) => {
                           const selectedId = e.target.value;
                           if (!selectedId) return;
-                          const { loadResponseSet, applyToGrid } = useResponseSet();
+                          const { loadResponseSet } = useResponseSet();
                           loadResponseSet(selectedId).then((set) => {
                             if (!set) return;
-                            const updates = applyToGrid(set, promptRows);
-                            if (updates.length === 0) {
-                              pushToast(lang === "zh" ? "响应集中没有匹配的指令" : "No matching commands", "warn");
-                              return;
-                            }
-                            let matchCount = 0;
-                            for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
-                              updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
-                              matchCount++;
-                            }
-                            pushToast(
-                              lang === "zh"
-                                ? `已从「${set.name}」导入 ${matchCount} 条指令`
-                                : `Imported ${matchCount} commands from "${set.name}"`,
-                              "success"
-                            );
+                            importResponseSet(set);
                           });
                         }}
                         className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-primary)] max-w-[130px]"
@@ -1261,6 +1312,45 @@ export function PromptPanel({
           onApply={(result) => { setBatchText(result); setRegexCleanOpen(false); }}
           onClose={() => setRegexCleanOpen(false)}
         />
+      )}
+      {placeholderModal && (
+        <Modal
+          open
+          onClose={() => setPlaceholderModal(null)}
+          title={t("prompt_param_title", lang)}
+          size="sm"
+          footer={
+            <div className="ml-auto flex gap-2">
+              <Button type="button" variant="ghost" onClick={() => setPlaceholderModal(null)}>
+                {t("prompt_param_cancel", lang)}
+              </Button>
+              <Button type="button" variant="primary" onClick={() => {
+                const inputs = document.querySelectorAll<HTMLInputElement>("[data-var-input]");
+                const values: Record<string, string> = {};
+                inputs.forEach((el) => { values[el.dataset.varInput || ""] = el.value; });
+                placeholderModal.onConfirm(values);
+              }}>
+                {t("prompt_param_apply", lang)}
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm">
+            <p className="text-xs text-[var(--text-muted)]">{t("prompt_param_desc", lang)}</p>
+            {Object.entries(placeholderModal.vars).map(([name, value]) => (
+              <div key={name} className="flex items-center gap-2">
+                <label className="text-xs font-mono text-[var(--text-muted)] w-20 shrink-0">{name}</label>
+                <input
+                  data-var-input={name}
+                  defaultValue={value}
+                  placeholder={name}
+                  className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  autoFocus
+                />
+              </div>
+            ))}
+          </div>
+        </Modal>
       )}
       {matchLogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={() => setMatchLogOpen(false)}>
