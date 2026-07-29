@@ -536,6 +536,28 @@ export function useSerialPort({
     const pending = pendingLogsRef.current;
     if (pending.length === 0) return;
     pendingLogsRef.current = [];
+
+    // If pending is very large (render queue backed up), coalesce into fewer entries
+    // to avoid drowning React in a single setState.
+    if (pending.length > 200) {
+      const truncated = pending.slice(0, 200);
+      pendingLogsRef.current = pending.slice(200);
+      scheduleBatchFlush();
+      setLogs((current) => {
+        if (current.length === 0) return truncated;
+        const next = [...current, ...truncated];
+        if (next.length > MAX_LOGS) {
+          if (!logCapWarningRef.current) {
+            logCapWarningRef.current = true;
+            setTimeout(() => setLogCapWarning(true), 0);
+          }
+          return next.slice(next.length - MAX_LOGS);
+        }
+        return next;
+      });
+      return;
+    }
+
     setLogs((current) => {
       if (current.length === 0) return pending;
       const next = [...current, ...pending];

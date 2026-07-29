@@ -147,8 +147,10 @@ export function ReceiveLog({
 
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
-      const el = containerRef.current;
-      el.scrollTop = el.scrollHeight;
+      requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      });
     }
   }, [logs, pinned]);
 

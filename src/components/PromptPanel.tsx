@@ -112,6 +112,7 @@ export function PromptPanel({
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   const waitingResponsesRef = useRef<Map<number, WaitingResponse>>(new Map());
   const lastProcessedLogRef = useRef<number>(-1);
+  const sendingRowRef = useRef(false);
   const [batchState, setBatchState] = useState<BatchExecutionState>({
     isRunning: false,
     currentLoop: 0,
@@ -413,9 +414,11 @@ export function PromptPanel({
   }
 
   async function handleSendPromptRow(row: PromptRow) {
+    if (sendingRowRef.current) return;
     if (!isConnected) { pushToast(t("toast_not_connected", lang), "warn"); return; }
     if (!row.command) { pushToast(`${t("prompt_sender", lang)} ${row.id}: ${t("toast_command_empty", lang)}`, "warn"); return; }
 
+    sendingRowRef.current = true;
     updatePromptRow(row.id, { selected: true, status: "pending" });
 
     try {
@@ -438,6 +441,8 @@ export function PromptPanel({
         existing.onComplete?.();
       }
       updatePromptRow(row.id, { status: "error" });
+    } finally {
+      sendingRowRef.current = false;
     }
   }
 

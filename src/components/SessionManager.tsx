@@ -213,7 +213,7 @@ export function SessionManager({
         onCreate={createSession}
         onRename={renameSession}
       />
-      <div className="flex-1 min-h-0 relative">
+      <div className="flex-1 min-h-0">
         {sessions.map((session) => {
           if (!sessionDataRefs.current[session.id]) {
             sessionDataRefs.current[session.id] = { current: null };
@@ -221,7 +221,7 @@ export function SessionManager({
           return (
             <div
               key={session.id}
-              className="absolute inset-0 flex flex-col min-h-0"
+              className="flex flex-col min-h-0 flex-1"
               style={{ display: session.id === activeSessionId ? "flex" : "none" }}
             >
               <SessionContent

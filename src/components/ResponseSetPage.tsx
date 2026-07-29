@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Copy, FileText, FolderOpen, Plus, Save, Trash2, List, Import } from "lucide-react";
+import { Copy, FileText, FolderOpen, Plus, Save, Trash2, List, Import } from "lucide-react";
 import { Button } from "./ui/Button.tsx";
 import { Input } from "./ui/Input.tsx";
 import { t } from "../i18n";
@@ -160,15 +160,6 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2 shrink-0">
-        <Button
-          type="button"
-          onClick={onClose}
-          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
-        >
-          <ArrowLeft size={14} />
-          {lang === "zh" ? "返回" : "Back"}
-        </Button>
-        <div className="h-4 w-px bg-[var(--border)]" />
         <Button
           type="button"
           onClick={handleCreateNew}

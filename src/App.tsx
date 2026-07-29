@@ -389,6 +389,13 @@ function App() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // Ctrl+W: close window (emergency exit when decorations:false)
+      if (e.ctrlKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        getCurrentWindow().close().catch(console.error);
+        return;
+      }
+
       // 让输入框/文本域/下拉框/可编辑元素的快捷键正常运作
       const target = e.target as HTMLElement;
       const tag = target?.tagName;

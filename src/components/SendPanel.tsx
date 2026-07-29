@@ -84,6 +84,7 @@ export function SendPanel({
   const fileSendCollapsed = sendPanelFileCollapsed ?? true;
   const hotkeysCollapsed = sendPanelHotkeysCollapsed ?? true;
   const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const sendingRef = React.useRef(false);
 
   function toggleExpanded() {
     onSendPanelExpandedChange?.(!expanded);
@@ -102,8 +103,12 @@ export function SendPanel({
   
 
   function handleSend() {
+    if (sendingRef.current || isBusy) { return; }
     if (!isConnected) { onPushToast(t("toast_not_connected", lang), "warn"); return; }
-    void onSend();
+    sendingRef.current = true;
+    const p = onSend();
+    if (p) { p.catch(() => {}).finally(() => { sendingRef.current = false; }); }
+    else { sendingRef.current = false; }
   }
   function handleTextareaKeyDown(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
     if (e.key !== "Enter") return;
