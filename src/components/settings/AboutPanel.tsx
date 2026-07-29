@@ -363,7 +363,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
             </div>
             <button
               type="button"
-              onClick={() => window.open(updateCheck.url, "_blank")}
+              onClick={() => window.open(`https://github.com/${GITHUB_REPO}/releases/latest`, "_blank")}
               className="text-[10px] text-emerald-600 underline hover:text-emerald-700"
             >
               {lang === "zh" ? "查看" : "View"}
