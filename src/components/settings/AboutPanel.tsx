@@ -49,7 +49,7 @@ type NotificationItem = {
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 
-export function AboutPanel({ lang, appVersion, updateAvailable, onRefreshVersionCheck }: { lang: Lang; appVersion?: string; updateAvailable?: boolean; onRefreshVersionCheck?: () => void }) {
+export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; appVersion?: string; updateAvailable?: boolean }) {
   const [version, setVersion] = useState(appVersion || "0.1.0");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clickCount, setClickCount] = useState(0);
@@ -64,14 +64,11 @@ export function AboutPanel({ lang, appVersion, updateAvailable, onRefreshVersion
 
   const [updateCheck, setUpdateCheck] = useState<CheckState>({ status: "idle" });
 
-  // Trigger parent version check when About panel opens
+  // Trigger version check when About panel opens, show result directly
   useEffect(() => {
-    setUpdateCheck({ status: "checking" });
-    onRefreshVersionCheck?.();
-    // After a timeout, if the check hasn't resolved, show idle
     const timer = setTimeout(() => {
-      setUpdateCheck((prev) => (prev.status === "checking" ? { status: "idle" } : prev));
-    }, 10000);
+      checkForUpdate();
+    }, 300);
     return () => clearTimeout(timer);
   }, []);
 
