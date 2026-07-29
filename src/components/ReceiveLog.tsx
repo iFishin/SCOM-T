@@ -543,7 +543,9 @@ export function ReceiveLog({
                     {ts}
                   </span>
                   <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
-                    {log.payload.trimStart()}
+                    {searchRegex ? highlightSegments(log.payload.trimStart(), searchRegex).map((seg, si) =>
+                      seg.match ? <mark key={si} className="hl-search-match">{seg.text}</mark> : <span key={si}>{seg.text}</span>
+                    ) : log.payload.trimStart()}
                   </span>
                 </div>
               );

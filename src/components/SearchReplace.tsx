@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, X, ChevronUp, ChevronDown, CaseSensitive, Regex, WholeWord } from "lucide-react";
 import { searchInText, buildSearchRegex, type SearchOptions, type MatchRange } from "../hooks/useSearch.ts";
 
 type Props = {
@@ -63,7 +63,7 @@ export function SearchReplace({
   const [query, setQuery] = useState("");
   const [replaceVal, setReplaceVal] = useState("");
   const [showReplace, setShowReplace] = useState(false);
-  const [options] = useState<SearchOptions>({
+  const [options, setOptions] = useState<SearchOptions>({
     caseSensitive: false,
     regex: false,
     wholeWord: false,
@@ -71,6 +71,10 @@ export function SearchReplace({
   const [localIdx, setLocalIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleOption = useCallback((key: keyof SearchOptions) => {
+    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   // ── Self-contained mode: internal search state ──
   const [selfMatches, setSelfMatches] = useState<MatchRange[]>([]);
@@ -201,6 +205,17 @@ export function SearchReplace({
         <button type="button" onClick={goToNext} disabled={total === 0} className={navBtn} title={lang === "zh" ? "下一个" : "Next"}>
           <ChevronDown size={14} />
         </button>
+        <span className="w-px h-4 bg-[var(--border)]" />
+        <button type="button" onClick={() => toggleOption("caseSensitive")} className={`rounded p-0.5 transition-colors ${options.caseSensitive ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`} title={lang === "zh" ? "大小写匹配" : "Case sensitive"}>
+          <CaseSensitive size={13} />
+        </button>
+        <button type="button" onClick={() => toggleOption("regex")} className={`rounded p-0.5 transition-colors ${options.regex ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`} title={lang === "zh" ? "正则表达式" : "Regex"}>
+          <Regex size={13} />
+        </button>
+        <button type="button" onClick={() => toggleOption("wholeWord")} className={`rounded p-0.5 transition-colors ${options.wholeWord ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`} title={lang === "zh" ? "全词匹配" : "Whole word"}>
+          <WholeWord size={13} />
+        </button>
+        <span className="w-px h-4 bg-[var(--border)]" />
         {allowReplace && isTextareaMode && (
           <>
             <span className="w-px h-4 bg-[var(--border)]" />
