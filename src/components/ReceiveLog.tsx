@@ -462,19 +462,35 @@ export function ReceiveLog({
         onScroll={handleScroll}
         tabIndex={0}
         onCopy={(e) => {
-          // If user has selected specific text, let browser default copy that selection
+          // Determine which log entries are selected (if any) via data-seq attributes
           const sel = window.getSelection();
-          if (sel && sel.toString().trim()) return;
-          // No selection → format all logs as clean text
-          if (logs.length === 0) return;
-          const text = logs
+          let selectedSeqs: Set<number> | null = null;
+          if (sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) {
+            const range = sel.getRangeAt(0);
+            const container = containerRef.current;
+            if (container && range.intersectsNode(container)) {
+              selectedSeqs = new Set();
+              container.querySelectorAll<HTMLElement>("[data-seq]").forEach((el) => {
+                if (range.intersectsNode(el)) {
+                  for (const s of (el.dataset.seq || "").split(",")) {
+                    const n = parseInt(s, 10);
+                    if (!isNaN(n)) selectedSeqs!.add(n);
+                  }
+                }
+              });
+            }
+          }
+          const toCopy = selectedSeqs
+            ? logs.filter((l) => selectedSeqs!.has(l.seq))
+            : logs;
+          if (toCopy.length === 0) return;
+          const text = toCopy
             .map((log) => {
               const tag = log.direction === "received" ? "RX" : "TX";
               const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
               const pay = log.payload.trimStart();
-              return pay ? `[${tag}] [${ts}] ${pay}` : "";
+              return `[${tag}] [${ts}] ${pay}`;
             })
-            .filter(Boolean)
             .join("\n");
           if (text) { e.preventDefault(); e.clipboardData.setData("text/plain", text); }
         }}
@@ -519,7 +535,7 @@ export function ReceiveLog({
                 ? "bg-sky-50/40 dark:bg-sky-950/15"
                 : "";
               return (
-                <div key={log.id} className={"flex items-baseline gap-1 px-1 py-px leading-relaxed " + rowBg}>
+                <div key={log.id} data-seq={log.seq} className={"flex items-baseline gap-1 px-1 py-px leading-relaxed " + rowBg}>
                   <span className={`shrink-0 font-bold ${tagColor}`}>
                     {tag}
                   </span>
@@ -550,7 +566,7 @@ export function ReceiveLog({
                       : "text-sky-600";
               const tag = isReceived ? "RX" : "TX";
               return (
-                <div key={log.id} className="group border-b border-[var(--border)]/40 last:border-b-0">
+                <div key={log.id} data-seq={log.seq} className="group border-b border-[var(--border)]/40 last:border-b-0">
                   <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-[10px] text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
                     <span className={`shrink-0 font-bold ${tagColor} ${isReceived ? "" : "opacity-60"}`}>
                       {tag}
@@ -596,6 +612,7 @@ export function ReceiveLog({
               return (
                 <div
                   key={group.key}
+                  data-seq={group.entries.map(e => e.seq).join(",")}
                   className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1"
                 >
                   <div className="mb-0.5 flex items-center gap-2 text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
