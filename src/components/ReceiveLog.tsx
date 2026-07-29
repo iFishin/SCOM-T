@@ -462,13 +462,21 @@ export function ReceiveLog({
         onScroll={handleScroll}
         tabIndex={0}
         onCopy={(e) => {
-          // Override copy with clean formatted text regardless of visual selection
+          // If user has selected specific text, let browser default copy that selection
+          const sel = window.getSelection();
+          if (sel && sel.toString().trim()) return;
+          // No selection → format all logs as clean text
           if (logs.length === 0) return;
-          const text = formatLogsAsText(logs);
-          if (text) {
-            e.preventDefault();
-            e.clipboardData.setData("text/plain", text);
-          }
+          const text = logs
+            .map((log) => {
+              const tag = log.direction === "received" ? "RX" : "TX";
+              const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
+              const pay = log.payload.trimStart();
+              return pay ? `[${tag}] [${ts}] ${pay}` : "";
+            })
+            .filter(Boolean)
+            .join("\n");
+          if (text) { e.preventDefault(); e.clipboardData.setData("text/plain", text); }
         }}
         onKeyDown={(e) => {
           if (e.ctrlKey && e.key === "a") {
