@@ -83,12 +83,21 @@ fn try_claim_instance(state: tauri::State<AppSettings>) -> bool {
 
 #[tauri::command]
 fn append_to_file(path: String, content: String) -> Result<(), String> {
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)
         .map_err(|e| format!("Failed to open file: {e}"))?;
-    file.write_all(content.as_bytes())
+
+    // Write UTF-8 BOM if file is empty (newly created) to help Windows Notepad
+    // detect UTF-8 encoding
+    let is_new = file.metadata().map(|m| m.len() == 0).unwrap_or(false);
+
+    let mut data = if is_new { vec![0xEF, 0xBB, 0xBF] } else { Vec::new() };
+    data.extend_from_slice(content.as_bytes());
+
+    let mut file = file;
+    file.write_all(&data)
         .map_err(|e| format!("Failed to write to file: {e}"))?;
     Ok(())
 }
