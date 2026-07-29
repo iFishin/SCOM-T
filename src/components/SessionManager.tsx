@@ -56,6 +56,7 @@ function SessionContent({
   isActive,
   onActiveData,
   logFileProps,
+  onAddToPrompts,
 }: {
   config: SerialConfig;
   lang: Lang;
@@ -76,6 +77,7 @@ function SessionContent({
     onFlushLogs: (() => void) | undefined;
     onCloseLogFile: (() => void) | undefined;
   };
+  onAddToPrompts?: (payload: string) => void;
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
 
@@ -161,6 +163,7 @@ function SessionContent({
         onToggleRealTime={logFileProps?.onToggleRealTime}
         onFlushLogs={logFileProps?.onFlushLogs}
         onCloseLogFile={logFileProps?.onCloseLogFile}
+        onAddToPrompts={onAddToPrompts}
       />
     </div>
   );
@@ -182,8 +185,9 @@ type SessionManagerProps = {
     onSelectLogFile: (() => void) | undefined;
     onToggleRealTime: (() => void) | undefined;
     onFlushLogs: (() => void) | undefined;
-    onCloseLogFile: (() => void) | undefined;
+    onCloseLogFile: ((() => void) | undefined);
   };
+  onAddToPrompts?: (payload: string) => void;
 };
 
 export function SessionManager({
@@ -195,6 +199,7 @@ export function SessionManager({
   mockSerial,
   onActiveSessionData,
   logFileProps,
+  onAddToPrompts,
 }: SessionManagerProps) {
   const {
     sessions,
@@ -261,6 +266,7 @@ export function SessionManager({
                 isActive={session.id === activeSessionId}
                 onActiveData={onActiveSessionData}
                 logFileProps={logFileProps}
+                onAddToPrompts={onAddToPrompts}
               />
             </div>
           );

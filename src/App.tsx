@@ -739,6 +739,7 @@ function App() {
                   onFlushLogs: () => logFile.flushAll(activeLogs),
                   onCloseLogFile: logFile.closeLogFile,
                 }}
+                onAddToPrompts={handleAddToPrompts}
               />
             </div>
 
@@ -1182,6 +1183,7 @@ function App() {
                       onFlushLogs: () => logFile.flushAll(activeLogs),
                       onCloseLogFile: logFile.closeLogFile,
                     }}
+                    onAddToPrompts={handleAddToPrompts}
                   />
                 </div>
               )}
