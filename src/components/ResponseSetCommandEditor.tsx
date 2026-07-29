@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Plus, Trash2, ChevronDown, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "./ui/Input.tsx";
+import { Checkbox } from "./ui/Checkbox.tsx";
 import { t } from "../i18n";
 import type { Lang } from "../i18n";
 import type { ResponseSetCommand } from "../hooks/useResponseSet";
@@ -146,10 +147,12 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
               title={cmd.commandRegex ? (lang === "zh" ? "正则模式" : "Regex mode") : (lang === "zh" ? "文本模式" : "Text mode")}>
               {cmd.commandRegex ? ".*" : "Abc"}
             </button>
-            <label className="flex items-center gap-0.5 text-[10px] text-[var(--text-muted)] cursor-pointer select-none">
-              <input type="checkbox" checked={cmd.isHex || false} onChange={(e) => updateField(i, { isHex: e.target.checked })} className="w-3 h-3 accent-[var(--accent)]" />
-              <span>{t("response_set_is_hex", lang)}</span>
-            </label>
+            <Checkbox
+              checked={cmd.isHex || false}
+              onChange={(e) => updateField(i, { isHex: (e.target as HTMLInputElement).checked })}
+              label={t("response_set_is_hex", lang)}
+              className="scale-[0.85] origin-right"
+            />
             <button type="button" onClick={() => removeCommand(i)} className="text-rose-400 hover:text-rose-600 p-0.5" title={lang === "zh" ? "删除" : "Delete"}><Trash2 size={11} /></button>
           </div>
         </div>
