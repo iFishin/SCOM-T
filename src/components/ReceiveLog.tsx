@@ -520,10 +520,11 @@ export function ReceiveLog({
                 ? "bg-sky-50/40 dark:bg-sky-950/15"
                 : "";
               const payTrim = log.payload.trimStart();
+              const payTrimOffset = log.payload.length - payTrim.length;
               // Compute offset for current-match detection relative to this payload
-              const logOffset = logIdx * LOG_SEPARATOR.length + logs.slice(0, logIdx).reduce((s, l) => s + l.payload.trimStart().length, 0);
-              const curStart = searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].start - logOffset : undefined;
-              const curEnd = curStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].end - logOffset : undefined;
+              const logOffset = logIdx * LOG_SEPARATOR.length + logs.slice(0, logIdx).reduce((s, l) => s + l.payload.length, 0);
+              const curStart = searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].start - logOffset - payTrimOffset : undefined;
+              const curEnd = curStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].end - logOffset - payTrimOffset : undefined;
               const inRange = curStart !== undefined && curEnd !== undefined && curStart >= 0 && curEnd <= payTrim.length;
               const hlMatch = searchRegex ? highlightText(payTrim, searchRegex, inRange ? curStart : undefined, inRange ? curEnd : undefined) : null;
               return (
@@ -607,7 +608,7 @@ export function ReceiveLog({
               // Compute offset of this group's mergedPayload in the full logText
               const firstLogIdx = logs.indexOf(first);
               const groupOffset = firstLogIdx >= 0
-                ? firstLogIdx * LOG_SEPARATOR.length + logs.slice(0, firstLogIdx).reduce((s, l) => s + l.payload.trimStart().length, 0)
+                ? firstLogIdx * LOG_SEPARATOR.length + logs.slice(0, firstLogIdx).reduce((s, l) => s + l.payload.length, 0)
                 : 0;
               const gCurStart = searchIndex >= 0 && searchIndex < searchMatches.length
                 ? searchMatches[searchIndex].start - groupOffset
