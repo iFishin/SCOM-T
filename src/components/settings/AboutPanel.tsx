@@ -13,7 +13,7 @@ const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
 type CheckState =
   | { status: "idle" }
   | { status: "checking" }
-  | { status: "latest" }
+  | { status: "latest"; version: string; url: string }
   | { status: "available"; version: string; url: string; body: string }
   | { status: "error"; message: string };
 
@@ -149,7 +149,11 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
           body: data.body || "",
         });
       } else {
-        setUpdateCheck({ status: "latest" });
+        setUpdateCheck({
+          status: "latest",
+          version: latestTag,
+          url: data.html_url || `https://github.com/${GITHUB_REPO}/releases/latest`,
+        });
       }
     } catch (err) {
       setUpdateCheck({ status: "error", message: String(err) });
@@ -348,9 +352,22 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
         )}
 
         {updateCheck.status === "latest" && (
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-600">
-            <CheckCircle size={12} />
-            {t("update_latest", lang)} (v{version})
+          <div className="mt-2 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-700">
+              <CheckCircle size={13} />
+              <span>
+                {lang === "zh"
+                  ? `本地 v${version} · GitHub v${updateCheck.version}`
+                  : `Local v${version} · GitHub v${updateCheck.version}`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.open(updateCheck.url, "_blank")}
+              className="text-[10px] text-emerald-600 underline hover:text-emerald-700"
+            >
+              {lang === "zh" ? "查看" : "View"}
+            </button>
           </div>
         )}
 
