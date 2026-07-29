@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Download } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -1029,6 +1029,46 @@ export function PromptPanel({
                   >
                     <Plus size={10} />
                     {lang === "zh" ? "添加期望结果" : "Add Response"}
+                  </button>
+                  {/* Capture response button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Find the most recent received log after the last sent matching this command
+                      if (!logs || logs.length === 0) return;
+                      const cmdUpper = row.command.trim().toUpperCase();
+                      let lastSentIdx = -1;
+                      for (let i = logs.length - 1; i >= 0; i--) {
+                        if (logs[i].direction === "sent" && logs[i].payload.trim().toUpperCase() === cmdUpper) {
+                          lastSentIdx = i;
+                          break;
+                        }
+                      }
+                      if (lastSentIdx < 0) return;
+                      // Collect all received entries after the last send
+                      const received: string[] = [];
+                      for (let i = lastSentIdx + 1; i < logs.length; i++) {
+                        if (logs[i].direction === "received") {
+                          received.push(logs[i].payload);
+                        }
+                      }
+                      if (received.length === 0) return;
+                      const captured = received.join("\n");
+                      const responses = [...(row.expectedResponses || []), captured];
+                      const regex = row.expectedResponseRegex
+                        ? [...row.expectedResponseRegex, false]
+                        : undefined;
+                      updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
+                      pushToast(
+                        lang === "zh" ? `已采集 ${captured.length} 字符` : `Captured ${captured.length} chars`,
+                        "success"
+                      );
+                    }}
+                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-emerald-600 px-1 py-0.5"
+                    title={lang === "zh" ? "从最近一次接收中采集实际响应" : "Capture actual response from last receive"}
+                  >
+                    <Download size={10} />
+                    {lang === "zh" ? "采集响应" : "Capture"}
                   </button>
                 </div>
               </div>
