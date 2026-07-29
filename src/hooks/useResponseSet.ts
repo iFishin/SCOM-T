@@ -7,6 +7,7 @@ import yaml from "js-yaml";
 
 export type ResponseSetCommand = {
   command: string;
+  commandRegex?: boolean;
   expectedResponses: string[];
   expectedResponseRegex?: boolean[];
   matchMode: "all" | "any";
@@ -26,6 +27,7 @@ interface YamlResponseSet {
   description?: string;
   commands: {
     command: string;
+    command_regex?: boolean;
     expected_responses?: string[];
     expected_responses_regex?: boolean[];
     match_mode?: "all" | "any";
@@ -89,6 +91,7 @@ export function useResponseSet() {
               const regex = Array.isArray(c.expected_responses_regex) ? c.expected_responses_regex : [];
               return {
                 command: c.command || "",
+                commandRegex: c.command_regex === true,
                 expectedResponses: responses,
                 expectedResponseRegex: regex.length === responses.length ? regex : undefined,
                 matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
@@ -110,6 +113,7 @@ export function useResponseSet() {
         const hasRegex = c.expectedResponseRegex?.some(Boolean);
         return {
           command: c.command,
+          command_regex: c.commandRegex || undefined,
           expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
           expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
           match_mode: c.matchMode === "any" ? "any" : undefined,
@@ -147,9 +151,16 @@ export function useResponseSet() {
     const results: { rowId: number; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] = [];
     for (const row of promptRows) {
       if (!row.command.trim()) continue;
-      const matched = responseSet.commands.find(
-        (c) => c.command.trim().toUpperCase() === row.command.trim().toUpperCase(),
-      );
+      const matched = responseSet.commands.find((c) => {
+        if (c.commandRegex) {
+          try {
+            return new RegExp(c.command).test(row.command.trim());
+          } catch {
+            return false;
+          }
+        }
+        return c.command.trim().toUpperCase() === row.command.trim().toUpperCase();
+      });
       if (matched && matched.expectedResponses.length > 0) {
         results.push({
           rowId: row.id,

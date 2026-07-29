@@ -17,6 +17,12 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
     onChange(next);
   }
 
+  function updateCommandRegex(index: number, commandRegex: boolean) {
+    const next = [...commands];
+    next[index] = { ...next[index], commandRegex };
+    onChange(next);
+  }
+
   function updateMatchMode(index: number, matchMode: "all" | "any") {
     const next = [...commands];
     next[index] = { ...next[index], matchMode };
@@ -100,9 +106,24 @@ export function ResponseSetCommandEditor({ lang, commands, onChange }: ResponseS
                 type="text"
                 value={cmd.command}
                 onChange={(e) => updateCommand(i, e.target.value)}
-                placeholder={lang === "zh" ? "AT指令" : "AT Command"}
+                placeholder={cmd.commandRegex ? (lang === "zh" ? "正则模式，如 AT\\+CSQ" : "Regex pattern, e.g. AT\\\\+CSQ") : (lang === "zh" ? "AT指令" : "AT Command")}
                 className="flex-1 text-xs font-mono"
               />
+              <button
+                type="button"
+                onClick={() => updateCommandRegex(i, !cmd.commandRegex)}
+                className={`shrink-0 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
+                  cmd.commandRegex
+                    ? "bg-amber-100 border-amber-300 text-amber-700"
+                    : "bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)]"
+                }`}
+                title={cmd.commandRegex
+                  ? (lang === "zh" ? "正则模式，点击切换为文本" : "Regex mode, click for text")
+                  : (lang === "zh" ? "文本模式，点击切换为正则" : "Text mode, click for regex")
+                }
+              >
+                {cmd.commandRegex ? ".*" : "Abc"}
+              </button>
               {/* Match mode toggle */}
               <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] overflow-hidden">
                 <button
