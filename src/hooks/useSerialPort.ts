@@ -784,16 +784,31 @@ export function useSerialPort({
 
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
-      const txTs = formatTimestamp(); // timestamp BEFORE write, so chronological order stays correct
+      const txTs = formatTimestamp();
+      const rxPos = pendingLogsRef.current.length; // mark where RX entries arrived during write
       await s.sendBinary(bytes);
       txBytesRef.current += bytes.length;
-      appendLog({
+      // Insert TX log right before any RX entries that arrived during the write,
+      // so chronological order (TX first, then RX echo) is preserved in the log
+      const txEntry: Omit<SerialLogEntry, "id" | "timestamp" | "seq"> = {
         direction: "sent",
         mode: sendMode,
         payload: sendMode === "hex"
           ? bytesToHex(bytes)
           : new TextDecoder().decode(new Uint8Array(bytes)),
-      }, txTs);
+      };
+      const seq = ++seqCounter.current;
+      pendingLogsRef.current.splice(rxPos, 0, {
+        ...txEntry,
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        timestamp: txTs,
+        seq,
+      });
+      if (pendingLogsRef.current.length >= BATCH_MAX_SIZE) {
+        flushPendingLogs();
+      } else {
+        scheduleBatchFlush();
+      }
     } catch (sendError) {
       setError(`发送失败：${toMessage(sendError)}`);
       throw sendError;
