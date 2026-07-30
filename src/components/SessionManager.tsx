@@ -39,6 +39,7 @@ export type ActiveSessionData = {
   clearLogs: (target: "all" | "received" | "sent") => void;
   refreshPorts: () => Promise<number>;
   setSignals: (rts: boolean, dtr: boolean) => Promise<void>;
+  clearSerialBuffer: () => Promise<void>;
   getSignalHistory: () => { time: number; rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[];
 };
 
@@ -104,6 +105,7 @@ function SessionContent({
       clearLogs: (t: "all" | "received" | "sent") => serial.clearLogs(t),
       refreshPorts: serial.refreshPorts,
       setSignals: serial.setSignals,
+      clearSerialBuffer: serial.clearSerialBuffer,
       getSignalHistory: serial.getSignalHistory,
     };
     onDataRef.current = data;

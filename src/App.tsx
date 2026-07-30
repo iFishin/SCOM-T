@@ -176,6 +176,7 @@ function App() {
   const latencyHistory = sessionData?.latencyHistory ?? [];
   const signalStates = sessionData?.signalStates ?? EMPTY_SIGNAL_STATES;
   const getSignalHistory = sessionData?.getSignalHistory ?? noopSignalHistory;
+  const clearSerialBuffer = sessionData?.clearSerialBuffer ?? noopAsync;
 
   const activeLogs = logs;
   const activeIsConnected = isConnected;
@@ -651,6 +652,9 @@ function App() {
           return;
         case "close_port":
           if (isConnected) void closePort?.();
+          return;
+        case "clear_serial_buffer":
+          void clearSerialBuffer().then(() => pushToast(lang === "zh" ? "串口缓冲区已清空" : "Serial buffer cleared", "success"));
           return;
         default:
           pushToast(`${hotkey.label}: ${t("hotkey_no_action", lang)}`, "warn");

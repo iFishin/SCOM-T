@@ -964,6 +964,12 @@ export function useSerialPort({
     await serialRef.current?.setSignals(rts, dtr).catch(() => undefined);
   }
 
+  async function clearSerialBuffer() {
+    if (config.connectionType !== "serial") return;
+    // Clear both input and output buffers to discard stale data
+    await serialRef.current?.clearBuffer("all").catch(() => undefined);
+  }
+
   // ── Init / Cleanup ──
 
   useEffect(() => {
@@ -1001,6 +1007,7 @@ export function useSerialPort({
     tcpServerStop,
     tcpServerBroadcast,
     setSignals,
+    clearSerialBuffer,
     // Visualization states
     txBytes,
     rxBytes,

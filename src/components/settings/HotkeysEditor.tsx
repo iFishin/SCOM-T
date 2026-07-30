@@ -19,6 +19,7 @@ const BUILTIN_ACTIONS = [
   { label: "清除已接收", value: "clear_received" },
   { label: "刷新设备列表", value: "refresh_ports" },
   { label: "关闭端口", value: "close_port" },
+  { label: "清空串口缓冲区", value: "clear_serial_buffer" },
   { label: "切换HEX模式", value: "toggle_hex" },
 ];
 

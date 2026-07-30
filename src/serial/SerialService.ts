@@ -1,4 +1,5 @@
 import {
+  ClearBuffer,
   DataBits,
   FlowControl,
   Parity,
@@ -73,6 +74,9 @@ export interface ISerialService {
 
   /** Set RTS/DTR signal levels */
   setSignals(rts: boolean, dtr: boolean): Promise<void>;
+
+  /** Clear serial port buffer (input, output, or both) */
+  clearBuffer(bufferType: "input" | "output" | "all"): Promise<void>;
 
   /** Read modem input signal states */
   readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }>;
@@ -260,6 +264,16 @@ export class TauriSerialService implements ISerialService {
       this.port.readRingIndicator().catch(() => false),
     ]);
     return { cts, dsr, cd, ri };
+  }
+
+  async clearBuffer(bufferType: "input" | "output" | "all"): Promise<void> {
+    if (!this.port) return;
+    const map: Record<string, ClearBuffer> = {
+      input: ClearBuffer.Input,
+      output: ClearBuffer.Output,
+      all: ClearBuffer.All,
+    };
+    await this.port.clearBuffer(map[bufferType]).catch(() => undefined);
   }
 
   async dispose(): Promise<void> {
@@ -472,6 +486,10 @@ export class MockSerialService implements ISerialService {
 
   async readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }> {
     return { cts: true, dsr: true, cd: true, ri: false };
+  }
+
+  async clearBuffer(_bufferType: "input" | "output" | "all"): Promise<void> {
+    // No-op for mock
   }
 
   async dispose(): Promise<void> {
