@@ -508,12 +508,12 @@ export function useSerialPort({
 
   // ── Logging (batched) ──
 
-  function appendLog(entry: Omit<SerialLogEntry, "id" | "timestamp" | "seq">) {
+  function appendLog(entry: Omit<SerialLogEntry, "id" | "timestamp" | "seq">, overrideTs?: string) {
     const seq = ++seqCounter.current;
     pendingLogsRef.current.push({
       ...entry,
       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      timestamp: formatTimestamp(),
+      timestamp: overrideTs ?? formatTimestamp(),
       seq,
     });
     if (pendingLogsRef.current.length >= BATCH_MAX_SIZE) {
@@ -784,8 +784,8 @@ export function useSerialPort({
 
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
-      // Log TX BEFORE write so the timestamp reflects when sending started,
-      // not when the write completed (device echo can arrive during write)
+      const txTs = formatTimestamp(); // timestamp BEFORE write, so chronological order stays correct
+      await s.sendBinary(bytes);
       txBytesRef.current += bytes.length;
       appendLog({
         direction: "sent",
@@ -793,8 +793,7 @@ export function useSerialPort({
         payload: sendMode === "hex"
           ? bytesToHex(bytes)
           : new TextDecoder().decode(new Uint8Array(bytes)),
-      });
-      await s.sendBinary(bytes);
+      }, txTs);
     } catch (sendError) {
       setError(`发送失败：${toMessage(sendError)}`);
       throw sendError;
@@ -816,6 +815,8 @@ export function useSerialPort({
         throw new Error("TCP 未连接");
       }
       lastTcpSendRef.current = Date.now();
+      const txTs = formatTimestamp(); // timestamp BEFORE write
+      await tcpClientRef.current.send(bytes);
       txBytesRef.current += bytes.length;
       appendLog({
         direction: "sent",
@@ -823,8 +824,7 @@ export function useSerialPort({
         payload: sendMode === "hex"
           ? bytesToHex(bytes)
           : new TextDecoder().decode(new Uint8Array(bytes)),
-      });
-      await tcpClientRef.current.send(bytes);
+      }, txTs);
     } catch (err) {
       setError(`TCP发送失败：${toMessage(err)}`);
       throw err;
