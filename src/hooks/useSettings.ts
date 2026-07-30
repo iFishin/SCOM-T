@@ -139,8 +139,8 @@ export const DEFAULT_GRID_LAYOUT: GridItemLayout[] = [
 ];
 
 const DEFAULT_HOTKEYS: HotkeyConfig[] = [
-  "Clear-Log", "Read-ATC", "Update-ATC", "Restore-ATC",
-  "Internet", "RST", "ECHO", "Version",
+  "快速发送指令1", "快速发送指令2", "快速发送指令3", "快速发送指令4",
+  "快速发送指令5", "快速发送指令6", "快速发送指令7", "快速发送指令8",
 ].map((label, index) => ({
   id: `hotkey-${index + 1}`,
   label,
