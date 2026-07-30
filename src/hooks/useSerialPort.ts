@@ -784,7 +784,8 @@ export function useSerialPort({
 
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
-      await s.sendBinary(bytes);
+      // Log TX BEFORE write so the timestamp reflects when sending started,
+      // not when the write completed (device echo can arrive during write)
       txBytesRef.current += bytes.length;
       appendLog({
         direction: "sent",
@@ -793,6 +794,7 @@ export function useSerialPort({
           ? bytesToHex(bytes)
           : new TextDecoder().decode(new Uint8Array(bytes)),
       });
+      await s.sendBinary(bytes);
     } catch (sendError) {
       setError(`发送失败：${toMessage(sendError)}`);
       throw sendError;
@@ -814,7 +816,6 @@ export function useSerialPort({
         throw new Error("TCP 未连接");
       }
       lastTcpSendRef.current = Date.now();
-      await tcpClientRef.current.send(bytes);
       txBytesRef.current += bytes.length;
       appendLog({
         direction: "sent",
@@ -823,6 +824,7 @@ export function useSerialPort({
           ? bytesToHex(bytes)
           : new TextDecoder().decode(new Uint8Array(bytes)),
       });
+      await tcpClientRef.current.send(bytes);
     } catch (err) {
       setError(`TCP发送失败：${toMessage(err)}`);
       throw err;

@@ -1,6 +1,6 @@
 [package]
 name = "scom-t"
-version = "0.3.49"
+version = "0.3.50"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
