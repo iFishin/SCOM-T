@@ -213,14 +213,18 @@ export class TauriSerialService implements ISerialService {
     let offset = 0;
     let calls = 0;
 
+    // Try full write first; partial writes are rare for normal commands
+    // but handled correctly when they occur (e.g. very large payloads).
     while (offset < data.length) {
-      const remaining = data.length - offset;
-      const written = await port.writeBinary(data.slice(offset));
+      const chunk = offset === 0 ? data : data.slice(offset);
+      const written = await port.writeBinary(chunk);
       calls += 1;
-      if (!Number.isInteger(written) || written <= 0 || written > remaining) {
+      if (!Number.isInteger(written) || written <= 0 || written > chunk.length) {
         throw new Error(`串口写入异常：第 ${calls} 次写入返回 ${written}，进度 ${offset}/${data.length} 字节。`);
       }
       offset += written;
+      // If the first write completed the whole payload, we're done
+      if (offset >= data.length) break;
     }
 
     const elapsedMs = Math.round(performance.now() - startedAt);
