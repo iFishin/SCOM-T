@@ -598,6 +598,9 @@ export function useSerialPort({
   function clearLineBuffer() {
     if (lineFlushTimerRef.current) clearTimeout(lineFlushTimerRef.current);
     lineFlushTimerRef.current = null;
+    if (lineBufferRef.current.length > 0) {
+      appLogger.debug("Serial", `Cleared stale line buffer (${lineBufferRef.current.length} bytes)`);
+    }
     lineBufferRef.current = [];
   }
 
