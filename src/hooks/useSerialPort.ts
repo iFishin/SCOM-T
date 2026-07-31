@@ -785,6 +785,9 @@ export function useSerialPort({
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
       const txTs = formatTimestamp();
+      // Clear line buffer so the new command's echo starts fresh,
+      // without being concatenated with stale data from a previous incomplete line
+      clearLineBuffer();
       const rxPos = pendingLogsRef.current.length; // mark where RX entries arrived during write
       await s.sendBinary(bytes);
       txBytesRef.current += bytes.length;
