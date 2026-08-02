@@ -1,18 +1,40 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { bytesToAscii, bytesToHex, formatTimestamp } from "../utils/hexConverter.ts";
+import {
+  bytesToAscii,
+  bytesToHex,
+  formatTimestamp,
+} from "../utils/hexConverter.ts";
 import { encodeSendPayload } from "../utils/sendPayload.ts";
 import { appLogger } from "../utils/appLogger.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
-import { TauriSerialService, MockSerialService, isMockPort, listAvailablePorts } from "../serial/SerialService.ts";
+import {
+  TauriSerialService,
+  MockSerialService,
+  isMockPort,
+  listAvailablePorts,
+} from "../serial/SerialService.ts";
 import type { ITcpClientService } from "../tcp/TcpClientService.ts";
 import { TauriTcpClientService } from "../tcp/TcpClientService.ts";
 import type { ITcpServerService } from "../tcp/TcpServerService.ts";
 import { TauriTcpServerService } from "../tcp/TcpServerService.ts";
-import type { PortSummary, SerialLogEntry, ReceiveMode, SendMode } from "../serial/types.ts";
-import type { ConnectionType, TcpConnectionStatus, TcpServerStatus, TcpClientInfo, TcpProtocol } from "../tcp/types.ts";
+import type {
+  PortSummary,
+  SerialLogEntry,
+  ReceiveMode,
+  SendMode,
+} from "../serial/types.ts";
+import type {
+  ConnectionType,
+  TcpConnectionStatus,
+  TcpServerStatus,
+  TcpClientInfo,
+  TcpProtocol,
+} from "../tcp/types.ts";
 import type { MockSerialConfig } from "./useSettings.ts";
+import { SerialEventJournal } from "../serial/SerialEventJournal.ts";
+import { SerialTextFramer } from "../serial/SerialTextFramer.ts";
 
 // ── Re-export types from the new service layers for backward compatibility ──
 
@@ -99,6 +121,8 @@ export function useSerialPort({
   const receiveModeRef = useRef(receiveMode);
   const configRef = useRef(config);
   const mockSerialRef = useRef(mockSerial);
+  const journalRef = useRef(new SerialEventJournal());
+  const logSubscribersRef = useRef(new Set<(entry: SerialLogEntry) => void>());
   // Keep configRef in sync so callback closures always read latest config
   configRef.current = config;
   const seqCounter = useRef(0);
@@ -108,18 +132,31 @@ export function useSerialPort({
   const BATCH_MAX_SIZE = 50;
   const pendingLogsRef = useRef<SerialLogEntry[]>([]);
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Current write-queue contents: text of commands queued but not yet fully sent.
+  const [sendQueue, setSendQueue] = useState<string[]>([]);
+  const sendQueueRef = useRef<string[]>([]);
   // Track last write to serial for echo suppression in TCP server mode
   const lastWriteRef = useRef<{ data: Uint8Array; time: number } | null>(null);
   // TCP latency measurement
   const lastTcpSendRef = useRef<number>(0);
-  // Line buffer for serial data: accumulate bytes and emit on newline
-  const lineBufferRef = useRef<number[]>([]);
-  const lineFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Byte-preserving receive framer. We accumulate bytes until a newline, but a
+  // device may send lines WITHOUT a trailing newline (e.g. "standalone:...").
+  // A short idle timer (reset on every chunk) flushes such lines after RX goes
+  // quiet, so they surface promptly without truncating USB-split multi-chunk
+  // lines (those arrive within milliseconds and keep resetting the timer).
+  const textFramerRef = useRef(new SerialTextFramer());
+  const frameFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Idle flush for newline-less device lines. NOTE: values below the plugin's
+  // ~50ms dispatch interval can truncate a single line that the plugin splits
+  // across two batches. Set to 10ms per user request — watch app logs for
+  // "Partial write recovered" / RX hex to judge whether truncation occurs.
+  const FRAME_IDLE_FLUSH_MS = 10;
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [logCapWarning, setLogCapWarning] = useState(false);
   const logCapWarningRef = useRef(false);
   const [ports, setPorts] = useState<PortSummary[]>([]);
   const [logs, setLogs] = useState<SerialLogEntry[]>([]);
+  const logsRef = useRef<SerialLogEntry[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [statusText, setStatusText] = useState("未连接");
@@ -138,18 +175,35 @@ export function useSerialPort({
   const txBytesRef = useRef(0);
   const rxBytesRef = useRef(0);
   const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
-  const [signalStates, setSignalStates] = useState<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }>({
+  const [signalStates, setSignalStates] = useState<{
+    cts: boolean;
+    dsr: boolean;
+    cd: boolean;
+    ri: boolean;
+  }>({
     cts: false,
     dsr: false,
     cd: false,
     ri: false,
   });
-  const signalHistoryRef = useRef<{ time: number; rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[]>([]);
+  const signalHistoryRef = useRef<
+    {
+      time: number;
+      rts: boolean;
+      dtr: boolean;
+      cts: boolean;
+      dsr: boolean;
+      cd: boolean;
+      ri: boolean;
+    }[]
+  >([]);
   const MAX_SIGNAL_HISTORY = 300;
 
   // TCP-specific state
-  const [tcpConnectionStatus, setTcpConnectionStatus] = useState<TcpConnectionStatus>("disconnected");
-  const [tcpServerStatus, setTcpServerStatus] = useState<TcpServerStatus>("stopped");
+  const [tcpConnectionStatus, setTcpConnectionStatus] =
+    useState<TcpConnectionStatus>("disconnected");
+  const [tcpServerStatus, setTcpServerStatus] =
+    useState<TcpServerStatus>("stopped");
   const [tcpServerClients, setTcpServerClients] = useState<TcpClientInfo[]>([]);
 
   useEffect(() => {
@@ -193,7 +247,8 @@ export function useSerialPort({
           ...states,
         });
         if (signalHistoryRef.current.length > MAX_SIGNAL_HISTORY) {
-          signalHistoryRef.current = signalHistoryRef.current.slice(-MAX_SIGNAL_HISTORY);
+          signalHistoryRef.current =
+            signalHistoryRef.current.slice(-MAX_SIGNAL_HISTORY);
         }
       }
     }, 500);
@@ -219,7 +274,10 @@ export function useSerialPort({
   function getSerial(portPath?: string): ISerialService {
     // If portPath is provided and it's a mock port, use MockSerialService
     if (portPath && isMockPort(portPath)) {
-      if (!serialRef.current || !(serialRef.current instanceof MockSerialService)) {
+      if (
+        !serialRef.current ||
+        !(serialRef.current instanceof MockSerialService)
+      ) {
         // Dispose existing service if any
         if (serialRef.current) {
           serialRef.current.dispose().catch(() => undefined);
@@ -227,28 +285,26 @@ export function useSerialPort({
         serialRef.current = new MockSerialService(mockSerialRef.current);
         // Wire up serial data callback
         serialRef.current.onData((data: Uint8Array) => {
-          const bytes = Array.from(data);
+          const rxEvent = journalRef.current.recordRx(data);
+          const bytes = Array.from(rxEvent.bytes);
           rxBytesRef.current += bytes.length;
 
-          // Line-buffer ASCII data
+          // Line-buffer ASCII data without dropping bytes.
           if (receiveModeRef.current === "ascii") {
-            for (const b of bytes) {
-              lineBufferRef.current.push(b);
-              if (b === 0x0A) {
-                const payload = bytesToAscii(lineBufferRef.current);
-                lineBufferRef.current = [];
-                if (payload) {
-                  appendLog({ direction: "received", mode: "ascii", payload });
-                }
-              }
-            }
-            resetLineFlushTimer();
+            bufferAsciiChunk(bytes, rxEvent.seq);
           } else {
-            appendLog({
-              direction: "received",
-              mode: "hex",
-              payload: bytesToHex(bytes),
-            });
+            appendLog(
+              {
+                direction: "received",
+                mode: "hex",
+                payload: bytesToHex(bytes),
+                rawBytes: [...bytes],
+                complete: true,
+                journalSeqStart: rxEvent.seq,
+                journalSeqEnd: rxEvent.seq,
+              },
+              formatTimestamp(rxEvent.timestamp),
+            );
           }
         });
 
@@ -265,7 +321,7 @@ export function useSerialPort({
       return serialRef.current;
     }
 
-    if (!serialRef.current || (serialRef.current instanceof MockSerialService)) {
+    if (!serialRef.current || serialRef.current instanceof MockSerialService) {
       // Dispose mock service if switching to real serial
       if (serialRef.current) {
         serialRef.current.dispose().catch(() => undefined);
@@ -273,7 +329,8 @@ export function useSerialPort({
       serialRef.current = new TauriSerialService();
       // Wire up serial data callback
       serialRef.current.onData((data: Uint8Array) => {
-        const bytes = Array.from(data);
+        const rxEvent = journalRef.current.recordRx(data);
+        const bytes = Array.from(rxEvent.bytes);
         rxBytesRef.current += bytes.length;
 
         // Echo suppression: in TCP server mode, skip data matching what we just wrote
@@ -299,28 +356,24 @@ export function useSerialPort({
           void getTcpServer().broadcast(dataWithTs);
         }
 
-        // Line-buffer ASCII data: accumulate bytes and flush on \n
+        // Line-buffer ASCII data without dropping bytes.
         if (receiveModeRef.current === "ascii") {
-          for (const b of bytes) {
-            lineBufferRef.current.push(b);
-            if (b === 0x0A) {
-              // \n — flush complete line, include \n in payload
-              const payload = bytesToAscii(lineBufferRef.current);
-              lineBufferRef.current = [];
-              if (payload) {
-                appendLog({ direction: "received", mode: "ascii", payload });
-              }
-            }
-          }
-          // Reset flush timer for any remaining incomplete data
-          resetLineFlushTimer();
+          appLogger.debug("Serial", `RX chunk (${bytes.length} B): ${bytesToHex(bytes)}`);
+          bufferAsciiChunk(bytes, rxEvent.seq);
         } else {
           // Hex mode: emit each chunk as-is
-          appendLog({
-            direction: "received",
-            mode: "hex",
-            payload: bytesToHex(bytes),
-          });
+          appLogger.debug("Serial", `RX hex chunk (${bytes.length} B): ${bytesToHex(bytes)}`);
+          appendLog(
+            {
+              direction: "received",
+              mode: "hex",
+              payload: bytesToHex(bytes),
+              complete: true,
+              journalSeqStart: rxEvent.seq,
+              journalSeqEnd: rxEvent.seq,
+            },
+            formatTimestamp(rxEvent.timestamp),
+          );
         }
       });
 
@@ -379,7 +432,10 @@ export function useSerialPort({
         const cfg = configRef.current;
         setTcpConnectionStatus("connected");
         setIsConnected(true);
-        setConnectedPort({ path: `${cfg.tcpHost}:${cfg.tcpPort}`, baudRate: cfg.baudRate });
+        setConnectedPort({
+          path: `${cfg.tcpHost}:${cfg.tcpPort}`,
+          baudRate: cfg.baudRate,
+        });
         setStatusText("TCP已连接");
         setError(null);
       });
@@ -411,21 +467,29 @@ export function useSerialPort({
             ? bytesToHex(bytes)
             : bytesToAscii(bytes);
 
-        appendLog({
-          direction: "sent",
-          source: "tcp-server",
-          mode: receiveModeRef.current,
-          payload: formatted,
-        });
-
-        // Record the write for echo suppression
-        lastWriteRef.current = { data, time: Date.now() };
-
-        // Forward data to serial port
+        // Forward data to serial port through the same FIFO lifecycle path.
         const s = serialRef.current;
-        if (s) {
-          s.sendBinary(bytes).catch(() => undefined);
-        }
+        if (!s) return;
+        const transferId = journalRef.current.allocateTransferId();
+        void sendSerialBytes(
+          s,
+          bytes,
+          {
+            direction: "sent",
+            source: "tcp-server",
+            mode: receiveModeRef.current,
+            payload: formatted,
+          },
+          transferId,
+          () => {
+            lastWriteRef.current = { data, time: Date.now() };
+          },
+        ).catch((error) => {
+          appLogger.error(
+            "Serial",
+            `TCP-server serial forward failed: ${toMessage(error)}`,
+          );
+        });
       });
 
       svc.onClientConnected((client) => {
@@ -470,10 +534,9 @@ export function useSerialPort({
 
   function cleanupServices() {
     flushPendingLogs(); // flush any pending log entries before cleanup
-    // Flush and clean up line buffer
-    if (lineFlushTimerRef.current) clearTimeout(lineFlushTimerRef.current);
-    lineFlushTimerRef.current = null;
-    lineBufferRef.current = [];
+    // Drain and reset the byte-preserving framer for this session.
+    flushLineBuffer();
+    resetTextFramer();
 
     if (tcpClientRef.current) {
       tcpClientRef.current.dispose();
@@ -508,20 +571,38 @@ export function useSerialPort({
 
   // ── Logging (batched) ──
 
-  function appendLog(entry: Omit<SerialLogEntry, "id" | "timestamp" | "seq">, overrideTs?: string) {
+  function applyLogs(nextLogs: SerialLogEntry[]) {
+    logsRef.current = nextLogs;
+    setLogs(nextLogs);
+  }
+
+  function appendLog(
+    entry: Omit<SerialLogEntry, "id" | "timestamp" | "seq">,
+    overrideTs?: string,
+  ) {
     const seq = ++seqCounter.current;
-    pendingLogsRef.current.push({
+    const logEntry: SerialLogEntry = {
       ...entry,
       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       timestamp: overrideTs ?? formatTimestamp(),
       seq,
-    });
+    };
+    pendingLogsRef.current.push(logEntry);
+    for (const subscriber of logSubscribersRef.current) subscriber(logEntry);
     if (pendingLogsRef.current.length >= BATCH_MAX_SIZE) {
       flushPendingLogs();
     } else {
       scheduleBatchFlush();
     }
   }
+
+  const subscribeLogs = useCallback(
+    (subscriber: (entry: SerialLogEntry) => void): (() => void) => {
+      logSubscribersRef.current.add(subscriber);
+      return () => logSubscribersRef.current.delete(subscriber);
+    },
+    [],
+  );
 
   function scheduleBatchFlush() {
     if (batchTimerRef.current) return;
@@ -543,77 +624,131 @@ export function useSerialPort({
       const truncated = pending.slice(0, 200);
       pendingLogsRef.current = pending.slice(200);
       scheduleBatchFlush();
-      setLogs((current) => {
-        if (current.length === 0) return truncated;
-        const next = [...current, ...truncated];
-        if (next.length > MAX_LOGS) {
-          if (!logCapWarningRef.current) {
-            logCapWarningRef.current = true;
-            setTimeout(() => setLogCapWarning(true), 0);
-          }
-          return next.slice(next.length - MAX_LOGS);
-        }
-        return next;
-      });
-      return;
-    }
-
-    setLogs((current) => {
-      if (current.length === 0) return pending;
-      const next = [...current, ...pending];
+      const current = logsRef.current;
+      const next =
+        current.length === 0 ? truncated : [...current, ...truncated];
       if (next.length > MAX_LOGS) {
         if (!logCapWarningRef.current) {
           logCapWarningRef.current = true;
           setTimeout(() => setLogCapWarning(true), 0);
         }
-        return next.slice(next.length - MAX_LOGS);
+        applyLogs(next.slice(next.length - MAX_LOGS));
+      } else {
+        applyLogs(next);
       }
-      return next;
+      return;
+    }
+
+    const current = logsRef.current;
+    const next = current.length === 0 ? pending : [...current, ...pending];
+    if (next.length > MAX_LOGS) {
+      if (!logCapWarningRef.current) {
+        logCapWarningRef.current = true;
+        setTimeout(() => setLogCapWarning(true), 0);
+      }
+      applyLogs(next.slice(next.length - MAX_LOGS));
+    } else {
+      applyLogs(next);
+    }
+  }
+
+  // ── Byte-preserving ASCII framing ──
+
+  /**
+   * Drain buffered bytes as one incomplete RX line. Used on idle timeout (so
+   * newline-less device lines like "standalone:..." surface promptly) and on
+   * session close. USB-split chunks of ONE line are never drained here because
+   * the idle timer resets on every incoming chunk — only a genuine pause
+   * (> FRAME_IDLE_FLUSH_MS) triggers the flush.
+   */
+  function flushLineBuffer() {
+    if (frameFlushTimerRef.current) {
+      clearTimeout(frameFlushTimerRef.current);
+      frameFlushTimerRef.current = null;
+    }
+    const pending = textFramerRef.current.drain().pending;
+    if (pending.length === 0) return;
+
+    const payload = bytesToAscii(pending);
+    if (!payload) return;
+    appendLog({
+      direction: "received",
+      mode: "ascii",
+      payload,
+      rawBytes: [...pending],
+      complete: false,
     });
   }
 
-  // ── Line buffer for ASCII receive ──
-
-  /** Flush accumulated bytes as a complete log entry */
-  function flushLineBuffer() {
-    const buf = lineBufferRef.current;
-    lineBufferRef.current = [];
-    if (lineFlushTimerRef.current) {
-      clearTimeout(lineFlushTimerRef.current);
-      lineFlushTimerRef.current = null;
-    }
-    if (buf.length === 0) return;
-
-    const payload = bytesToAscii(buf);
-    if (!payload) return;
-
-    appendLog({ direction: "received", mode: "ascii", payload });
+  /** Arm a one-shot idle flush so newline-less lines still surface promptly. */
+  function armFrameIdleFlush() {
+    if (frameFlushTimerRef.current) clearTimeout(frameFlushTimerRef.current);
+    frameFlushTimerRef.current = setTimeout(() => {
+      frameFlushTimerRef.current = null;
+      flushLineBuffer();
+    }, FRAME_IDLE_FLUSH_MS);
   }
 
-  function resetLineFlushTimer() {
-    if (lineFlushTimerRef.current) clearTimeout(lineFlushTimerRef.current);
-    lineFlushTimerRef.current = setTimeout(flushLineBuffer, 100);
+  function resetTextFramer() {
+    if (frameFlushTimerRef.current) {
+      clearTimeout(frameFlushTimerRef.current);
+      frameFlushTimerRef.current = null;
+    }
+    const pendingBytes = textFramerRef.current.getPending().length;
+    if (pendingBytes > 0) {
+      appLogger.warn(
+        "Serial",
+        `Resetting text framer with ${pendingBytes} pending bytes at session boundary`,
+      );
+    }
+    textFramerRef.current.reset();
   }
 
-  function clearLineBuffer() {
-    if (lineFlushTimerRef.current) clearTimeout(lineFlushTimerRef.current);
-    lineFlushTimerRef.current = null;
-    if (lineBufferRef.current.length > 0) {
-      appLogger.debug("Serial", `Cleared stale line buffer (${lineBufferRef.current.length} bytes)`);
+  function bufferAsciiChunk(bytes: number[], journalSeq: number) {
+    if (bytes.length === 0) return;
+
+    // Accumulate incomplete bytes until a newline. A device may deliver one
+    // logical line split across many USB chunks (e.g. echo "ver" + "sion\r\n");
+    // those arrive within milliseconds, so the idle timer keeps resetting and
+    // the whole line reassembles when "\n" arrives — never truncated.
+    textFramerRef.current.feed(bytes);
+    const frames = textFramerRef.current.takeFrames();
+
+    for (const frame of frames) {
+      const frameBytes = [...frame.line, ...frame.ending];
+      const payload = bytesToAscii(frameBytes);
+      appendLog({
+        direction: "received",
+        mode: "ascii",
+        payload,
+        rawBytes: [...frameBytes],
+        complete: true,
+        journalSeqStart: journalSeq,
+        journalSeqEnd: journalSeq,
+      });
     }
-    lineBufferRef.current = [];
+
+    // If bytes remain without a newline (e.g. a newline-less "standalone:..."
+    // message), arm an idle flush so they surface promptly once RX goes quiet.
+    if (textFramerRef.current.hasPending()) {
+      armFrameIdleFlush();
+    }
   }
 
   // ── Open / Close ──
 
   async function openPort() {
-    clearLineBuffer(); // clear any stale buffered data from previous session
+    resetTextFramer(); // start a new session without carrying bytes from a closed port
 
     if (config.connectionType === "tcp-client") {
       setIsBusy(true);
       setError(null);
       try {
-        await getTcpClient().connect(config.tcpHost, config.tcpPort, config.tcpProtocol);
+        await getTcpClient().connect(
+          config.tcpHost,
+          config.tcpPort,
+          config.tcpProtocol,
+        );
       } catch (err) {
         setTcpConnectionStatus("disconnected");
         setError(`TCP连接失败：${toMessage(err)}`);
@@ -631,7 +766,9 @@ export function useSerialPort({
           throw new Error("请先选择串口。");
         }
         if (!claimConfiguredPort(config.path)) {
-          throw new Error(`串口 ${config.path} 已被其他标签占用，请先关闭该标签中的连接。`);
+          throw new Error(
+            `串口 ${config.path} 已被其他标签占用，请先关闭该标签中的连接。`,
+          );
         }
         await getSerial(config.path).open({
           path: config.path,
@@ -670,7 +807,9 @@ export function useSerialPort({
         throw new Error("请先选择串口。");
       }
       if (!claimConfiguredPort(config.path)) {
-        throw new Error(`串口 ${config.path} 已被其他标签占用，请先关闭该标签中的连接。`);
+        throw new Error(
+          `串口 ${config.path} 已被其他标签占用，请先关闭该标签中的连接。`,
+        );
       }
 
       await getSerial(config.path).open({
@@ -702,7 +841,10 @@ export function useSerialPort({
   async function closePort() {
     flushPendingLogs(); // flush any pending log entries before closing
     // TCP client disconnect
-    if (config.connectionType === "tcp-client" && tcpConnectionStatus === "connected") {
+    if (
+      config.connectionType === "tcp-client" &&
+      tcpConnectionStatus === "connected"
+    ) {
       if (tcpClientRef.current) {
         setIsBusy(true);
         try {
@@ -721,7 +863,10 @@ export function useSerialPort({
     }
 
     // TCP server stop (also close serial)
-    if (config.connectionType === "tcp-server" && tcpServerStatus === "running") {
+    if (
+      config.connectionType === "tcp-server" &&
+      tcpServerStatus === "running"
+    ) {
       setIsBusy(true);
       try {
         if (tcpServerRef.current) {
@@ -765,6 +910,67 @@ export function useSerialPort({
 
   // ── Send ──
 
+  function pushSendQueue(label: string) {
+    sendQueueRef.current = [...sendQueueRef.current, label];
+    setSendQueue(sendQueueRef.current);
+  }
+
+  function popSendQueue() {
+    const next = sendQueueRef.current.slice(1);
+    sendQueueRef.current = next;
+    setSendQueue(next);
+  }
+
+  async function sendSerialBytes(
+    service: ISerialService,
+    bytes: number[],
+    txEntry: Omit<SerialLogEntry, "id" | "timestamp" | "seq">,
+    transferId = journalRef.current.allocateTransferId(),
+    onDispatch?: () => void,
+  ) {
+    pushSendQueue(txEntry.payload);
+    let settled = false;
+    const settle = () => {
+      if (!settled) {
+        settled = true;
+        popSendQueue();
+      }
+    };
+    try {
+      await service.sendBinary(bytes, {
+        onDispatch: (dispatchedBytes) => {
+          onDispatch?.();
+          const event = journalRef.current.recordTxDispatched(
+            transferId,
+            dispatchedBytes,
+          );
+          appendLog(
+            {
+              ...txEntry,
+              rawBytes: Array.from(dispatchedBytes),
+              transferId,
+              complete: true,
+              journalSeqStart: event.seq,
+              journalSeqEnd: event.seq,
+            },
+            formatTimestamp(event.timestamp),
+          );
+        },
+        onComplete: (completedBytes) => {
+          settle();
+          journalRef.current.recordTxCompleted(transferId, completedBytes);
+        },
+        onError: (failedBytes, error) => {
+          settle();
+          journalRef.current.recordTxFailed(transferId, failedBytes, error);
+        },
+      });
+    } catch (error) {
+      settle();
+      throw error;
+    }
+  }
+
   async function sendData(
     value: string,
     sendMode: SendMode,
@@ -787,34 +993,17 @@ export function useSerialPort({
 
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
-      const txTs = formatTimestamp();
-      // Clear line buffer so the new command's echo starts fresh,
-      // without being concatenated with stale data from a previous incomplete line
-      clearLineBuffer();
-      const rxPos = pendingLogsRef.current.length; // mark where RX entries arrived during write
-      await s.sendBinary(bytes);
-      txBytesRef.current += bytes.length;
-      // Insert TX log right before any RX entries that arrived during the write,
-      // so chronological order (TX first, then RX echo) is preserved in the log
       const txEntry: Omit<SerialLogEntry, "id" | "timestamp" | "seq"> = {
         direction: "sent",
         mode: sendMode,
-        payload: sendMode === "hex"
-          ? bytesToHex(bytes)
-          : new TextDecoder().decode(new Uint8Array(bytes)),
+        payload:
+          sendMode === "hex"
+            ? bytesToHex(bytes)
+            : new TextDecoder().decode(new Uint8Array(bytes)),
       };
-      const seq = ++seqCounter.current;
-      pendingLogsRef.current.splice(rxPos, 0, {
-        ...txEntry,
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        timestamp: txTs,
-        seq,
-      });
-      if (pendingLogsRef.current.length >= BATCH_MAX_SIZE) {
-        flushPendingLogs();
-      } else {
-        scheduleBatchFlush();
-      }
+
+      await sendSerialBytes(s, bytes, txEntry);
+      txBytesRef.current += bytes.length;
     } catch (sendError) {
       setError(`发送失败：${toMessage(sendError)}`);
       throw sendError;
@@ -839,13 +1028,17 @@ export function useSerialPort({
       const txTs = formatTimestamp(); // timestamp BEFORE write
       await tcpClientRef.current.send(bytes);
       txBytesRef.current += bytes.length;
-      appendLog({
-        direction: "sent",
-        mode: sendMode,
-        payload: sendMode === "hex"
-          ? bytesToHex(bytes)
-          : new TextDecoder().decode(new Uint8Array(bytes)),
-      }, txTs);
+      appendLog(
+        {
+          direction: "sent",
+          mode: sendMode,
+          payload:
+            sendMode === "hex"
+              ? bytesToHex(bytes)
+              : new TextDecoder().decode(new Uint8Array(bytes)),
+        },
+        txTs,
+      );
     } catch (err) {
       setError(`TCP发送失败：${toMessage(err)}`);
       throw err;
@@ -875,10 +1068,19 @@ export function useSerialPort({
       const CHUNK_SIZE = 256;
       let lastReportedPct = -1;
       for (let offset = 0; offset < total; offset += CHUNK_SIZE) {
-        const chunk = Array.from(bytes.slice(offset, Math.min(offset + CHUNK_SIZE, total)));
-        await s.sendBinary(chunk);
+        const chunk = Array.from(
+          bytes.slice(offset, Math.min(offset + CHUNK_SIZE, total)),
+        );
+        await sendSerialBytes(s, chunk, {
+          direction: "sent",
+          mode: "hex",
+          payload: bytesToHex(chunk),
+        });
         txBytesRef.current += chunk.length;
-        const pct = Math.min(100, Math.round(((offset + CHUNK_SIZE) / total) * 100));
+        const pct = Math.min(
+          100,
+          Math.round(((offset + CHUNK_SIZE) / total) * 100),
+        );
         if (pct !== lastReportedPct) {
           lastReportedPct = pct;
           setFileSendProgress(pct);
@@ -886,11 +1088,6 @@ export function useSerialPort({
       }
 
       setFileSendProgress(100);
-      appendLog({
-        direction: "sent",
-        mode: "ascii",
-        payload: `[文件] ${filePath} (${total} bytes)`,
-      });
     } catch (sendFileError) {
       setError(`发送文件失败：${toMessage(sendFileError)}`);
     } finally {
@@ -902,10 +1099,16 @@ export function useSerialPort({
   // ── Clear logs ──
 
   function clearLogs(target: "all" | "sent" | "received") {
-    setLogs((current) => {
-      if (target === "all") return [];
-      return current.filter((item) => item.direction !== target);
-    });
+    if (target === "all") {
+      pendingLogsRef.current = [];
+      applyLogs([]);
+      return;
+    }
+    const next = logsRef.current.filter((item) => item.direction !== target);
+    pendingLogsRef.current = pendingLogsRef.current.filter(
+      (item) => item.direction !== target,
+    );
+    applyLogs(next);
   }
 
   // ── TCP Client ──
@@ -914,7 +1117,11 @@ export function useSerialPort({
     setTcpConnectionStatus("connecting");
     setError(null);
     try {
-      await getTcpClient().connect(config.tcpHost, config.tcpPort, config.tcpProtocol);
+      await getTcpClient().connect(
+        config.tcpHost,
+        config.tcpPort,
+        config.tcpProtocol,
+      );
     } catch (err) {
       setTcpConnectionStatus("disconnected");
       setError(`TCP连接失败：${toMessage(err)}`);
@@ -995,6 +1202,8 @@ export function useSerialPort({
     error,
     fileSendProgress,
     logCapWarning,
+    sendQueue,
+    subscribeLogs,
     refreshPorts,
     openPort,
     closePort,

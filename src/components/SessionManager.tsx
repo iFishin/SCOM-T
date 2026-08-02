@@ -21,6 +21,7 @@ export type ActiveSessionData = {
   error: string | null;
   fileSendProgress: number | null;
   logCapWarning: boolean;
+  sendQueue: string[];
   ports: import("../hooks/useSerialPort.ts").PortSummary[];
   tcpConnectionStatus: string;
   tcpServerStatus: string;
@@ -87,6 +88,7 @@ function SessionContent({
       error: serial.error,
       fileSendProgress: serial.fileSendProgress,
       logCapWarning: serial.logCapWarning,
+      sendQueue: serial.sendQueue,
       ports: serial.ports,
       tcpConnectionStatus: serial.tcpConnectionStatus,
       tcpServerStatus: serial.tcpServerStatus,
@@ -120,10 +122,8 @@ function SessionContent({
     onDataRef,
   ]);
 
-  // Per-tab log file sync
-  useEffect(() => {
-    logFile.syncLogs(serial.logs);
-  }, [serial.logs, logFile]);
+  // Persist from the uncapped ordered stream so UI clearing/retention cannot drop file entries.
+  useEffect(() => serial.subscribeLogs(logFile.enqueueLog), [serial.subscribeLogs, logFile.enqueueLog]);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -152,6 +152,7 @@ function SessionContent({
         logs={serial.logs}
         lang={lang}
         logCapWarning={serial.logCapWarning}
+        sendQueue={serial.sendQueue}
         displayMode={displayMode}
         onDisplayModeChange={onDisplayModeChange}
         onClearAll={() => serial.clearLogs("all")}

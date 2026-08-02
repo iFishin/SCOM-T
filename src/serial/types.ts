@@ -17,10 +17,19 @@ export type SerialLogEntry = {
   source?: LogSource;
   mode: SendMode | ReceiveMode;
   payload: string;
+  /** Exact transport bytes for lossless persistence/diagnostics. */
+  rawBytes?: number[];
   timestamp: string;
   /** Server-side timestamp embedded in TCP data stream, parsed for display */
   serverTs?: string;
   seq: number;
+  /** Transport transfer id for TX lifecycle events. */
+  transferId?: number;
+  /** Complete lines end in LF; incomplete entries are snapshots/drains only. */
+  complete?: boolean;
+  /** Raw byte range in the serial event journal. */
+  journalSeqStart?: number;
+  journalSeqEnd?: number;
 };
 
 // ── Port ──

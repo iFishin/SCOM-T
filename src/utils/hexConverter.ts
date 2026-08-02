@@ -61,14 +61,15 @@ export function setTimestampFormat(format: "time" | "datetime" | "none") {
 }
 
 /** Always store the full datetime in log entries. */
-export function formatTimestamp(date = new Date()): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  const seconds = `${date.getSeconds()}`.padStart(2, "0");
-  const milliseconds = `${date.getMilliseconds()}`.padStart(3, "0");
+export function formatTimestamp(date: Date | number = new Date()): string {
+  const value = typeof date === "number" ? new Date(date) : date;
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, "0");
+  const day = `${value.getDate()}`.padStart(2, "0");
+  const hours = `${value.getHours()}`.padStart(2, "0");
+  const minutes = `${value.getMinutes()}`.padStart(2, "0");
+  const seconds = `${value.getSeconds()}`.padStart(2, "0");
+  const milliseconds = `${value.getMilliseconds()}`.padStart(3, "0");
 
   return `[${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}]`;
 }

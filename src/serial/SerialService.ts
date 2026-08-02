@@ -11,6 +11,7 @@ import type { SerialConfig, PortSummary } from "./types.ts";
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import { normalizePluginPayload } from "../utils/hexConverter.ts";
 import { appLogger } from "../utils/appLogger.ts";
+import type { SerialTransport } from "./FakeSerialTransport.ts";
 
 // ── Mapping helpers (internal) ──
 
@@ -59,6 +60,35 @@ function formatPortLabel(port: PortInfo) {
   return meta ? `${port.path} · ${meta}` : port.path;
 }
 
+export type SerialSendLifecycle = {
+  onDispatch?: (data: Uint8Array) => void;
+  onComplete?: (data: Uint8Array) => void;
+  onError?: (data: Uint8Array, error: unknown) => void;
+};
+
+/** Runtime transport contract; production wraps SerialPort, tests inject a fake. */
+export type SerialTransportFactory = (config: SerialConfig) => SerialTransport;
+
+class TauriSerialTransportAdapter implements SerialTransport {
+  constructor(private readonly port: SerialPort) {}
+
+  open() { return this.port.open(); }
+  close() { return this.port.close(); }
+  writeBinary(data: number[]) { return this.port.writeBinary(data); }
+  startListening() { return this.port.startListening(); }
+  stopListening() { return this.port.stopListening(); }
+  listen(callback: (data: unknown) => void, once: boolean) { return this.port.listen(callback, once); }
+  disconnected(callback: () => void) { return this.port.disconnected(callback); }
+  cancelAllListeners() { return this.port.cancelAllListeners(); }
+  writeRequestToSend(value: boolean) { return this.port.writeRequestToSend(value); }
+  writeDataTerminalReady(value: boolean) { return this.port.writeDataTerminalReady(value); }
+  clearBuffer(bufferType: ClearBuffer) { return this.port.clearBuffer(bufferType); }
+  readClearToSend() { return this.port.readClearToSend(); }
+  readDataSetReady() { return this.port.readDataSetReady(); }
+  readCarrierDetect() { return this.port.readCarrierDetect(); }
+  readRingIndicator() { return this.port.readRingIndicator(); }
+}
+
 // ── Interface ──
 
 export interface ISerialService {
@@ -68,9 +98,9 @@ export interface ISerialService {
   close(): Promise<void>;
 
   /** Send raw bytes */
-  sendBinary(data: number[]): Promise<void>;
+  sendBinary(data: number[], lifecycle?: SerialSendLifecycle): Promise<void>;
   /** Send text string */
-  sendText(text: string): Promise<void>;
+  sendText(text: string, lifecycle?: SerialSendLifecycle): Promise<void>;
 
   /** Set RTS/DTR signal levels */
   setSignals(rts: boolean, dtr: boolean): Promise<void>;
@@ -97,6 +127,7 @@ export interface ISerialService {
 
 export class TauriSerialService implements ISerialService {
   private port: SerialPort | null = null;
+  private transport: SerialTransport | null = null;
   private _path: string | null = null;
   private dataCallback: ((data: Uint8Array) => void) | null = null;
   private disconnectCallback: (() => void) | null = null;
@@ -104,8 +135,10 @@ export class TauriSerialService implements ISerialService {
   private unlistenData: (() => void) | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
 
+  constructor(private readonly transportFactory?: SerialTransportFactory) {}
+
   get isOpen(): boolean {
-    return this.port !== null;
+    return this.transport !== null;
   }
 
   get path(): string | null {
@@ -126,29 +159,37 @@ export class TauriSerialService implements ISerialService {
       await this.close();
     }
 
-    // Force-close to release any stale handle
-    await SerialPort.forceClose(config.path).catch(() => undefined);
+    // Force-close only for the production plugin transport. Test/injected
+    // transports do not own a native path and must not invoke Tauri commands.
+    if (!this.transportFactory) {
+      await SerialPort.forceClose(config.path).catch(() => undefined);
+    }
 
-    const serial = new SerialPort({
+    const serial = this.transportFactory ? null : new SerialPort({
       path: config.path,
       baudRate: config.baudRate,
       dataBits: mapDataBits(config.dataBits),
       flowControl: mapFlowControl(config.flowControl),
       parity: mapParity(config.parity),
       stopBits: mapStopBits(config.stopBits),
-      timeout: 50,
+      // Short dispatch interval: the plugin flushes accumulated RX bytes to JS
+      // every `timeout` ms. Keeping it small (5ms) lets USB-split chunks of one
+      // line reach JS within the 10ms idle-flush window, so lines are not
+      // truncated while newline-less lines still surface promptly.
+      timeout: 5,
     });
+    const transport = this.transportFactory?.(config) ?? new TauriSerialTransportAdapter(serial!);
 
     try {
-      await serial.open();
+      await transport.open();
 
       // Apply RTS/DTR signals
-      await serial.writeRequestToSend(config.rts).catch(() => undefined);
-      await serial.writeDataTerminalReady(config.dtr).catch(() => undefined);
+      await transport.writeRequestToSend(config.rts).catch(() => undefined);
+      await transport.writeDataTerminalReady(config.dtr).catch(() => undefined);
 
-      // Start listening and attach data handler
-      await serial.startListening();
-      this.unlistenData = await serial.listen(
+      // Attach the JS event listener before starting the native read thread so
+      // bytes emitted immediately after listening starts cannot fall in a gap.
+      this.unlistenData = await transport.listen(
         (payload: unknown) => {
           if (this.dataCallback) {
             const bytes = normalizePluginPayload(payload);
@@ -158,14 +199,17 @@ export class TauriSerialService implements ISerialService {
         false,
       );
 
-      await serial.disconnected(() => {
+      await transport.disconnected(() => {
+        this.transport = null;
         this.port = null;
         this._path = null;
         if (this.disconnectCallback) {
           this.disconnectCallback();
         }
       });
+      await transport.startListening();
 
+      this.transport = transport;
       this.port = serial;
       this._path = config.path;
     } catch (error) {
@@ -173,9 +217,10 @@ export class TauriSerialService implements ISerialService {
         this.unlistenData();
         this.unlistenData = null;
       }
-      await serial.stopListening().catch(() => undefined);
-      await serial.cancelAllListeners().catch(() => undefined);
-      await serial.close().catch(() => undefined);
+      await transport.stopListening().catch(() => undefined);
+      await transport.cancelAllListeners().catch(() => undefined);
+      await transport.close().catch(() => undefined);
+      this.transport = null;
       this.port = null;
       this._path = null;
       throw error;
@@ -183,8 +228,9 @@ export class TauriSerialService implements ISerialService {
   }
 
   async close(): Promise<void> {
-    const p = this.port;
-    if (!p) {
+    const transport = this.transport;
+    if (!transport) {
+      this.port = null;
       this._path = null;
       return;
     }
@@ -195,10 +241,11 @@ export class TauriSerialService implements ISerialService {
       this.unlistenData = null;
     }
 
-    await p.stopListening().catch(() => undefined);
-    await p.cancelAllListeners().catch(() => undefined);
-    await p.close().catch(() => undefined);
+    await transport.stopListening().catch(() => undefined);
+    await transport.cancelAllListeners().catch(() => undefined);
+    await transport.close().catch(() => undefined);
 
+    this.transport = null;
     this.port = null;
     this._path = null;
   }
@@ -210,19 +257,23 @@ export class TauriSerialService implements ISerialService {
   }
 
   private async writeAll(data: number[]): Promise<void> {
-    const port = this.port;
-    if (!port) throw new Error("串口未打开，无法发送数据。");
+    const transport = this.transport;
+    if (!transport) throw new Error("串口未打开，无法发送数据。");
 
     const startedAt = performance.now();
     let offset = 0;
     let calls = 0;
+    const writtenChunks: string[] = [];
+    const hexDump = (bytes: number[]) =>
+      bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ");
 
     // Try full write first; partial writes are rare for normal commands
     // but handled correctly when they occur (e.g. very large payloads).
     while (offset < data.length) {
       const chunk = offset === 0 ? data : data.slice(offset);
-      const written = await port.writeBinary(chunk);
+      const written = await transport.writeBinary(chunk);
       calls += 1;
+      writtenChunks.push(`${chunk.length}->${written}`);
       if (!Number.isInteger(written) || written <= 0 || written > chunk.length) {
         throw new Error(`串口写入异常：第 ${calls} 次写入返回 ${written}，进度 ${offset}/${data.length} 字节。`);
       }
@@ -233,47 +284,57 @@ export class TauriSerialService implements ISerialService {
 
     const elapsedMs = Math.round(performance.now() - startedAt);
     if (calls > 1) {
-      appLogger.warn("Serial", `Partial write recovered: ${data.length} bytes in ${calls} writes (${elapsedMs} ms)`);
+      appLogger.warn("Serial", `Partial write recovered: ${data.length} bytes in ${calls} writes [${writtenChunks.join(" ")}] (${elapsedMs} ms) hex=${hexDump(data)}`);
     } else {
-      appLogger.debug("Serial", `Wrote ${data.length} bytes (${elapsedMs} ms)`);
+      appLogger.debug("Serial", `Wrote ${data.length} bytes (${elapsedMs} ms) hex=${hexDump(data)}`);
     }
   }
 
-  async sendBinary(data: number[]): Promise<void> {
-    if (!this.port) throw new Error("串口未打开，无法发送数据。");
-    await this.enqueueWrite(() => this.writeAll(data));
+  async sendBinary(data: number[], lifecycle?: SerialSendLifecycle): Promise<void> {
+    if (!this.transport) throw new Error("串口未打开，无法发送数据。");
+    const immutable = new Uint8Array(data);
+    await this.enqueueWrite(async () => {
+      lifecycle?.onDispatch?.(immutable.slice());
+      try {
+        await this.writeAll(Array.from(immutable));
+        lifecycle?.onComplete?.(immutable.slice());
+      } catch (error) {
+        lifecycle?.onError?.(immutable.slice(), error);
+        throw error;
+      }
+    });
   }
 
-  async sendText(text: string): Promise<void> {
+  async sendText(text: string, lifecycle?: SerialSendLifecycle): Promise<void> {
     const bytes = Array.from(new TextEncoder().encode(text));
-    await this.sendBinary(bytes);
+    await this.sendBinary(bytes, lifecycle);
   }
 
   async setSignals(rts: boolean, dtr: boolean): Promise<void> {
-    if (!this.port) return;
-    await this.port.writeRequestToSend(rts).catch(() => undefined);
-    await this.port.writeDataTerminalReady(dtr).catch(() => undefined);
+    if (!this.transport) return;
+    await this.transport.writeRequestToSend(rts).catch(() => undefined);
+    await this.transport.writeDataTerminalReady(dtr).catch(() => undefined);
   }
 
   async readSignals(): Promise<{ cts: boolean; dsr: boolean; cd: boolean; ri: boolean }> {
-    if (!this.port) return { cts: false, dsr: false, cd: false, ri: false };
+    if (!this.transport) return { cts: false, dsr: false, cd: false, ri: false };
     const [cts, dsr, cd, ri] = await Promise.all([
-      this.port.readClearToSend().catch(() => false),
-      this.port.readDataSetReady().catch(() => false),
-      this.port.readCarrierDetect().catch(() => false),
-      this.port.readRingIndicator().catch(() => false),
+      this.transport.readClearToSend().catch(() => false),
+      this.transport.readDataSetReady().catch(() => false),
+      this.transport.readCarrierDetect().catch(() => false),
+      this.transport.readRingIndicator().catch(() => false),
     ]);
     return { cts, dsr, cd, ri };
   }
 
   async clearBuffer(bufferType: "input" | "output" | "all"): Promise<void> {
-    if (!this.port) return;
+    if (!this.transport) return;
     const map: Record<string, ClearBuffer> = {
       input: ClearBuffer.Input,
       output: ClearBuffer.Output,
       all: ClearBuffer.All,
     };
-    await this.port.clearBuffer(map[bufferType]).catch(() => undefined);
+    await this.transport.clearBuffer(map[bufferType]).catch(() => undefined);
   }
 
   async dispose(): Promise<void> {
@@ -450,8 +511,9 @@ export class MockSerialService implements ISerialService {
     }
   }
 
-  async sendBinary(data: number[]): Promise<void> {
+  async sendBinary(data: number[], lifecycle?: SerialSendLifecycle): Promise<void> {
     if (!this._isOpen) return;
+    lifecycle?.onDispatch?.(new Uint8Array(data));
 
     const text = new TextDecoder().decode(new Uint8Array(data));
     const cmd = text.trim().replace(/\r?\n$/, "");
@@ -474,10 +536,11 @@ export class MockSerialService implements ISerialService {
         this.dataCallback(responseBytes);
       }
     }, this.responseDelay);
+    lifecycle?.onComplete?.(new Uint8Array(data));
   }
 
-  async sendText(text: string): Promise<void> {
-    await this.sendBinary(Array.from(new TextEncoder().encode(text)));
+  async sendText(text: string, lifecycle?: SerialSendLifecycle): Promise<void> {
+    await this.sendBinary(Array.from(new TextEncoder().encode(text)), lifecycle);
   }
 
   async setSignals(_rts: boolean, _dtr: boolean): Promise<void> {

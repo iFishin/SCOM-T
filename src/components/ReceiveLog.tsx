@@ -22,6 +22,7 @@ type ReceiveLogProps = {
   logs: SerialLogEntry[];
   lang: Lang;
   logCapWarning?: boolean;
+  sendQueue?: string[];
   onClearAll: () => void;
   onClearReceived: () => void;
   onClearSent: () => void;
@@ -60,7 +61,7 @@ function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
       log.mode === last.entries[0].mode
     ) {
       last.entries.push(log);
-      last.mergedPayload += log.payload;
+      last.mergedPayload += `${last.mergedPayload.endsWith("\n") ? "" : "\n"}${log.payload}`;
     } else {
       groups.push({
         entries: [log],
@@ -98,6 +99,7 @@ export function ReceiveLog({
   logs,
   lang,
   logCapWarning = false,
+  sendQueue = [],
   onClearAll,
   onClearReceived,
   onClearSent,
@@ -298,6 +300,19 @@ export function ReceiveLog({
         <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
           {t("received", lang)}
         </span>
+
+        {/* ── Send buffer (write queue) indicator ── */}
+        {sendQueue.length > 0 && (
+          <div
+            className="flex min-w-0 max-w-[240px] items-center gap-1.5 rounded bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700"
+            title={lang === "zh" ? "串口发送缓冲区（排队待发送）" : "Serial send buffer (queued)"}
+          >
+            <span className="shrink-0 font-semibold">
+              {lang === "zh" ? "发送缓冲" : "Send"} {sendQueue.length}
+            </span>
+            <span className="truncate font-mono">{sendQueue[sendQueue.length - 1]}</span>
+          </div>
+        )}
 
         <Select
           value={displayMode}

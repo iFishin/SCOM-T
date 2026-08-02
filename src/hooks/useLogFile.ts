@@ -6,49 +6,76 @@ import type { SerialLogEntry } from "./useSerialPort";
 function formatLogEntry(log: SerialLogEntry): string {
   const dir = log.direction === "received" ? "RX" : "TX";
   const ts = log.timestamp.replace(/^\[|\]$/g, "");
-  const payload = log.payload.replace(/[\r\n]+$/, "");
-  if (!payload) return "";
-  return `[${ts}] [${dir}] [${log.mode.toUpperCase()}] ${payload}\n`;
+  const payload = log.rawBytes
+    ? new TextDecoder().decode(new Uint8Array(log.rawBytes))
+    : log.payload;
+  if (payload.length === 0) return `[${ts}] [${dir}] [${log.mode.toUpperCase()}]\n`;
+  return `[${ts}] [${dir}] [${log.mode.toUpperCase()}] ${payload}${payload.endsWith("\n") ? "" : "\n"}`;
 }
 
 export function useLogFile() {
   const [savePath, setSavePath] = useState<string | null>(null);
   const [realTime, setRealTime] = useState(true);
-  const lastSeqRef = useRef(0);
+  const savePathRef = useRef<string | null>(null);
+  const realTimeRef = useRef(true);
   const writingRef = useRef(false);
+  const pendingRef = useRef<SerialLogEntry[]>([]);
+  const activeWriteRef = useRef<Promise<boolean> | null>(null);
   const logCountRef = useRef(0);
-  const logsRef = useRef<SerialLogEntry[]>([]);
 
-  /** Sync latest logs from the hook (ref-based, no re-render) */
-  const syncLogs = useCallback((logs: SerialLogEntry[]) => {
-    logsRef.current = logs;
+  useEffect(() => {
+    savePathRef.current = savePath;
+  }, [savePath]);
+
+  useEffect(() => {
+    realTimeRef.current = realTime;
+  }, [realTime]);
+
+  /** Receive every ordered log event before UI retention/clearing is applied. */
+  const enqueueLog = useCallback((entry: SerialLogEntry) => {
+    if (!savePathRef.current) return;
+    pendingRef.current.push(entry);
   }, []);
 
-  /** Core write: flush all pending entries to disk */
-  const doWrite = useCallback(async () => {
-    if (!savePath || !realTime || writingRef.current) return;
-    const logs = logsRef.current;
-    const pending = logs.filter((l) => l.seq > lastSeqRef.current);
-    if (pending.length === 0) return;
+  /** Compatibility no-op: persistence now consumes the uncapped event stream. */
+  const syncLogs = useCallback((_logs: SerialLogEntry[]) => {}, []);
 
-    writingRef.current = true;
-    try {
-      const text = pending.map(formatLogEntry).join("");
-      await invoke("append_to_file", { path: savePath, content: text });
-      lastSeqRef.current = pending[pending.length - 1].seq;
-      logCountRef.current += pending.length;
-    } catch (err) {
-      console.error("Log write failed:", err);
-    } finally {
-      writingRef.current = false;
+  /** Flush one stable prefix. Entries arriving during I/O remain queued. */
+  const doWrite = useCallback(async (force = false): Promise<boolean> => {
+    if (activeWriteRef.current) {
+      await activeWriteRef.current;
+      if (pendingRef.current.length === 0) return true;
     }
-  }, [savePath, realTime]);
 
-  // Periodic flush timer — drives writes on a schedule instead of React effects
+    const path = savePathRef.current;
+    if (!path || (!force && !realTimeRef.current) || writingRef.current) return false;
+    if (pendingRef.current.length === 0) return true;
+
+    const batch = pendingRef.current.slice();
+    writingRef.current = true;
+    const write = (async () => {
+      try {
+        const text = batch.map(formatLogEntry).join("");
+        if (text) await invoke("append_to_file", { path, content: text });
+        pendingRef.current.splice(0, batch.length);
+        logCountRef.current += batch.length;
+        return true;
+      } catch (err) {
+        console.error("Log write failed:", err);
+        return false;
+      } finally {
+        writingRef.current = false;
+        activeWriteRef.current = null;
+      }
+    })();
+    activeWriteRef.current = write;
+    return write;
+  }, []);
+
   useEffect(() => {
     if (!savePath || !realTime) return;
-    doWrite(); // flush immediately when starting
-    const timer = setInterval(doWrite, 2000);
+    void doWrite();
+    const timer = setInterval(() => void doWrite(), 2000);
     return () => clearInterval(timer);
   }, [savePath, realTime, doWrite]);
 
@@ -66,45 +93,48 @@ export function useLogFile() {
     });
 
     if (result) {
+      if (savePathRef.current) {
+        const flushed = await doWrite(true);
+        if (!flushed && pendingRef.current.length > 0) {
+          console.error("Cannot switch log files because pending entries could not be flushed.");
+          return;
+        }
+      }
+      pendingRef.current = [];
+      savePathRef.current = result;
+      realTimeRef.current = true;
       setSavePath(result);
       setRealTime(true);
-      lastSeqRef.current = 0;
       logCountRef.current = 0;
+      void doWrite();
     }
-  }, []);
+  }, [doWrite]);
 
-  /** Flush ALL unwritten logs at once — used for manual save */
-  const flushAll = useCallback(
-    async (logs: SerialLogEntry[]) => {
-      if (!savePath || logs.length === 0) return;
+  /** Manual save flushes the uncapped queue; the argument remains API-compatible. */
+  const flushAll = useCallback(async (_logs?: SerialLogEntry[]) => {
+    await doWrite(true);
+  }, [doWrite]);
 
-      const pending = logs.filter((l) => l.seq > lastSeqRef.current);
-      if (pending.length === 0) return;
-
-      try {
-        const text = pending.map(formatLogEntry).join("");
-        await invoke("append_to_file", { path: savePath, content: text });
-        lastSeqRef.current = pending[pending.length - 1].seq;
-        logCountRef.current += pending.length;
-      } catch (err) {
-        console.error("Log flush failed:", err);
-      }
-    },
-    [savePath],
-  );
-
-  const closeLogFile = useCallback(() => {
+  const closeLogFile = useCallback(async () => {
+    const flushed = await doWrite(true);
+    if (!flushed && pendingRef.current.length > 0) {
+      console.error("Log file remains open because pending entries could not be flushed.");
+      return;
+    }
+    pendingRef.current = [];
+    savePathRef.current = null;
+    realTimeRef.current = false;
     setSavePath(null);
     setRealTime(false);
-    lastSeqRef.current = 0;
     logCountRef.current = 0;
-  }, []);
+  }, [doWrite]);
 
   return {
     savePath,
     realTime,
     setRealTime,
     selectLogFile,
+    enqueueLog,
     syncLogs,
     flushAll,
     closeLogFile,
