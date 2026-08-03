@@ -54,6 +54,8 @@ function SessionContent({
   onDisplayModeChange,
   portFilterMode,
   mockSerial,
+  rxIdleFlushMs,
+  logBatchFlushMs,
   onConfigChange,
   onDataRef,
   isActive,
@@ -67,13 +69,15 @@ function SessionContent({
   onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
+  rxIdleFlushMs?: number;
+  logBatchFlushMs?: number;
   onConfigChange: (config: SerialConfig) => void;
   onDataRef: React.MutableRefObject<ActiveSessionData | null>;
   isActive: boolean;
   onActiveData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
 }) {
-  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
+  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs });
   const logFile = useLogFile();
 
   // Keep the ref up-to-date with the latest serial data
@@ -179,6 +183,8 @@ type SessionManagerProps = {
   onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
+  rxIdleFlushMs?: number;
+  logBatchFlushMs?: number;
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
 };
@@ -190,6 +196,8 @@ export function SessionManager({
   onDisplayModeChange,
   portFilterMode,
   mockSerial,
+  rxIdleFlushMs,
+  logBatchFlushMs,
   onActiveSessionData,
   onAddToPrompts,
 }: SessionManagerProps) {
@@ -253,6 +261,8 @@ export function SessionManager({
                 onDisplayModeChange={onDisplayModeChange}
                 portFilterMode={portFilterMode}
                 mockSerial={mockSerial}
+                rxIdleFlushMs={rxIdleFlushMs}
+                logBatchFlushMs={logBatchFlushMs}
                 onConfigChange={(config) => handleConfigChange(session.id, config)}
                 onDataRef={sessionDataRefs.current[session.id]}
                 isActive={session.id === activeSessionId}

@@ -107,11 +107,15 @@ export function useSerialPort({
   receiveMode,
   portFilterMode = "default",
   mockSerial,
+  rxIdleFlushMs = 50,
+  logBatchFlushMs = 50,
 }: {
   config: SerialConfig;
   receiveMode: ReceiveMode;
   portFilterMode?: "default" | "all";
   mockSerial?: MockSerialConfig;
+  rxIdleFlushMs?: number;
+  logBatchFlushMs?: number;
 }) {
   const serialRef = useRef<ISerialService | null>(null);
   const portOwnerRef = useRef(Symbol("serial-session"));
@@ -121,6 +125,8 @@ export function useSerialPort({
   const receiveModeRef = useRef(receiveMode);
   const configRef = useRef(config);
   const mockSerialRef = useRef(mockSerial);
+  const rxIdleFlushMsRef = useRef(50);
+  const logBatchFlushMsRef = useRef(50);
   const journalRef = useRef(new SerialEventJournal());
   const logSubscribersRef = useRef(new Set<(entry: SerialLogEntry) => void>());
   // Keep configRef in sync so callback closures always read latest config
@@ -128,7 +134,6 @@ export function useSerialPort({
   const seqCounter = useRef(0);
   // Batch pending log entries to reduce React state updates
   const MAX_LOGS = 10_000;
-  const BATCH_FLUSH_MS = 50;
   const BATCH_MAX_SIZE = 50;
   const pendingLogsRef = useRef<SerialLogEntry[]>([]);
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,11 +151,10 @@ export function useSerialPort({
   // lines (those arrive within milliseconds and keep resetting the timer).
   const textFramerRef = useRef(new SerialTextFramer());
   const frameFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Idle flush for newline-less device lines. NOTE: values below the plugin's
-  // ~50ms dispatch interval can truncate a single line that the plugin splits
-  // across two batches. Set to 10ms per user request — watch app logs for
-  // "Partial write recovered" / RX hex to judge whether truncation occurs.
-  const FRAME_IDLE_FLUSH_MS = 10;
+  // Idle flush for newline-less device lines. The plugin dispatch interval is
+  // 5ms; if a device splits one line across USB chunks with gaps bigger than
+  // this idle value, the line gets truncated. Tuned via settings
+  // (rxIdleFlushMs), default 50ms covers the observed 34ms inter-chunk gaps.
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [logCapWarning, setLogCapWarning] = useState(false);
   const logCapWarningRef = useRef(false);
@@ -213,6 +217,14 @@ export function useSerialPort({
   useEffect(() => {
     mockSerialRef.current = mockSerial;
   }, [mockSerial]);
+
+  useEffect(() => {
+    rxIdleFlushMsRef.current = rxIdleFlushMs;
+  }, [rxIdleFlushMs]);
+
+  useEffect(() => {
+    logBatchFlushMsRef.current = logBatchFlushMs;
+  }, [logBatchFlushMs]);
 
   // ── Rate calculation (every 1s) ──
   useEffect(() => {
@@ -606,7 +618,7 @@ export function useSerialPort({
 
   function scheduleBatchFlush() {
     if (batchTimerRef.current) return;
-    batchTimerRef.current = setTimeout(flushPendingLogs, BATCH_FLUSH_MS);
+    batchTimerRef.current = setTimeout(flushPendingLogs, logBatchFlushMsRef.current);
   }
 
   function flushPendingLogs() {
@@ -659,7 +671,7 @@ export function useSerialPort({
    * newline-less device lines like "standalone:..." surface promptly) and on
    * session close. USB-split chunks of ONE line are never drained here because
    * the idle timer resets on every incoming chunk — only a genuine pause
-   * (> FRAME_IDLE_FLUSH_MS) triggers the flush.
+   * (> rxIdleFlushMsRef.current) triggers the flush.
    */
   function flushLineBuffer() {
     if (frameFlushTimerRef.current) {
@@ -686,7 +698,7 @@ export function useSerialPort({
     frameFlushTimerRef.current = setTimeout(() => {
       frameFlushTimerRef.current = null;
       flushLineBuffer();
-    }, FRAME_IDLE_FLUSH_MS);
+    }, rxIdleFlushMsRef.current);
   }
 
   function resetTextFramer() {

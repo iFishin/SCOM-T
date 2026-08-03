@@ -82,6 +82,11 @@ export type AppSettings = {
   cloudServerUrl?: string;
   cloudAuthToken?: string;
   cloudUploaderName?: string;
+  /** RX 空闲刷新间隔：半行数据判定已发完的等待时间（ms）。设备把回显拆成多个
+   *  USB 包时，此值需大于包间隔，否则一行会被腰斩。范围 1–500。 */
+  rxIdleFlushMs?: number;
+  /** 日志渲染批间隔：合并 `setState` 的延迟（ms）。越大 UI 越平滑，越小日志出现越快。范围 5–1000。 */
+  logBatchFlushMs?: number;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -178,6 +183,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   cloudServerUrl: "https://scom-t-marketplace.ifishin.top",
   cloudAuthToken: "",
   cloudUploaderName: "",
+  rxIdleFlushMs: 50,
+  logBatchFlushMs: 50,
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -243,6 +250,10 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",
     cloudAuthToken: typeof raw.cloudAuthToken === "string" ? raw.cloudAuthToken : "",
     cloudUploaderName: typeof raw.cloudUploaderName === "string" ? raw.cloudUploaderName : "",
+    rxIdleFlushMs: typeof raw.rxIdleFlushMs === "number" && raw.rxIdleFlushMs >= 1 && raw.rxIdleFlushMs <= 500
+      ? Math.floor(raw.rxIdleFlushMs) : 50,
+    logBatchFlushMs: typeof raw.logBatchFlushMs === "number" && raw.logBatchFlushMs >= 5 && raw.logBatchFlushMs <= 1000
+      ? Math.floor(raw.logBatchFlushMs) : 50,
   };
 }
 
@@ -465,6 +476,20 @@ export function useSettings() {
     setSettings((current) => ({ ...current, cloudUploaderName: name }));
   }
 
+  function updateRxIdleFlushMs(ms: number) {
+    setSettings((current) => ({
+      ...current,
+      rxIdleFlushMs: Math.max(1, Math.min(500, Math.floor(ms))),
+    }));
+  }
+
+  function updateLogBatchFlushMs(ms: number) {
+    setSettings((current) => ({
+      ...current,
+      logBatchFlushMs: Math.max(5, Math.min(1000, Math.floor(ms))),
+    }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     updateTheme({
@@ -512,5 +537,7 @@ export function useSettings() {
     updateCloudServerUrl,
     updateCloudAuthToken,
     updateCloudUploaderName,
+    updateRxIdleFlushMs,
+    updateLogBatchFlushMs,
   };
 }

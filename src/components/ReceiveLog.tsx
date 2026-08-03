@@ -132,6 +132,16 @@ export function ReceiveLog({
   const [logEditorContent, setLogEditorContent] = useState("");
   const [logManagerOpen, setLogManagerOpen] = useState(false);
 
+  // Prefix sums of log payload lengths — O(1) per-row offset lookup for search
+  // highlight. Without this, each row recomputes a slice+reduce (O(n²) overall),
+  // which stalls on thousands of log entries.
+  const payloadPrefix = useMemo(() => {
+    const arr = new Array(logs.length + 1);
+    arr[0] = 0;
+    for (let i = 0; i < logs.length; i++) arr[i + 1] = arr[i] + logs[i].payload.length;
+    return arr;
+  }, [logs]);
+
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
       requestAnimationFrame(() => {
@@ -537,7 +547,7 @@ export function ReceiveLog({
               const payTrim = log.payload.trimStart();
               const payTrimOffset = log.payload.length - payTrim.length;
               // Compute offset for current-match detection relative to this payload
-              const logOffset = logIdx * LOG_SEPARATOR.length + logs.slice(0, logIdx).reduce((s, l) => s + l.payload.length, 0);
+              const logOffset = logIdx * LOG_SEPARATOR.length + payloadPrefix[logIdx];
               const curStart = searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].start - logOffset - payTrimOffset : undefined;
               const curEnd = curStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].end - logOffset - payTrimOffset : undefined;
               const inRange = curStart !== undefined && curEnd !== undefined && curStart >= 0 && curEnd <= payTrim.length;
@@ -623,7 +633,7 @@ export function ReceiveLog({
               // Compute offset of this group's mergedPayload in the full logText
               const firstLogIdx = logs.indexOf(first);
               const groupOffset = firstLogIdx >= 0
-                ? firstLogIdx * LOG_SEPARATOR.length + logs.slice(0, firstLogIdx).reduce((s, l) => s + l.payload.length, 0)
+                ? firstLogIdx * LOG_SEPARATOR.length + payloadPrefix[firstLogIdx]
                 : 0;
               const gCurStart = searchIndex >= 0 && searchIndex < searchMatches.length
                 ? searchMatches[searchIndex].start - groupOffset

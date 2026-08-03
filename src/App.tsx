@@ -136,7 +136,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -734,6 +734,8 @@ function App() {
                 onDisplayModeChange={updateDisplayMode}
                 portFilterMode={settings.portFilterMode ?? "default"}
                 mockSerial={settings.mockSerial}
+                rxIdleFlushMs={settings.rxIdleFlushMs ?? 50}
+                logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
               />
@@ -1170,6 +1172,8 @@ function App() {
                     onDisplayModeChange={updateDisplayMode}
                     portFilterMode={settings.portFilterMode ?? "default"}
                     mockSerial={settings.mockSerial}
+                    rxIdleFlushMs={settings.rxIdleFlushMs ?? 50}
+                    logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
                   />
@@ -1326,6 +1330,8 @@ function App() {
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         mockSerial={settings.mockSerial}
+        rxIdleFlushMs={settings.rxIdleFlushMs}
+        logBatchFlushMs={settings.logBatchFlushMs}
         onClose={() => setSettingsOpen(false)}
         onHotkeysChange={updateHotkeys}
         onThemeChange={updateTheme}
@@ -1343,6 +1349,8 @@ function App() {
         onCloudAuthTokenChange={updateCloudAuthToken}
         onCloudUploaderNameChange={updateCloudUploaderName}
         onMockSerialChange={updateMockSerial}
+        onRxIdleFlushMsChange={updateRxIdleFlushMs}
+        onLogBatchFlushMsChange={updateLogBatchFlushMs}
       />
       {/* ── Notification card modal ── */}
       {cardNotifications.length > 0 && (
