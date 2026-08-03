@@ -21,6 +21,7 @@ export type ActiveSessionData = {
   error: string | null;
   fileSendProgress: number | null;
   logCapWarning: boolean;
+  sendQueue: string[];
   ports: import("../hooks/useSerialPort.ts").PortSummary[];
   tcpConnectionStatus: string;
   tcpServerStatus: string;
@@ -53,6 +54,8 @@ function SessionContent({
   onDisplayModeChange,
   portFilterMode,
   mockSerial,
+  rxIdleFlushMs,
+  logBatchFlushMs,
   onConfigChange,
   onDataRef,
   isActive,
@@ -66,13 +69,15 @@ function SessionContent({
   onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
+  rxIdleFlushMs?: number;
+  logBatchFlushMs?: number;
   onConfigChange: (config: SerialConfig) => void;
   onDataRef: React.MutableRefObject<ActiveSessionData | null>;
   isActive: boolean;
   onActiveData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
 }) {
-  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial });
+  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs });
   const logFile = useLogFile();
 
   // Keep the ref up-to-date with the latest serial data
@@ -87,6 +92,7 @@ function SessionContent({
       error: serial.error,
       fileSendProgress: serial.fileSendProgress,
       logCapWarning: serial.logCapWarning,
+      sendQueue: serial.sendQueue,
       ports: serial.ports,
       tcpConnectionStatus: serial.tcpConnectionStatus,
       tcpServerStatus: serial.tcpServerStatus,
@@ -120,10 +126,8 @@ function SessionContent({
     onDataRef,
   ]);
 
-  // Per-tab log file sync
-  useEffect(() => {
-    logFile.syncLogs(serial.logs);
-  }, [serial.logs, logFile]);
+  // Persist from the uncapped ordered stream so UI clearing/retention cannot drop file entries.
+  useEffect(() => serial.subscribeLogs(logFile.enqueueLog), [serial.subscribeLogs, logFile.enqueueLog]);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -152,6 +156,7 @@ function SessionContent({
         logs={serial.logs}
         lang={lang}
         logCapWarning={serial.logCapWarning}
+        sendQueue={serial.sendQueue}
         displayMode={displayMode}
         onDisplayModeChange={onDisplayModeChange}
         onClearAll={() => serial.clearLogs("all")}
@@ -178,6 +183,8 @@ type SessionManagerProps = {
   onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
   mockSerial?: MockSerialConfig;
+  rxIdleFlushMs?: number;
+  logBatchFlushMs?: number;
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
 };
@@ -189,6 +196,8 @@ export function SessionManager({
   onDisplayModeChange,
   portFilterMode,
   mockSerial,
+  rxIdleFlushMs,
+  logBatchFlushMs,
   onActiveSessionData,
   onAddToPrompts,
 }: SessionManagerProps) {
@@ -252,6 +261,8 @@ export function SessionManager({
                 onDisplayModeChange={onDisplayModeChange}
                 portFilterMode={portFilterMode}
                 mockSerial={mockSerial}
+                rxIdleFlushMs={rxIdleFlushMs}
+                logBatchFlushMs={logBatchFlushMs}
                 onConfigChange={(config) => handleConfigChange(session.id, config)}
                 onDataRef={sessionDataRefs.current[session.id]}
                 isActive={session.id === activeSessionId}

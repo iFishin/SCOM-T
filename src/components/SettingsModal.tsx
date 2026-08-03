@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Clock, X } from "lucide-react";
+import { Clock, Timer, X } from "lucide-react";
 import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
 import type { HotkeyConfig, ThemeSettings, GridItemLayout, MockSerialConfig } from "../hooks/useSettings.ts";
 import { DEFAULT_GRID_LAYOUT } from "../hooks/useSettings.ts";
 import { t } from "../i18n.ts";
@@ -49,6 +50,10 @@ type SettingsModalProps = {
   onCloudAuthTokenChange?: (token: string) => void;
   onCloudUploaderNameChange?: (name: string) => void;
   onMockSerialChange?: (config: MockSerialConfig) => void;
+  rxIdleFlushMs?: number;
+  logBatchFlushMs?: number;
+  onRxIdleFlushMsChange?: (ms: number) => void;
+  onLogBatchFlushMsChange?: (ms: number) => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -87,6 +92,10 @@ export function SettingsModal({
   onCloudAuthTokenChange,
   onCloudUploaderNameChange,
   onMockSerialChange,
+  rxIdleFlushMs,
+  logBatchFlushMs,
+  onRxIdleFlushMsChange,
+  onLogBatchFlushMsChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -177,6 +186,58 @@ export function SettingsModal({
                     >
                       {lang === "zh" ? "无" : "None"}
                     </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+                  <div className="mb-2 text-sm font-semibold flex items-center gap-1.5">
+                    <Timer size={14} />
+                    {lang === "zh" ? "串口数据时序" : "Serial Data Timing"}
+                  </div>
+                  <div className="text-xs text-[var(--text-muted)] mb-3">
+                    {lang === "zh" ? "调整接收数据的判断与渲染时机。一般无需修改。" : "Tune when received data is framed and rendered. Usually leave as-is."}
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-48 shrink-0">
+                        <div className="text-xs">{lang === "zh" ? "空闲刷新间隔" : "Idle Flush (ms)"}</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">
+                          {lang === "zh" ? "半行数据判定已发完的等待时间" : "Wait before flushing a partial line"}
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={String(rxIdleFlushMs ?? 50)}
+                        onChange={(e) => {
+                          const v = parseInt(e.currentTarget.value, 10);
+                          if (!Number.isNaN(v)) onRxIdleFlushMsChange?.(v);
+                        }}
+                        className="w-20 text-center"
+                      />
+                      <span className="text-xs text-[var(--text-muted)]">ms</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-48 shrink-0">
+                        <div className="text-xs">{lang === "zh" ? "渲染批间隔" : "Render Batch (ms)"}</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">
+                          {lang === "zh" ? "日志合并渲染的等待时间" : "Coalesce log renders by this delay"}
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={5}
+                        max={1000}
+                        value={String(logBatchFlushMs ?? 50)}
+                        onChange={(e) => {
+                          const v = parseInt(e.currentTarget.value, 10);
+                          if (!Number.isNaN(v)) onLogBatchFlushMsChange?.(v);
+                        }}
+                        className="w-20 text-center"
+                      />
+                      <span className="text-xs text-[var(--text-muted)]">ms</span>
+                    </div>
                   </div>
                 </div>
               </div>

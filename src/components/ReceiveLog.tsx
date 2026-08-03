@@ -22,6 +22,7 @@ type ReceiveLogProps = {
   logs: SerialLogEntry[];
   lang: Lang;
   logCapWarning?: boolean;
+  sendQueue?: string[];
   onClearAll: () => void;
   onClearReceived: () => void;
   onClearSent: () => void;
@@ -60,7 +61,7 @@ function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
       log.mode === last.entries[0].mode
     ) {
       last.entries.push(log);
-      last.mergedPayload += log.payload;
+      last.mergedPayload += `${last.mergedPayload.endsWith("\n") ? "" : "\n"}${log.payload}`;
     } else {
       groups.push({
         entries: [log],
@@ -98,6 +99,7 @@ export function ReceiveLog({
   logs,
   lang,
   logCapWarning = false,
+  sendQueue = [],
   onClearAll,
   onClearReceived,
   onClearSent,
@@ -129,6 +131,16 @@ export function ReceiveLog({
   const [logEditorOpen, setLogEditorOpen] = useState(false);
   const [logEditorContent, setLogEditorContent] = useState("");
   const [logManagerOpen, setLogManagerOpen] = useState(false);
+
+  // Prefix sums of log payload lengths — O(1) per-row offset lookup for search
+  // highlight. Without this, each row recomputes a slice+reduce (O(n²) overall),
+  // which stalls on thousands of log entries.
+  const payloadPrefix = useMemo(() => {
+    const arr = new Array(logs.length + 1);
+    arr[0] = 0;
+    for (let i = 0; i < logs.length; i++) arr[i + 1] = arr[i] + logs[i].payload.length;
+    return arr;
+  }, [logs]);
 
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
@@ -298,6 +310,19 @@ export function ReceiveLog({
         <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
           {t("received", lang)}
         </span>
+
+        {/* ── Send buffer (write queue) indicator ── */}
+        {sendQueue.length > 0 && (
+          <div
+            className="flex min-w-0 max-w-[240px] items-center gap-1.5 rounded bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700"
+            title={lang === "zh" ? "串口发送缓冲区（排队待发送）" : "Serial send buffer (queued)"}
+          >
+            <span className="shrink-0 font-semibold">
+              {lang === "zh" ? "发送缓冲" : "Send"} {sendQueue.length}
+            </span>
+            <span className="truncate font-mono">{sendQueue[sendQueue.length - 1]}</span>
+          </div>
+        )}
 
         <Select
           value={displayMode}
@@ -522,7 +547,7 @@ export function ReceiveLog({
               const payTrim = log.payload.trimStart();
               const payTrimOffset = log.payload.length - payTrim.length;
               // Compute offset for current-match detection relative to this payload
-              const logOffset = logIdx * LOG_SEPARATOR.length + logs.slice(0, logIdx).reduce((s, l) => s + l.payload.length, 0);
+              const logOffset = logIdx * LOG_SEPARATOR.length + payloadPrefix[logIdx];
               const curStart = searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].start - logOffset - payTrimOffset : undefined;
               const curEnd = curStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].end - logOffset - payTrimOffset : undefined;
               const inRange = curStart !== undefined && curEnd !== undefined && curStart >= 0 && curEnd <= payTrim.length;
@@ -608,7 +633,7 @@ export function ReceiveLog({
               // Compute offset of this group's mergedPayload in the full logText
               const firstLogIdx = logs.indexOf(first);
               const groupOffset = firstLogIdx >= 0
-                ? firstLogIdx * LOG_SEPARATOR.length + logs.slice(0, firstLogIdx).reduce((s, l) => s + l.payload.length, 0)
+                ? firstLogIdx * LOG_SEPARATOR.length + payloadPrefix[firstLogIdx]
                 : 0;
               const gCurStart = searchIndex >= 0 && searchIndex < searchMatches.length
                 ? searchMatches[searchIndex].start - groupOffset
