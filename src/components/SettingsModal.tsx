@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Clock, Timer, X } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
-import type { HotkeyConfig, ThemeSettings, GridItemLayout, MockSerialConfig } from "../hooks/useSettings.ts";
+import type { HotkeyConfig, ThemeSettings, GridItemLayout, MockSerialConfig, CustomEnder } from "../hooks/useSettings.ts";
 import { DEFAULT_GRID_LAYOUT } from "../hooks/useSettings.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
@@ -12,6 +12,7 @@ import { ThemeEditor } from "./settings/ThemeEditor.tsx";
 import { LayoutEditor } from "./settings/LayoutEditor.tsx";
 import { MockSerialSettings } from "./settings/MockSerialSettings.tsx";
 import { MarketplaceSettings } from "./settings/MarketplaceSettings.tsx";
+import { CommandLineSettings } from "./settings/CommandLineSettings.tsx";
 
 // Subcomponents extracted to src/components/settings/*
 
@@ -50,6 +51,8 @@ type SettingsModalProps = {
   onCloudAuthTokenChange?: (token: string) => void;
   onCloudUploaderNameChange?: (name: string) => void;
   onMockSerialChange?: (config: MockSerialConfig) => void;
+  customEnders?: CustomEnder[];
+  onCustomEndersChange?: (config: CustomEnder[]) => void;
   rxIdleFlushMs?: number;
   logBatchFlushMs?: number;
   onRxIdleFlushMsChange?: (ms: number) => void;
@@ -92,6 +95,8 @@ export function SettingsModal({
   onCloudAuthTokenChange,
   onCloudUploaderNameChange,
   onMockSerialChange,
+  customEnders,
+  onCustomEndersChange,
   rxIdleFlushMs,
   logBatchFlushMs,
   onRxIdleFlushMsChange,
@@ -106,6 +111,7 @@ export function SettingsModal({
     t("settings_layout", lang),
     t("settings_mock_serial", lang),
     t("settings_marketplace", lang),
+    t("settings_command_line", lang),
   ];
 
 
@@ -244,7 +250,7 @@ export function SettingsModal({
             )}
 
             {activeTab === 2 && (
-              <HotkeysEditor hotkeys={hotkeys} onHotkeysChange={onHotkeysChange} lang={lang} />
+              <HotkeysEditor hotkeys={hotkeys} customEnders={customEnders} onHotkeysChange={onHotkeysChange} lang={lang} />
             )}
 
             {activeTab === 3 && (
@@ -310,6 +316,14 @@ export function SettingsModal({
                 onCloudServerUrlChange={onCloudServerUrlChange}
                 onCloudAuthTokenChange={onCloudAuthTokenChange}
                 onCloudUploaderNameChange={onCloudUploaderNameChange}
+              />
+            )}
+
+            {activeTab === 7 && (
+              <CommandLineSettings
+                lang={lang}
+                customEnders={customEnders ?? []}
+                onCustomEndersChange={(list) => onCustomEndersChange?.(list)}
               />
             )}
 

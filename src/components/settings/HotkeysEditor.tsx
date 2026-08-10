@@ -1,17 +1,11 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "../ui/Button";
-import type { AppendNewline, HotkeyConfig } from "../../hooks/useSettings.ts";
+import type { AppendNewline, CustomEnder, HotkeyConfig } from "../../hooks/useSettings.ts";
 import { eventToShortcut } from "../../utils/shortcutUtils.ts";
+import { buildEnderOptions, appendEnderFallback } from "../../utils/enderOptions.ts";
 import { t } from "../../i18n.ts";
 import type { Lang } from "../../i18n.ts";
-
-const ENDER_OPTIONS: { label: string; value: AppendNewline }[] = [
-  { label: "无", value: "" },
-  { label: "CRLF", value: "\r\n" },
-  { label: "LF", value: "\n" },
-  { label: "CR", value: "\r" },
-];
 
 const BUILTIN_ACTIONS = [
   { label: "清除日志", value: "clear_log" },
@@ -35,8 +29,9 @@ function newHotkey(): HotkeyConfig {
   };
 }
 
-export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: HotkeyConfig[]; onHotkeysChange: (h: HotkeyConfig[]) => void; lang: Lang }) {
+export function HotkeysEditor({ hotkeys, customEnders, onHotkeysChange, lang }: { hotkeys: HotkeyConfig[]; customEnders?: CustomEnder[]; onHotkeysChange: (h: HotkeyConfig[]) => void; lang: Lang }) {
   const [capturingId, setCapturingId] = useState<string | null>(null);
+  const enderOptions = buildEnderOptions(customEnders ?? [], lang);
 
   function updateHotkey(id: string, patch: Partial<HotkeyConfig>) {
     onHotkeysChange(hotkeys.map((hotkey) => (hotkey.id === id ? { ...hotkey, ...patch } : hotkey)));
@@ -126,8 +121,8 @@ export function HotkeysEditor({ hotkeys, onHotkeysChange, lang }: { hotkeys: Hot
                 className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-1 py-1 text-xs outline-none focus:border-[var(--accent)]"
                 disabled={hotkey.actionType === "builtin"}
               >
-                {ENDER_OPTIONS.map((option) => (
-                  <option key={option.label} value={option.value}>{option.label}</option>
+                {appendEnderFallback(enderOptions, hotkey.appendNewline, lang).map((option, i) => (
+                  <option key={i} value={option.value}>{option.label}</option>
                 ))}
               </select>
             <Button

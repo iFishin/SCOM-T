@@ -13,7 +13,9 @@ import { Modal } from "./ui/Modal.tsx";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { useResponseSet } from "../hooks/useResponseSet.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
+import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
 import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
+import type { CustomEnder } from "../hooks/useSettings.ts";
 
 type PromptRowStatus = "idle" | "pending" | "success" | "error";
 
@@ -42,7 +44,7 @@ type PromptRow = {
   selected: boolean;
   command: string;
   isHex: boolean;
-  ender: "" | "\r\n" | "\r" | "\n";
+  ender: string;
   interval: string;
   device?: string;
   note?: string;
@@ -54,7 +56,8 @@ type PromptRow = {
 type PromptPanelProps = {
   variant: "grid" | "panel";
   isConnected: boolean;
-  sendData: (value: string, sendMode: SendMode, appendNewline: "" | "\r\n" | "\r" | "\n") => Promise<void>;
+  sendData: (value: string, sendMode: SendMode, appendNewline: string) => Promise<void>;
+  customEnders?: CustomEnder[];
   lang: Lang;
   promptRowCount: number;
   updatePromptRowCount: (count: number) => void;
@@ -74,6 +77,7 @@ export function PromptPanel({
   variant,
   isConnected,
   sendData,
+  customEnders,
   lang,
   promptRowCount,
   updatePromptRowCount,
@@ -693,7 +697,7 @@ export function PromptPanel({
           selected: existing?.selected ?? false,
           command: lines[i] ?? "",
           isHex: existing?.isHex ?? false,
-          ender: (existing?.ender ?? "\r\n") as "" | "\r\n" | "\r" | "\n",
+          ender: existing?.ender ?? "\r\n",
           interval: existing?.interval ?? "",
           status: (existing?.status ?? "idle") as PromptRowStatus,
         };
@@ -801,6 +805,8 @@ export function PromptPanel({
 
   // ── Content blocks ──
 
+  const enderOptions = buildEnderOptions(customEnders ?? [], lang);
+
   const gridContent = (
     <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
       <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
@@ -852,8 +858,10 @@ export function PromptPanel({
               <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)} className="text-[10px] px-1.5 py-0.5">{t("prompt_sender", lang)}</Button>
               <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-[11px]" />
               <div className="flex justify-center"><Checkbox checked={row.isHex} onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })} /></div>
-              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value as "" | "\r\n" | "\r" | "\n" })} className="text-[11px]" style={{ paddingLeft: "4px" } as React.CSSProperties}>
-                <option value="\r\n">{t("ender_crlf", lang)}</option><option value="">{t("ender_none", lang)}</option><option value="\n">{t("ender_lf", lang)}</option><option value="\r">{t("ender_cr", lang)}</option>
+              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value })} className="text-[11px]" style={{ paddingLeft: "4px" } as React.CSSProperties}>
+                {appendEnderFallback(enderOptions, row.ender, lang).map((o, i) => (
+                  <option key={i} value={o.value}>{o.label}</option>
+                ))}
               </Select>
               <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px] placeholder:text-[11px]" />
               <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity gap-1">

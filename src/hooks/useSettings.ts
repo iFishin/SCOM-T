@@ -2,7 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import type { SendMode, ReceiveMode, LogDisplayMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
 
-export type AppendNewline = "" | "\r\n" | "\r" | "\n";
+/**
+ * 结尾符值。内置为 "" / "\r\n" / "\r" / "\n"，自定义结尾符是「字节串」
+ * （每个 char 一个字节 0-255），故统一放宽为 string。
+ */
+export type AppendNewline = string;
+
+/** 用户自定义的结尾符：以十六进制字节序列定义，出现在所有结尾符下拉框中。 */
+export type CustomEnder = {
+  id: string;
+  label: string;
+  /** 十六进制字节序列，如 "0D 0A"。 */
+  hex: string;
+};
 
 export type HotkeyConfig = {
   id: string;
@@ -68,7 +80,7 @@ export type AppSettings = {
   sendMode?: SendMode;
   receiveMode?: ReceiveMode;
   displayMode?: LogDisplayMode;
-  appendNewline?: "" | "\r\n" | "\r" | "\n";
+  appendNewline?: string;
   logRetentionDays?: number;
   topCollapsed?: boolean;
   rightCollapsed?: boolean;
@@ -79,6 +91,7 @@ export type AppSettings = {
   activeConfigFile?: string;
   portFilterMode?: "default" | "all";
   mockSerial?: MockSerialConfig;
+  customEnders?: CustomEnder[];
   cloudServerUrl?: string;
   cloudAuthToken?: string;
   cloudUploaderName?: string;
@@ -185,6 +198,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   cloudUploaderName: "",
   rxIdleFlushMs: 50,
   logBatchFlushMs: 50,
+  customEnders: [],
 };
 
 /** Merge a raw parsed object into AppSettings with validation. */
@@ -224,8 +238,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
     receiveMode: raw.receiveMode === "hex" ? "hex" : "ascii",
     displayMode: raw.displayMode === "text" || raw.displayMode === "hex"
       ? raw.displayMode : "card",
-    appendNewline: raw.appendNewline === "\r\n" || raw.appendNewline === "\n" || raw.appendNewline === "\r" || raw.appendNewline === ""
-      ? raw.appendNewline : "\r\n",
+    appendNewline: typeof raw.appendNewline === "string" ? raw.appendNewline : "\r\n",
     logRetentionDays: typeof raw.logRetentionDays === "number" && raw.logRetentionDays >= 1
       ? Math.floor(raw.logRetentionDays) : 30,
     topCollapsed: raw.topCollapsed === true,
@@ -247,6 +260,15 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             enabled: r.enabled !== false,
           })).filter(r => r.command) : [],
     } : { enabled: false, responseDelay: 100, customResponses: [] },
+    customEnders: Array.isArray(raw.customEnders)
+      ? raw.customEnders
+          .filter((e: any) => e && typeof e.hex === "string" && /^[0-9a-fA-F\s]+$/.test(e.hex) && e.hex.replace(/\s+/g, "").length % 2 === 0)
+          .map((e: any) => ({
+            id: e.id || `ender-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            label: typeof e.label === "string" ? e.label : "",
+            hex: e.hex.replace(/\s+/g, "").toUpperCase(),
+          }))
+      : [],
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",
     cloudAuthToken: typeof raw.cloudAuthToken === "string" ? raw.cloudAuthToken : "",
     cloudUploaderName: typeof raw.cloudUploaderName === "string" ? raw.cloudUploaderName : "",
@@ -315,6 +337,8 @@ export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   // Load from file on mount
   useEffect(() => {
@@ -346,10 +370,9 @@ export function useSettings() {
   // Flush pending save on beforeunload
   useEffect(() => {
     function flush() {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveSettingsToFile(settings);
-      }
+      // 无条件落盘：即使防抖尚未调度，也把最新配置写入（Tauri 关窗时 beforeunload 可能不触发）。
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveSettingsToFile(settings);
     }
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
@@ -420,7 +443,7 @@ export function useSettings() {
     setSettings((current) => ({ ...current, displayMode: mode }));
   }
 
-  function updateAppendNewline(v: "" | "\r\n" | "\r" | "\n") {
+  function updateAppendNewline(v: string) {
     setSettings((current) => ({ ...current, appendNewline: v }));
   }
 
@@ -462,6 +485,14 @@ export function useSettings() {
 
   function updateMockSerial(config: MockSerialConfig) {
     setSettings((current) => ({ ...current, mockSerial: config }));
+  }
+
+  function updateCustomEnders(customEnders: CustomEnder[]) {
+    const next = { ...settingsRef.current, customEnders };
+    setSettings(next);
+    // 立即落盘：自定义结尾符改动不依赖 500ms 防抖。Tauri 关窗时 beforeunload
+    // 不可靠，防抖若未触发会丢配置（实测 config.yaml 中 customEnders 变回 []）。
+    void saveSettingsToFile(next);
   }
 
   function updateCloudServerUrl(url: string) {
@@ -534,6 +565,7 @@ export function useSettings() {
     updateActiveConfigFile,
     updatePortFilterMode,
     updateMockSerial,
+    updateCustomEnders,
     updateCloudServerUrl,
     updateCloudAuthToken,
     updateCloudUploaderName,

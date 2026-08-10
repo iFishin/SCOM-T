@@ -17,12 +17,14 @@ import { usePromptConfig } from "../hooks/usePromptConfig";
 import type { PromptRow } from "../utils/yamlConfig";
 import { ResponseSetCommandEditor } from "./ResponseSetCommandEditor.tsx";
 import { PromptConfigRowEditor } from "./PromptConfigRowEditor.tsx";
+import type { CustomEnder } from "../hooks/useSettings.ts";
 
 type MarketplacePageProps = {
   lang: Lang;
   serverUrl: string;
   authToken?: string;
   uploaderName?: string;
+  customEnders?: CustomEnder[];
   onClose: () => void;
   onApply?: (responseSetId: string) => void;
   onApplyPromptConfig?: (configName: string) => void;
@@ -53,6 +55,7 @@ export function MarketplacePage({
   serverUrl,
   authToken,
   uploaderName,
+  customEnders,
   onClose: _onClose,
   onApply,
   onApplyPromptConfig,
@@ -716,7 +719,7 @@ export function MarketplacePage({
                         onChange={(commands) => setEditedSet({ ...editedSet, commands })}
                       />
                     ) : preview.type === "prompt_config" && editedRows ? (
-                      <PromptConfigRowEditor lang={lang} rows={editedRows} onChange={setEditedRows} />
+                      <PromptConfigRowEditor lang={lang} rows={editedRows} customEnders={customEnders} onChange={setEditedRows} />
                     ) : preview.type === "command_text" && editedText !== null ? (
                       <textarea
                         value={editedText}

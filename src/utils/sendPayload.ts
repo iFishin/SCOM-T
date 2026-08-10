@@ -1,7 +1,8 @@
 import { parseHexString } from "./hexConverter.ts";
 import type { SendMode } from "../serial/types.ts";
+import { enderStringToBytes } from "./enderOptions.ts";
 
-export type AppendNewline = "" | "\r\n" | "\r" | "\n";
+export type AppendNewline = string;
 
 export class SendCancelledError extends Error {
   constructor() {
@@ -15,9 +16,10 @@ export function encodeSendPayload(
   sendMode: SendMode,
   appendNewline: AppendNewline,
 ): number[] {
-  const newlineBytes = appendNewline
-    ? Array.from(new TextEncoder().encode(appendNewline))
-    : [];
+  // The terminator is a byte-string (each char = one byte, 0-255). It must be
+  // extracted via charCodeAt, NOT TextEncoder — TextEncoder UTF-8 expands any
+  // byte >0x7F (e.g. 0xFF → EF BF BD), corrupting custom hex terminators.
+  const newlineBytes = enderStringToBytes(appendNewline || "");
 
   if (sendMode === "hex") {
     const normalized = (value || "").replace(/\s+/g, "");
@@ -26,7 +28,9 @@ export function encodeSendPayload(
     return bytes;
   }
 
-  const finalValue = `${value}${appendNewline}`;
-  if (!finalValue) throw new Error("发送内容不能为空。");
-  return Array.from(new TextEncoder().encode(finalValue));
+  // Encode the command (UTF-8) separately from the terminator (byte-string).
+  const cmdBytes = Array.from(new TextEncoder().encode(value));
+  const bytes = cmdBytes.concat(newlineBytes);
+  if (bytes.length === 0) throw new Error("发送内容不能为空。");
+  return bytes;
 }

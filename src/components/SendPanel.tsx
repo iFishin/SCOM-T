@@ -7,19 +7,21 @@ import { Select } from "./ui/Select";
 import { parseHexString, bytesToHex, bytesToAscii } from "../utils/hexConverter.ts";
 import type { ToastType } from "./ui/Toast.tsx";
 import type { ReceiveMode, SendMode } from "../hooks/useSerialPort.ts";
-import type { HotkeyConfig } from "../hooks/useSettings.ts";
+import type { HotkeyConfig, CustomEnder } from "../hooks/useSettings.ts";
+import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
 import { FileSend } from "./FileSend.tsx";
 import { HotkeysPanel } from "./HotkeysPanel.tsx";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 
-type AppendNewline = "" | "\r\n" | "\r" | "\n";
+type AppendNewline = string;
 
 type SendPanelProps = {
   value: string;
   sendMode: SendMode;
   receiveMode: ReceiveMode;
   appendNewline: AppendNewline;
+  customEnders?: CustomEnder[];
   isConnected: boolean;
   isBusy: boolean;
   hotkeys: HotkeyConfig[];
@@ -54,6 +56,7 @@ export function SendPanel({
   sendMode,
   receiveMode,
   appendNewline,
+  customEnders,
   isConnected,
   isBusy,
   hotkeys,
@@ -93,12 +96,7 @@ export function SendPanel({
   
   
 
-  const enderOptions = [
-    { label: t("ender_crlf", lang), value: "\r\n" as AppendNewline },
-    { label: t("ender_none", lang), value: "" as AppendNewline },
-    { label: t("ender_lf", lang), value: "\n" as AppendNewline },
-    { label: t("ender_cr", lang), value: "\r" as AppendNewline },
-  ];
+  const enderOptions = buildEnderOptions(customEnders ?? [], lang);
 
   
 
@@ -246,8 +244,8 @@ export function SendPanel({
                       title={t("ender_crlf", lang)}
                       className="text-[11px]"
                     >
-                      {enderOptions.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                      {appendEnderFallback(enderOptions, appendNewline, lang).map((o, i) => (
+                        <option key={i} value={o.value}>{o.label}</option>
                       ))}
                     </Select>
                   </div>

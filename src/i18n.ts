@@ -284,6 +284,7 @@ const ZH: Dict = {
   batch_stop: "■ 停止",
   batch_no_selected: "请先选择要执行的指令",
   settings_mock_serial: "模拟串口",
+  settings_command_line: "指令行",
   settings_mock_serial_desc: "用于AT指令调试的模拟串口设备",
   mock_serial_delay: "响应延迟",
   mock_serial_builtin_responses: "内置响应",
@@ -625,6 +626,7 @@ const EN: Dict = {
 
   // Mock serial settings
   settings_mock_serial: "Mock Serial",
+  settings_command_line: "Command Line",
   settings_mock_serial_desc: "Virtual serial port for AT command debugging",
   mock_serial_delay: "Response Delay",
   mock_serial_builtin_responses: "Built-in Responses",

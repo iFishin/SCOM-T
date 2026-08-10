@@ -45,7 +45,7 @@ const EMPTY_SIGNAL_STATES = { rts: false, dtr: false, cts: false, dsr: false, cd
 const noopAsync = async () => {};
 const noopRefresh = async () => 0;
 const noopClearLogs = () => {};
-const noopSendData = async (_value: string, _sendMode: import("./hooks/useSerialPort.ts").SendMode, _appendNewline: "" | "\r\n" | "\r" | "\n") => {};
+const noopSendData = async (_value: string, _sendMode: import("./hooks/useSerialPort.ts").SendMode, _appendNewline: string) => {};
 const noopSendFile = async (_filePath: string): Promise<number | void> => {};
 const noopSignalHistory = () => [];
 
@@ -136,11 +136,12 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCustomEnders, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
   const appendNewline = settings.appendNewline ?? "\r\n";
+  const customEnders = settings.customEnders ?? [];
 
   const { containerRef, leftWidth, onDividerMouseDown } = useHSplit(
     0.5,
@@ -746,6 +747,7 @@ function App() {
                 value={message}
                 sendMode={sendMode}
                 appendNewline={appendNewline}
+                customEnders={customEnders}
                 receiveMode={receiveMode}
                 isConnected={activeIsConnected}
                 isBusy={isBusy}
@@ -816,7 +818,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -1029,6 +1031,7 @@ function App() {
           serverUrl={settings.cloudServerUrl ?? ""}
           authToken={settings.cloudAuthToken}
           uploaderName={settings.cloudUploaderName}
+          customEnders={customEnders}
           onClose={() => setPage("main")}
           onApply={(id) => setPendingApplyResponseSet(id)}
           onApplyPromptConfig={(name) => {
@@ -1229,6 +1232,7 @@ function App() {
                       value={message}
                       sendMode={sendMode}
                       appendNewline={appendNewline}
+                      customEnders={customEnders}
                       receiveMode={receiveMode}
                       isConnected={activeIsConnected}
                       isBusy={isBusy}
@@ -1293,7 +1297,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}
@@ -1330,6 +1334,7 @@ function App() {
         layoutMode={settings.layoutMode}
         gridLayout={settings.gridLayout}
         mockSerial={settings.mockSerial}
+        customEnders={customEnders}
         rxIdleFlushMs={settings.rxIdleFlushMs}
         logBatchFlushMs={settings.logBatchFlushMs}
         onClose={() => setSettingsOpen(false)}
@@ -1349,6 +1354,7 @@ function App() {
         onCloudAuthTokenChange={updateCloudAuthToken}
         onCloudUploaderNameChange={updateCloudUploaderName}
         onMockSerialChange={updateMockSerial}
+        onCustomEndersChange={updateCustomEnders}
         onRxIdleFlushMsChange={updateRxIdleFlushMs}
         onLogBatchFlushMsChange={updateLogBatchFlushMs}
       />
