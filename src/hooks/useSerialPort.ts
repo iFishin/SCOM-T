@@ -6,6 +6,7 @@ import {
   formatTimestamp,
 } from "../utils/hexConverter.ts";
 import { encodeSendPayload } from "../utils/sendPayload.ts";
+import { enderStringToBytes } from "../utils/enderOptions.ts";
 import { appLogger } from "../utils/appLogger.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
@@ -370,11 +371,9 @@ export function useSerialPort({
 
         // Line-buffer ASCII data without dropping bytes.
         if (receiveModeRef.current === "ascii") {
-          appLogger.debug("Serial", `RX chunk (${bytes.length} B): ${bytesToHex(bytes)}`);
           bufferAsciiChunk(bytes, rxEvent.seq);
         } else {
           // Hex mode: emit each chunk as-is
-          appLogger.debug("Serial", `RX hex chunk (${bytes.length} B): ${bytesToHex(bytes)}`);
           appendLog(
             {
               direction: "received",
@@ -986,7 +985,7 @@ export function useSerialPort({
   async function sendData(
     value: string,
     sendMode: SendMode,
-    appendNewline: "" | "\r\n" | "\r" | "\n",
+    appendNewline: string,
   ) {
     if (config.connectionType === "tcp-client") {
       await sendTcpData(value, sendMode, appendNewline);
@@ -1005,13 +1004,19 @@ export function useSerialPort({
 
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
+      const termBytes = enderStringToBytes(appendNewline || "");
       const txEntry: Omit<SerialLogEntry, "id" | "timestamp" | "seq"> = {
         direction: "sent",
         mode: sendMode,
         payload:
           sendMode === "hex"
             ? bytesToHex(bytes)
-            : new TextDecoder().decode(new Uint8Array(bytes)),
+            // ASCII 日志只显示用户输入的命令；结尾符以字节追加到线上，单独存
+            // terminator 供显示为 [0D 0A]，避免形如字面文本 \r\n 的误导。
+            : value,
+        ...(sendMode === "ascii" && termBytes.length > 0
+          ? { terminator: bytesToHex(termBytes) }
+          : {}),
       };
 
       await sendSerialBytes(s, bytes, txEntry);
@@ -1027,11 +1032,12 @@ export function useSerialPort({
   async function sendTcpData(
     value: string,
     sendMode: import("../serial/types.ts").SendMode,
-    appendNewline: "" | "\r\n" | "\r" | "\n",
+    appendNewline: string,
   ) {
     setError(null);
     try {
       const bytes = encodeSendPayload(value, sendMode, appendNewline);
+      const termBytes = enderStringToBytes(appendNewline || "");
 
       if (!tcpClientRef.current) {
         throw new Error("TCP 未连接");
@@ -1047,7 +1053,12 @@ export function useSerialPort({
           payload:
             sendMode === "hex"
               ? bytesToHex(bytes)
-              : new TextDecoder().decode(new Uint8Array(bytes)),
+              // 与 sendData 一致：日志只显示命令本身，结尾符以字节追加到线上，
+              // 单独存 terminator 供显示为 [0D 0A]。
+              : value,
+          ...(sendMode === "ascii" && termBytes.length > 0
+            ? { terminator: bytesToHex(termBytes) }
+            : {}),
         },
         txTs,
       );

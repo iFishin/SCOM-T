@@ -12,7 +12,7 @@ import {
   type MatchRange,
 } from "../hooks/useSearch.ts";
 import type { LogDisplayMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
-import { payloadToBytes, formatHexDump, displayTimestamp } from "../utils/hexConverter.ts";
+import { payloadToBytes, parseHexString, formatHexDump, displayTimestamp } from "../utils/hexConverter.ts";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
@@ -90,7 +90,8 @@ export function formatLogsAsText(logs: SerialLogEntry[]): string {
       const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
       // Trim trailing \r\n from payload to prevent extra blank lines
       const cleanPayload = log.payload.replace(/[\r\n]+$/, "").trimStart();
-      return `[${tag}] [${ts}] ${cleanPayload}`;
+      const term = log.terminator ? ` [${log.terminator}]` : "";
+      return `[${tag}] [${ts}] ${cleanPayload}${term}`;
     })
     .join("\n");
 }
@@ -499,7 +500,8 @@ export function ReceiveLog({
               const tag = log.direction === "received" ? "RX" : "TX";
               const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
               const pay = log.payload.trimStart();
-              return `[${tag}] [${ts}] ${pay}`;
+              const term = log.terminator ? ` [${log.terminator}]` : "";
+              return `[${tag}] [${ts}] ${pay}${term}`;
             })
             .join("\n");
           if (text) { e.preventDefault(); e.clipboardData.setData("text/plain", text); }
@@ -566,6 +568,9 @@ export function ReceiveLog({
                         : seg.match ? <mark key={si} className="hl-search-match">{seg.text}</mark>
                           : <span key={si}>{seg.text}</span>
                     ) : payTrim}
+                    {log.terminator && (
+                      <span className="text-[var(--text-muted)] opacity-50"> [{log.terminator}]</span>
+                    )}
                   </span>
                 </div>
               );
@@ -576,7 +581,10 @@ export function ReceiveLog({
             {logs.map((log) => {
               const isReceived = log.direction === "received";
               const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
-              const bytes = payloadToBytes(log.payload, log.mode);
+              const base = payloadToBytes(log.payload, log.mode);
+              // ASCII TX 的结尾符单独存于 terminator，这里追加进转储字节，
+              // 否则 hex 视图会丢失结尾符字节。
+              const bytes = log.terminator ? base.concat(parseHexString(log.terminator)) : base;
               const dumpLines = formatHexDump(bytes);
               const tagColor =
                 log.source === "tcp-server"
@@ -687,6 +695,9 @@ export function ReceiveLog({
                           ),
                         )
                       : group.mergedPayload.trimStart()}
+                    {first.terminator && (
+                      <span className="text-[var(--text-muted)] opacity-50"> [{first.terminator}]</span>
+                    )}
                   </div>
                 </div>
               );

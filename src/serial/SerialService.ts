@@ -285,8 +285,6 @@ export class TauriSerialService implements ISerialService {
     const elapsedMs = Math.round(performance.now() - startedAt);
     if (calls > 1) {
       appLogger.warn("Serial", `Partial write recovered: ${data.length} bytes in ${calls} writes [${writtenChunks.join(" ")}] (${elapsedMs} ms) hex=${hexDump(data)}`);
-    } else {
-      appLogger.debug("Serial", `Wrote ${data.length} bytes (${elapsedMs} ms) hex=${hexDump(data)}`);
     }
   }
 

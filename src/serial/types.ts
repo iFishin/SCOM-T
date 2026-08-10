@@ -19,6 +19,8 @@ export type SerialLogEntry = {
   payload: string;
   /** Exact transport bytes for lossless persistence/diagnostics. */
   rawBytes?: number[];
+  /** 结尾符字节的 hex 表示（如 "0D 0A"）。仅 TX 且带结尾符时设置。 */
+  terminator?: string;
   timestamp: string;
   /** Server-side timestamp embedded in TCP data stream, parsed for display */
   serverTs?: string;

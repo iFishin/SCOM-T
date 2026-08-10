@@ -34,7 +34,7 @@ export type ActiveSessionData = {
   rxRate: number;
   latencyHistory: number[];
   signalStates: { rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean };
-  sendData: (value: string, sendMode: SendMode, appendNewline: "" | "\r\n" | "\r" | "\n") => Promise<void>;
+  sendData: (value: string, sendMode: SendMode, appendNewline: string) => Promise<void>;
   sendFile: (filePath: string) => Promise<number | void>;
   closePort: () => Promise<void>;
   clearLogs: (target: "all" | "received" | "sent") => void;

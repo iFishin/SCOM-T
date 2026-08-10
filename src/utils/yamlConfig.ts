@@ -6,7 +6,7 @@ export interface PromptRow {
   selected: boolean;
   command: string;
   isHex: boolean;
-  ender: "" | "\r\n" | "\r" | "\n";
+  ender: string;
   interval: string;
   device?: string;
   note?: string;
@@ -40,7 +40,7 @@ const ENDER_TO_YAML: Record<string, string> = {
   "": "None",
 };
 
-const YAML_TO_ENDER: Record<string, "" | "\r\n" | "\r" | "\n"> = {
+const YAML_TO_ENDER: Record<string, string> = {
   CRLF: "\r\n",
   LF: "\n",
   CR: "\r",
@@ -54,7 +54,7 @@ export function serializeToYaml(rows: PromptRow[]): string {
     return {
       command: r.command,
       hex_mode: r.isHex,
-      line_ending: ENDER_TO_YAML[r.ender] ?? "CRLF",
+      line_ending: ENDER_TO_YAML[r.ender] ?? r.ender,
       timeout: Math.max(0, parseInt(r.interval) || 0),
       order: r.id,
       ...(r.selected ? { is_selected: true } : {}),
@@ -108,7 +108,8 @@ export function parseYamlToRows(
       return { valid: false, error: `Entry ${i + 1} is not an object.` };
     }
 
-    const ender = YAML_TO_ENDER[cmd.line_ending] ?? "\r\n";
+    // 自定义结尾符（非符号名）按原始字节串回退；缺省时为 CRLF。
+    const ender = cmd.line_ending ? (YAML_TO_ENDER[cmd.line_ending] ?? cmd.line_ending) : "\r\n";
 
     rows.push({
       id: typeof cmd.order === "number" ? cmd.order : i + 1,

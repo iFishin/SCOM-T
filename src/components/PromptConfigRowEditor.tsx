@@ -3,21 +3,18 @@ import { Input } from "./ui/Input.tsx";
 import { Checkbox } from "./ui/Checkbox.tsx";
 import type { Lang } from "../i18n";
 import type { PromptRow } from "../utils/yamlConfig";
+import type { CustomEnder } from "../hooks/useSettings.ts";
+import { buildEnderOptions } from "../utils/enderOptions.ts";
 
 type PromptConfigRowEditorProps = {
   lang: Lang;
   rows: PromptRow[];
+  customEnders?: CustomEnder[];
   onChange: (rows: PromptRow[]) => void;
 };
 
-const ENDER_OPTIONS: { value: PromptRow["ender"]; label: string }[] = [
-  { value: "\r\n", label: "CRLF" },
-  { value: "\n", label: "LF" },
-  { value: "\r", label: "CR" },
-  { value: "", label: "None" },
-];
-
-export function PromptConfigRowEditor({ lang, rows, onChange }: PromptConfigRowEditorProps) {
+export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: PromptConfigRowEditorProps) {
+  const enderOptions = buildEnderOptions(customEnders ?? [], lang);
   function updateRow(index: number, patch: Partial<PromptRow>) {
     const next = [...rows];
     next[index] = { ...next[index], ...patch };
@@ -85,8 +82,8 @@ export function PromptConfigRowEditor({ lang, rows, onChange }: PromptConfigRowE
                   onChange={(e) => updateRow(i, { ender: e.target.value as PromptRow["ender"] })}
                   className="input text-[10px] py-0.5"
                 >
-                  {ENDER_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value}>
+                  {enderOptions.map((o, i) => (
+                    <option key={i} value={o.value}>
                       {o.label}
                     </option>
                   ))}
