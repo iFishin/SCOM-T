@@ -14,7 +14,7 @@ function DialogShell({ title, onClose, children }: { title: string; onClose: () 
             <X size={16} />
           </button>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="max-h-[80vh] overflow-y-auto p-4">{children}</div>
       </div>
     </div>
   );
@@ -177,7 +177,7 @@ export function CodecDialog({ lang, onClose }: { lang: Lang; onClose: () => void
             }
             spellCheck={false}
             rows={3}
-            className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] outline-none focus:border-[var(--accent)] placeholder:text-[var(--text-muted)] placeholder:opacity-50"
+            className="w-full resize-none overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] outline-none focus:border-[var(--accent)] placeholder:text-[var(--text-muted)] placeholder:opacity-50"
           />
         </div>
 
@@ -199,7 +199,7 @@ export function CodecDialog({ lang, onClose }: { lang: Lang; onClose: () => void
               {copied ? (lang === "zh" ? "已复制" : "Copied") : (lang === "zh" ? "复制" : "Copy")}
             </button>
           </div>
-          <div className={`min-h-[52px] rounded-lg border px-3 py-2 text-xs font-mono leading-relaxed break-all whitespace-pre-wrap ${
+          <div className={`min-h-[52px] max-h-[200px] overflow-y-auto rounded-lg border px-3 py-2 text-xs font-mono leading-relaxed break-all whitespace-pre-wrap ${
             output.startsWith("⚠")
               ? "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-400"
               : output
