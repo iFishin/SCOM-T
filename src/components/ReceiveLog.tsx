@@ -473,29 +473,22 @@ export function ReceiveLog({
         onScroll={handleScroll}
         tabIndex={0}
         onCopy={(e) => {
-          // Determine which log entries are selected (if any) via data-seq attributes
+          // 复制策略（WYSIWYG + 全量导出）：
+          // - 有选区但只是部分文字 → 不拦截，浏览器复制选中的原文（框到几行就复制几行）
+          // - 全选（选区覆盖整个日志容器，如 Ctrl+A）或无选中 → 导出完整格式化日志
           const sel = window.getSelection();
-          let selectedSeqs: Set<number> | null = null;
-          if (sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) {
-            const range = sel.getRangeAt(0);
+          const hasSelection = !!sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed;
+          let isSelectAll = false;
+          if (hasSelection) {
             const container = containerRef.current;
-            if (container && range.intersectsNode(container)) {
-              selectedSeqs = new Set();
-              container.querySelectorAll<HTMLElement>("[data-seq]").forEach((el) => {
-                if (range.intersectsNode(el)) {
-                  for (const s of (el.dataset.seq || "").split(",")) {
-                    const n = parseInt(s, 10);
-                    if (!isNaN(n)) selectedSeqs!.add(n);
-                  }
-                }
-              });
-            }
+            isSelectAll =
+              !!container && sel!.toString().trim() === (container.textContent ?? "").trim();
+            if (!isSelectAll) return; // 部分选中：交给浏览器默认复制
           }
-          const toCopy = selectedSeqs
-            ? logs.filter((l) => selectedSeqs!.has(l.seq))
-            : logs;
-          if (toCopy.length === 0) return;
-          const text = toCopy
+          // 全选 / 无选中 → 全量格式化复制（过滤空 payload，避免空行）
+          if (logs.length === 0) return;
+          const text = logs
+            .filter((log) => log.payload.trim().length > 0)
             .map((log) => {
               const tag = log.direction === "received" ? "RX" : "TX";
               const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
