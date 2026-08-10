@@ -8,7 +8,7 @@ import { parseHexString, bytesToHex, bytesToAscii } from "../utils/hexConverter.
 import type { ToastType } from "./ui/Toast.tsx";
 import type { ReceiveMode, SendMode } from "../hooks/useSerialPort.ts";
 import type { HotkeyConfig, CustomEnder } from "../hooks/useSettings.ts";
-import { buildEnderOptions } from "../utils/enderOptions.ts";
+import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
 import { FileSend } from "./FileSend.tsx";
 import { HotkeysPanel } from "./HotkeysPanel.tsx";
 import { t } from "../i18n.ts";
@@ -244,7 +244,7 @@ export function SendPanel({
                       title={t("ender_crlf", lang)}
                       className="text-[11px]"
                     >
-                      {enderOptions.map((o, i) => (
+                      {appendEnderFallback(enderOptions, appendNewline, lang).map((o, i) => (
                         <option key={i} value={o.value}>{o.label}</option>
                       ))}
                     </Select>

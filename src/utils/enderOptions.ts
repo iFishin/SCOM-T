@@ -18,11 +18,30 @@ export function bytesToEnderString(bytes: number[]): string {
   return s;
 }
 
-/** Byte-string → bytes. Inverse of {@link bytesToEnderString}. */
+/**
+ * Byte-string → bytes. Inverse of {@link bytesToEnderString}.
+ */
 export function enderStringToBytes(s: string): number[] {
   const bytes: number[] = [];
   for (const ch of s) bytes.push(ch.charCodeAt(0) & 0xff);
   return bytes;
+}
+
+/**
+ * 若 value 未出现在下拉选项里（例如引用了已删除的自定义结尾符），追加一个占位
+ * 项，避免下拉框显示成「无结尾符」而发送时仍在追加该字节串。字节串本身保留，
+ * 因此发送行为不变，只是让状态可见。
+ */
+export function appendEnderFallback(options: EnderOption[], value: string, lang: Lang): EnderOption[] {
+  if (!value || options.some((o) => o.value === value)) return options;
+  const hex = bytesToHex(enderStringToBytes(value));
+  return [
+    ...options,
+    {
+      label: lang === "zh" ? `已删除自定义结尾符 (${hex})` : `Deleted terminator (${hex})`,
+      value,
+    },
+  ];
 }
 
 /**

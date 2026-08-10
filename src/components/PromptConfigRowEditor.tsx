@@ -4,7 +4,7 @@ import { Checkbox } from "./ui/Checkbox.tsx";
 import type { Lang } from "../i18n";
 import type { PromptRow } from "../utils/yamlConfig";
 import type { CustomEnder } from "../hooks/useSettings.ts";
-import { buildEnderOptions } from "../utils/enderOptions.ts";
+import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
 
 type PromptConfigRowEditorProps = {
   lang: Lang;
@@ -82,7 +82,7 @@ export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: Pr
                   onChange={(e) => updateRow(i, { ender: e.target.value as PromptRow["ender"] })}
                   className="input text-[10px] py-0.5"
                 >
-                  {enderOptions.map((o, i) => (
+                  {appendEnderFallback(enderOptions, row.ender, lang).map((o, i) => (
                     <option key={i} value={o.value}>
                       {o.label}
                     </option>

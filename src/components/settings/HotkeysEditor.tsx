@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import type { AppendNewline, CustomEnder, HotkeyConfig } from "../../hooks/useSettings.ts";
 import { eventToShortcut } from "../../utils/shortcutUtils.ts";
-import { buildEnderOptions } from "../../utils/enderOptions.ts";
+import { buildEnderOptions, appendEnderFallback } from "../../utils/enderOptions.ts";
 import { t } from "../../i18n.ts";
 import type { Lang } from "../../i18n.ts";
 
@@ -121,7 +121,7 @@ export function HotkeysEditor({ hotkeys, customEnders, onHotkeysChange, lang }: 
                 className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-1 py-1 text-xs outline-none focus:border-[var(--accent)]"
                 disabled={hotkey.actionType === "builtin"}
               >
-                {enderOptions.map((option, i) => (
+                {appendEnderFallback(enderOptions, hotkey.appendNewline, lang).map((option, i) => (
                   <option key={i} value={option.value}>{option.label}</option>
                 ))}
               </select>

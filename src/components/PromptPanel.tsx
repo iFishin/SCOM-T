@@ -13,7 +13,7 @@ import { Modal } from "./ui/Modal.tsx";
 import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { useResponseSet } from "../hooks/useResponseSet.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
-import { buildEnderOptions } from "../utils/enderOptions.ts";
+import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
 import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 import type { CustomEnder } from "../hooks/useSettings.ts";
 
@@ -859,7 +859,7 @@ export function PromptPanel({
               <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-[11px]" />
               <div className="flex justify-center"><Checkbox checked={row.isHex} onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })} /></div>
               <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value })} className="text-[11px]" style={{ paddingLeft: "4px" } as React.CSSProperties}>
-                {enderOptions.map((o, i) => (
+                {appendEnderFallback(enderOptions, row.ender, lang).map((o, i) => (
                   <option key={i} value={o.value}>{o.label}</option>
                 ))}
               </Select>
