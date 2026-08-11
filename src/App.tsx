@@ -546,6 +546,18 @@ function App() {
     root.style.setProperty("--font-size", `${theme.fontSize}px`);
     root.style.setProperty("--font-weight", String(theme.fontWeight));
     root.style.setProperty("--mono-font-family", theme.monoFontFamily);
+    // ── 扩展主题变量（可选字段，缺失时用 styles.css 静态默认）──
+    root.style.setProperty("--bg-hover", theme.bgHover ?? "");
+    root.style.setProperty("--text-placeholder", theme.textPlaceholder ?? "");
+    root.style.setProperty("--border-focus", theme.borderFocus ?? "");
+    root.style.setProperty("--accent-dark", theme.accentDark ?? "");
+    root.style.setProperty("--accent-light", theme.accentLight ?? "");
+    root.style.setProperty("--accent-muted", theme.accentMuted ?? "");
+    root.style.setProperty("--radius-sm", `${theme.radiusSm ?? 0.375}rem`);
+    root.style.setProperty("--radius-md", `${theme.radiusMd ?? 0.5}rem`);
+    root.style.setProperty("--radius-lg", `${theme.radiusLg ?? 0.75}rem`);
+    root.style.setProperty("--panel-padding", `${theme.panelPadding ?? 0.5}rem`);
+    root.style.setProperty("--control-gap", `${theme.controlGap ?? 0.375}rem`);
     // density compact mode
     root.classList.toggle("density-compact", !!settings.compactMode);
   }, [settings.theme, settings.compactMode]);
