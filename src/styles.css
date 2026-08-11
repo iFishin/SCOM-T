@@ -33,7 +33,8 @@
   /* typography */
   --font-family:   system-ui, "SF Pro Text", "Segoe UI", "PingFang SC",
                    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --mono-font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+  --mono-font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace,
+                      "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC";
   --font-size:     13px;
   --control-font-size: calc(var(--font-size) * 0.92);
   --font-weight:   400;

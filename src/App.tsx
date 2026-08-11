@@ -550,7 +550,10 @@ function App() {
     root.style.setProperty("--font-family", theme.fontFamily);
     root.style.setProperty("--font-size", `${theme.fontSize}px`);
     root.style.setProperty("--font-weight", String(theme.fontWeight));
-    root.style.setProperty("--mono-font-family", theme.monoFontFamily);
+    // 等宽字体末尾追加中文字体兜底，避免日志/编辑器等 mono 区域中文
+    // fallback 到宋体而与界面不一致（Consolas 等仅负责英文/数字等宽）。
+    const monoWithCn = `${theme.monoFontFamily}, "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC"`;
+    root.style.setProperty("--mono-font-family", monoWithCn);
     // ── 扩展主题变量（可选字段，缺失时用 styles.css 静态默认）──
     root.style.setProperty("--bg-hover", theme.bgHover ?? "");
     root.style.setProperty("--text-placeholder", theme.textPlaceholder ?? "");
