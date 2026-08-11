@@ -38,7 +38,7 @@ export function FileSend({
   return (
     <div className={`bg-[var(--bg-surface)] p-2 ${borderless ? "" : "rounded-lg border border-[var(--border)]"}`}>
       {!borderless && (
-        <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+        <div className="mb-1.5 flex items-center gap-1 text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)]">
           <File size={11} />
           {t("file", lang)}
         </div>

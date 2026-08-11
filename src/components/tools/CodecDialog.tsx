@@ -158,7 +158,7 @@ export function CodecDialog({ lang, onClose }: { lang: Lang; onClose: () => void
 
         {/* ── Input ── */}
         <div>
-          <div className="mb-1 text-[11px] font-semibold text-[var(--text-muted)]">
+          <div className="mb-1 text-theme-11 font-semibold text-[var(--text-muted)]">
             {lang === "zh" ? "输入" : "Input"}
             {mode === "hex" && direction === "decode" && (
               <span className="ml-1.5 font-normal opacity-60">(hex bytes, space separated)</span>
@@ -183,13 +183,13 @@ export function CodecDialog({ lang, onClose }: { lang: Lang; onClose: () => void
 
         {/* ── Output ── */}
         <div>
-          <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-[var(--text-muted)]">
+          <div className="mb-1 flex items-center justify-between text-theme-11 font-semibold text-[var(--text-muted)]">
             <span>{lang === "zh" ? "输出" : "Output"}</span>
             <button
               type="button"
               onClick={handleCopy}
               disabled={!output || output.startsWith("⚠")}
-              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-theme-10 transition-colors ${
                 copied
                   ? "text-emerald-500"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"

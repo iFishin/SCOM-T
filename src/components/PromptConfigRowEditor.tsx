@@ -51,7 +51,7 @@ export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: Pr
         {rows.map((row, i) => (
           <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-2 space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-[var(--text-muted)] font-mono w-5">#{i + 1}</span>
+              <span className="text-theme-10 text-[var(--text-muted)] font-mono w-5">#{i + 1}</span>
               <Input
                 type="text"
                 value={row.command}
@@ -73,14 +73,14 @@ export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: Pr
                 checked={row.isHex}
                 onChange={(e) => updateRow(i, { isHex: e.target.checked })}
                 label="HEX"
-                className="text-[10px]"
+                className="text-theme-10"
               />
-              <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+              <label className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)]">
                 {lang === "zh" ? "换行符" : "Ender"}
                 <select
                   value={row.ender}
                   onChange={(e) => updateRow(i, { ender: e.target.value as PromptRow["ender"] })}
-                  className="input text-[10px] py-0.5"
+                  className="input text-theme-10 py-0.5"
                 >
                   {appendEnderFallback(enderOptions, row.ender, lang).map((o, i) => (
                     <option key={i} value={o.value}>
@@ -89,13 +89,13 @@ export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: Pr
                   ))}
                 </select>
               </label>
-              <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+              <label className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)]">
                 {lang === "zh" ? "超时(ms)" : "Timeout(ms)"}
                 <Input
                   type="text"
                   value={row.interval}
                   onChange={(e) => updateRow(i, { interval: e.target.value.replace(/[^0-9]/g, "") })}
-                  className="w-16 text-[10px] py-0.5"
+                  className="w-16 text-theme-10 py-0.5"
                 />
               </label>
             </div>

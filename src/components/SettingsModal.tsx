@@ -207,7 +207,7 @@ export function SettingsModal({
                     <div className="flex items-center gap-2">
                       <div className="w-48 shrink-0">
                         <div className="text-xs">{lang === "zh" ? "空闲刷新间隔" : "Idle Flush (ms)"}</div>
-                        <div className="text-[10px] text-[var(--text-muted)]">
+                        <div className="text-theme-10 text-[var(--text-muted)]">
                           {lang === "zh" ? "半行数据判定已发完的等待时间" : "Wait before flushing a partial line"}
                         </div>
                       </div>
@@ -227,7 +227,7 @@ export function SettingsModal({
                     <div className="flex items-center gap-2">
                       <div className="w-48 shrink-0">
                         <div className="text-xs">{lang === "zh" ? "渲染批间隔" : "Render Batch (ms)"}</div>
-                        <div className="text-[10px] text-[var(--text-muted)]">
+                        <div className="text-theme-10 text-[var(--text-muted)]">
                           {lang === "zh" ? "日志合并渲染的等待时间" : "Coalesce log renders by this delay"}
                         </div>
                       </div>

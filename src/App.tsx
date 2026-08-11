@@ -6,6 +6,8 @@ import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { AboutPanel } from "./components/settings/AboutPanel.tsx";
+import { HelpDialog } from "./components/HelpDialog.tsx";
+import { ShortcutsDialog } from "./components/ShortcutsDialog.tsx";
 import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
@@ -120,6 +122,9 @@ function App() {
   const [waveformOpen, setWaveformOpen] = useState(false);
   const [vizMenu, setVizMenu] = useState<{ x: number; y: number } | null>(null);
   const [toolMenu, setToolMenu] = useState<{ x: number; y: number } | null>(null);
+  const [helpMenu, setHelpMenu] = useState<{ x: number; y: number } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [stringGenOpen, setStringGenOpen] = useState(false);
   const [stringCheckOpen, setStringCheckOpen] = useState(false);
   const [codecOpen, setCodecOpen] = useState(false);
@@ -546,6 +551,18 @@ function App() {
     root.style.setProperty("--font-size", `${theme.fontSize}px`);
     root.style.setProperty("--font-weight", String(theme.fontWeight));
     root.style.setProperty("--mono-font-family", theme.monoFontFamily);
+    // ── 扩展主题变量（可选字段，缺失时用 styles.css 静态默认）──
+    root.style.setProperty("--bg-hover", theme.bgHover ?? "");
+    root.style.setProperty("--text-placeholder", theme.textPlaceholder ?? "");
+    root.style.setProperty("--border-focus", theme.borderFocus ?? "");
+    root.style.setProperty("--accent-dark", theme.accentDark ?? "");
+    root.style.setProperty("--accent-light", theme.accentLight ?? "");
+    root.style.setProperty("--accent-muted", theme.accentMuted ?? "");
+    root.style.setProperty("--radius-sm", `${theme.radiusSm ?? 0.375}rem`);
+    root.style.setProperty("--radius-md", `${theme.radiusMd ?? 0.5}rem`);
+    root.style.setProperty("--radius-lg", `${theme.radiusLg ?? 0.75}rem`);
+    root.style.setProperty("--panel-padding", `${theme.panelPadding ?? 0.5}rem`);
+    root.style.setProperty("--control-gap", `${theme.controlGap ?? 0.375}rem`);
     // density compact mode
     root.classList.toggle("density-compact", !!settings.compactMode);
   }, [settings.theme, settings.compactMode]);
@@ -687,14 +704,14 @@ function App() {
         {/* Editing toggle */}
         <div className="shrink-0 flex items-center justify-end gap-2 px-2 py-1">
           {gridEditing && (
-            <span className="text-[10px] text-[var(--accent)] font-semibold">
+            <span className="text-theme-10 text-[var(--accent)] font-semibold">
               {lang === "zh" ? "📐 编辑模式 — 拖拽卡片调整布局" : "📐 Edit mode — drag cards to rearrange"}
             </span>
           )}
           <button
             type="button"
             onClick={() => setGridEditing((v) => !v)}
-            className={`rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+            className={`rounded px-2 py-0.5 text-theme-10 font-semibold transition-colors ${
               gridEditing
                 ? "bg-[var(--accent)] text-white"
                 : "border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -880,13 +897,31 @@ function App() {
           </Button>
           <Button
             type="button"
-            onClick={() => setTourOpen(true)}
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setHelpMenu({ x: rect.left, y: rect.bottom + 4 });
+            }}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <HelpCircle size={14} />
             <span>{t("help", lang)}</span>
           </Button>
+          {helpMenu && (
+            <ContextMenu
+              x={helpMenu.x}
+              y={helpMenu.y}
+              onClose={() => setHelpMenu(null)}
+              items={[
+                { id: "guide", label: lang === "zh" ? "新手引导" : "Tour Guide", onClick: () => setTourOpen(true) },
+                { id: "docs", label: lang === "zh" ? "帮助文档" : "Help Docs", onClick: () => setHelpOpen(true) },
+                { id: "shortcuts", label: lang === "zh" ? "快捷键" : "Shortcuts", onClick: () => setShortcutsOpen(true) },
+                { id: "sep", label: "", separator: true, onClick: () => {} },
+                { id: "logs", label: lang === "zh" ? "查看程序日志" : "App Logs", onClick: handleOpenLogViewer },
+                { id: "about", label: lang === "zh" ? "关于" : "About", onClick: () => setAboutOpen(true) },
+              ]}
+            />
+          )}
           <Button
             type="button"
             onClick={handleOpenLogViewer}
@@ -1059,6 +1094,20 @@ function App() {
         </div>
       )}
 
+      <HelpDialog
+        open={helpOpen}
+        lang={lang}
+        helpUrl={settings.helpUrl}
+        onClose={() => setHelpOpen(false)}
+      />
+
+      <ShortcutsDialog
+        open={shortcutsOpen}
+        lang={lang}
+        hotkeys={settings.hotkeys ?? []}
+        onClose={() => setShortcutsOpen(false)}
+      />
+
       {signalOpen && (
         <SignalDialog
           lang={lang}
@@ -1155,7 +1204,7 @@ function App() {
                   onClick={() => updateTopCollapsed(false)}
                   className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 transition-colors hover:bg-[var(--bg-input)]"
                 >
-                  <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                  <div className="flex items-center gap-2 text-theme-11 text-[var(--text-muted)]">
                     <ChevronDown size={14} />
                     <span className="font-semibold uppercase tracking-widest">
                       {currentPortLabel}
@@ -1272,7 +1321,7 @@ function App() {
                     onClick={() => updateRightSendCollapsed(false)}
                     className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 transition-colors hover:bg-[var(--bg-input)]"
                   >
-                    <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--text-muted)]">
+                    <div className="flex items-center justify-center gap-2 text-theme-11 text-[var(--text-muted)]">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
                         <ChevronDown size={10} />
                       </span>
@@ -1372,7 +1421,7 @@ function App() {
                     {n.severity && n.severity !== "info" && (
                       <div className={`flex items-center gap-1.5 mb-2 text-${severity}-600`}>
                         <span className={`inline-block w-2 h-2 rounded-full bg-${severity}-500`} />
-                        <span className="text-[11px] font-semibold">
+                        <span className="text-theme-11 font-semibold">
                           {lang === "zh"
                             ? n.severity === "warning" ? "通知" : "重要通知"
                             : n.severity === "warning" ? "Notice" : "Important"}
@@ -1380,7 +1429,7 @@ function App() {
                       </div>
                     )}
                     {n.date && (
-                      <div className="text-[10px] text-[var(--text-muted)]/60 mb-1">{n.date}</div>
+                      <div className="text-theme-10 text-[var(--text-muted)]/60 mb-1">{n.date}</div>
                     )}
                     {n.title && (
                       <div className="text-sm font-semibold text-[var(--text-primary)] mb-2">{n.title}</div>

@@ -74,7 +74,7 @@ export function NotificationHistory({ lang, items, onClose }: NotificationHistor
                       <span className={`inline-block w-2 h-2 shrink-0 rounded-full ${s.dot}`} />
                       {/* Mode badge */}
                       {n.mode === "card" && (
-                        <span className="shrink-0 rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                        <span className="shrink-0 rounded bg-purple-100 px-1.5 py-0.5 text-theme-9 font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
                           {lang === "zh" ? "卡片" : "Card"}
                         </span>
                       )}
@@ -84,7 +84,7 @@ export function NotificationHistory({ lang, items, onClose }: NotificationHistor
                       </span>
                       {/* Date */}
                       {n.date && (
-                        <span className="shrink-0 text-[10px] text-[var(--text-muted)]/60">{n.date}</span>
+                        <span className="shrink-0 text-theme-10 text-[var(--text-muted)]/60">{n.date}</span>
                       )}
                       {/* Expand arrow */}
                       <svg
@@ -103,7 +103,7 @@ export function NotificationHistory({ lang, items, onClose }: NotificationHistor
                       <div className="border-t border-[var(--border)] px-2.5 py-2 space-y-1.5">
                         {n.severity && n.severity !== "info" && (
                           <div className="flex items-center gap-1.5">
-                            <span className={`text-[10px] font-semibold ${s.text}`}>
+                            <span className={`text-theme-10 font-semibold ${s.text}`}>
                               {lang === "zh"
                                 ? n.severity === "warning" ? "⚠ 警告" : "🔴 重要"
                                 : n.severity === "warning" ? "Warning" : "Important"}
@@ -111,7 +111,7 @@ export function NotificationHistory({ lang, items, onClose }: NotificationHistor
                           </div>
                         )}
                         {n.body && (
-                          <div className="text-[11px] text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap">
+                          <div className="text-theme-11 text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap">
                             {n.body}
                           </div>
                         )}
@@ -120,7 +120,7 @@ export function NotificationHistory({ lang, items, onClose }: NotificationHistor
                             href={n.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-[var(--accent)] hover:underline"
+                            className="inline-flex items-center gap-1 text-theme-11 text-[var(--accent)] hover:underline"
                           >
                             <ExternalLink size={11} />
                             {t("notification_link", lang)}
@@ -136,7 +136,7 @@ export function NotificationHistory({ lang, items, onClose }: NotificationHistor
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--text-muted)]">
+        <div className="flex shrink-0 items-center justify-between border-t border-[var(--border)] px-4 py-2 text-theme-10 text-[var(--text-muted)]">
           <span>{items.length} {lang === "zh" ? "条通知" : "notifications"}</span>
           <Button variant="primary" size="sm" onClick={onClose} className="text-xs">
             {t("dialog_close", lang)}

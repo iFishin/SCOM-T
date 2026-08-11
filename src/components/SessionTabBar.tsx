@@ -78,7 +78,7 @@ export function SessionTabBar({
         <button
           type="button"
           onClick={onCreate}
-          className="flex items-center gap-1 px-2 py-1.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
+          className="flex items-center gap-1 px-2 py-1.5 text-theme-10 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
           title={lang === "zh" ? "新建会话" : "New Session"}
         >
           <Plus size={12} />
@@ -146,7 +146,7 @@ function SessionTab({
 
   return (
     <div
-      className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors shrink-0 border-r border-[var(--border)] ${
+      className={`group flex items-center gap-1 px-2.5 py-1.5 text-theme-11 cursor-pointer transition-colors shrink-0 border-r border-[var(--border)] ${
         isActive
           ? "bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold"
           : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
@@ -178,7 +178,7 @@ function SessionTab({
               onCancelRename();
             }
           }}
-          className="h-5 w-20 min-w-10 rounded border border-[var(--border-focus)] bg-[var(--bg-input)] px-1 text-[11px] font-semibold text-[var(--text-primary)] outline-none shadow-[var(--shadow-focus)]"
+          className="h-5 w-20 min-w-10 rounded border border-[var(--border-focus)] bg-[var(--bg-input)] px-1 text-theme-11 font-semibold text-[var(--text-primary)] outline-none shadow-[var(--shadow-focus)]"
         />
       ) : (
         <span className="truncate max-w-[80px]" title={session.name}>{session.name}</span>

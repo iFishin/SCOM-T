@@ -33,7 +33,7 @@ type Props = {
 const inputCls =
   "w-full rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 pr-12 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]";
 const counterCls =
-  "absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)] select-none pointer-events-none";
+  "absolute right-2 top-1/2 -translate-y-1/2 text-theme-10 text-[var(--text-muted)] select-none pointer-events-none";
 const toggleOn = "bg-[var(--accent)] text-white border-[var(--accent-dark)]";
 const toggleOff =
   "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] border-transparent";
@@ -219,7 +219,7 @@ export function SearchReplace({
         {allowReplace && isTextareaMode && (
           <>
             <span className="w-px h-4 bg-[var(--border)]" />
-            <button type="button" onClick={() => setShowReplace((v) => !v)} className={`rounded px-1.5 py-0.5 text-[11px] font-mono transition-colors border ${showReplace ? toggleOn : toggleOff}`}>
+            <button type="button" onClick={() => setShowReplace((v) => !v)} className={`rounded px-1.5 py-0.5 text-theme-11 font-mono transition-colors border ${showReplace ? toggleOn : toggleOff}`}>
               替换
             </button>
           </>
@@ -239,10 +239,10 @@ export function SearchReplace({
             placeholder={lang === "zh" ? "替换为…" : "Replace with…"}
             className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
           />
-          <button type="button" onClick={handleReplace} disabled={total === 0} className="rounded px-2 py-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] disabled:opacity-30 transition-colors">
+          <button type="button" onClick={handleReplace} disabled={total === 0} className="rounded px-2 py-1 text-theme-11 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] disabled:opacity-30 transition-colors">
             {lang === "zh" ? "替换" : "Replace"}
           </button>
-          <button type="button" onClick={handleReplaceAll} disabled={total === 0} className="rounded px-2 py-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] disabled:opacity-30 transition-colors">
+          <button type="button" onClick={handleReplaceAll} disabled={total === 0} className="rounded px-2 py-1 text-theme-11 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] disabled:opacity-30 transition-colors">
             {lang === "zh" ? "全部替换" : "Replace All"}
           </button>
         </div>

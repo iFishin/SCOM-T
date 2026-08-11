@@ -27,6 +27,11 @@ export type HotkeyConfig = {
   builtinAction?: string;
 };
 
+export type ThemeStylePreset = "modern" | "sharp" | "classic" | "custom";
+
+/** 圆角/间距字段（rem） */
+type RemKey = "radiusSm" | "radiusMd" | "radiusLg" | "panelPadding" | "controlGap";
+
 export type ThemeSettings = {
   mode: "light" | "dark";
   bgPrimary: string;
@@ -40,6 +45,21 @@ export type ThemeSettings = {
   fontSize: number;
   fontWeight: number;
   monoFontFamily: string;
+  // ── 新增文字/背景色（可选，缺省回填默认）──
+  bgHover?: string;          // 悬停背景
+  textPlaceholder?: string;  // 占位符文字色
+  borderFocus?: string;      // 聚焦边框色
+  accentDark?: string;       // 强调色深（hover/active）
+  accentLight?: string;      // 强调色浅（柔和底）
+  accentMuted?: string;      // 强调色淡化（滚动条等）
+  // ── 圆角/间距（rem，随字号缩放）──
+  radiusSm?: number;         // 小圆角（输入框）
+  radiusMd?: number;         // 中圆角（按钮）
+  radiusLg?: number;         // 大圆角（面板/弹窗）
+  panelPadding?: number;     // 面板内边距
+  controlGap?: number;       // 控件间距
+  // ── 整体风格预设（最近选用或 custom）──
+  stylePreset?: ThemeStylePreset;
 };
 
 export type GridItemLayout = {
@@ -76,6 +96,8 @@ export type AppSettings = {
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   notificationUrl?: string;
+  /** 帮助文档地址（支持 {lang} 占位符，空则用默认云端 URL）。 */
+  helpUrl?: string;
   timestampFormat?: "time" | "datetime" | "none";
   sendMode?: SendMode;
   receiveMode?: ReceiveMode;
@@ -118,6 +140,18 @@ export const DEFAULT_LIGHT_THEME: ThemeSettings = {
   fontSize: 13,
   fontWeight: 400,
   monoFontFamily: "Consolas, Menlo, Monaco, monospace",
+  bgHover: "#f0fdf4",
+  textPlaceholder: "#94a3b8",
+  borderFocus: "#10b981",
+  accentDark: "#059669",
+  accentLight: "#d1fae5",
+  accentMuted: "#6ee7b7",
+  radiusSm: 0.375,
+  radiusMd: 0.5,
+  radiusLg: 0.75,
+  panelPadding: 0.5,
+  controlGap: 0.375,
+  stylePreset: "classic",
 };
 
 export const DEFAULT_DARK_THEME: ThemeSettings = {
@@ -133,6 +167,18 @@ export const DEFAULT_DARK_THEME: ThemeSettings = {
   fontSize: 13,
   fontWeight: 400,
   monoFontFamily: "Consolas, Menlo, Monaco, monospace",
+  bgHover: "#052e16",
+  textPlaceholder: "#94a3b8",
+  borderFocus: "#10b981",
+  accentDark: "#059669",
+  accentLight: "#064e3b",
+  accentMuted: "#6ee7b7",
+  radiusSm: 0.375,
+  radiusMd: 0.5,
+  radiusLg: 0.75,
+  panelPadding: 0.5,
+  controlGap: 0.375,
+  stylePreset: "classic",
 };
 
 export const GRID_ITEM_KEYS = ["config", "send", "filesend", "hotkeys", "receive", "prompts"] as const;
@@ -196,10 +242,58 @@ const DEFAULT_SETTINGS: AppSettings = {
   cloudServerUrl: "https://scom-t-marketplace.ifishin.top",
   cloudAuthToken: "",
   cloudUploaderName: "",
+  helpUrl: "",
   rxIdleFlushMs: 50,
   logBatchFlushMs: 50,
   customEnders: [],
 };
+
+/** 颜色值（hex）校验：补齐原始 rgb/缩写等不校验，仅回退非字符串。 */
+function isColorString(v: unknown): v is string {
+  return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$|^[a-z]+$/i.test(v.trim());
+}
+
+/** rem 数值钳制到合理范围（0.125–3）。 */
+function clampRem(v: unknown, fallback: number): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+  return Math.min(3, Math.max(0.125, Math.round(v * 1000) / 1000));
+}
+
+/** 合并主题：默认值兜底 + 新增字段校验（防手改 config.yaml 产生非法值）。 */
+function mergeTheme(raw: Record<string, unknown>): ThemeSettings {
+  const base = raw.mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+  const colorFields: (keyof ThemeSettings)[] = [
+    "bgPrimary", "bgSurface", "bgInput", "textPrimary", "textMuted",
+    "accent", "border", "bgHover", "textPlaceholder", "borderFocus",
+    "accentDark", "accentLight", "accentMuted",
+  ];
+  const out: ThemeSettings = { ...base };
+  for (const k of colorFields) {
+    const v = raw[k];
+    if (isColorString(v)) (out as Record<string, unknown>)[k] = v;
+  }
+  // 字体/字数/字重
+  if (typeof raw.fontFamily === "string") out.fontFamily = raw.fontFamily;
+  if (typeof raw.monoFontFamily === "string") out.monoFontFamily = raw.monoFontFamily;
+  if (typeof raw.fontSize === "number" && raw.fontSize >= 10 && raw.fontSize <= 24) out.fontSize = raw.fontSize;
+  if (typeof raw.fontWeight === "number" && raw.fontWeight >= 300 && raw.fontWeight <= 700) out.fontWeight = raw.fontWeight;
+  // 圆角/间距（rem）
+  const remFields: [RemKey, number][] = [
+    ["radiusSm", base.radiusSm ?? 0.375],
+    ["radiusMd", base.radiusMd ?? 0.5],
+    ["radiusLg", base.radiusLg ?? 0.75],
+    ["panelPadding", base.panelPadding ?? 0.5],
+    ["controlGap", base.controlGap ?? 0.375],
+  ];
+  for (const [k, fb] of remFields) {
+    out[k] = clampRem(raw[k], fb);
+  }
+  // 风格预设枚举
+  const p = raw.stylePreset;
+  out.stylePreset =
+    p === "modern" || p === "sharp" || p === "classic" ? p : "custom";
+  return out;
+}
 
 /** Merge a raw parsed object into AppSettings with validation. */
 function mergeSettings(raw: Partial<AppSettings>): AppSettings {
@@ -216,7 +310,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
           builtinAction: (hk as any).builtinAction || undefined,
         }))
       : DEFAULT_HOTKEYS,
-    theme: { ...DEFAULT_LIGHT_THEME, ...(raw.theme || {}) },
+    theme: mergeTheme(raw.theme || {}),
     promptRowCount: typeof raw.promptRowCount === "number" && raw.promptRowCount >= 1
       ? raw.promptRowCount : 100,
     lang: raw.lang === "en" || raw.lang === "zh" ? raw.lang : "zh",
@@ -232,6 +326,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
         }))
       : DEFAULT_GRID_LAYOUT,
     notificationUrl: typeof raw.notificationUrl === "string" ? raw.notificationUrl : "",
+    helpUrl: typeof raw.helpUrl === "string" ? raw.helpUrl : "",
     timestampFormat: raw.timestampFormat === "time" || raw.timestampFormat === "datetime" || raw.timestampFormat === "none"
       ? raw.timestampFormat : "datetime",
     sendMode: raw.sendMode === "hex" ? "hex" : "ascii",
@@ -423,6 +518,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, notificationUrl: url }));
   }
 
+  function updateHelpUrl(url: string) {
+    setSettings((current) => ({ ...current, helpUrl: url }));
+  }
+
   function updateTimestampFormat(format: "time" | "datetime" | "none") {
     setSettings((current) => ({ ...current, timestampFormat: format }));
   }
@@ -523,16 +622,11 @@ export function useSettings() {
 
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+    // 重置整套主题（含扩展字段）回该 mode 的默认，并标记为「经典」预设
     updateTheme({
       ...settings.theme,
-      mode: base.mode,
-      bgPrimary: base.bgPrimary,
-      bgSurface: base.bgSurface,
-      bgInput: base.bgInput,
-      textPrimary: base.textPrimary,
-      textMuted: base.textMuted,
-      accent: base.accent,
-      border: base.border,
+      ...base,
+      stylePreset: "classic",
     });
   }
 
@@ -550,6 +644,7 @@ export function useSettings() {
     updateLayoutMode,
     updateGridLayout,
     updateNotificationUrl,
+    updateHelpUrl,
     updateTimestampFormat,
     updateSendMode,
     updateReceiveMode,

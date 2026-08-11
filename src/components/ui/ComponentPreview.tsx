@@ -49,7 +49,7 @@ export function ComponentPreview() {
             <div className="text-xs text-[var(--text-muted)] mb-2">输入 - 前缀/后缀 / 校验提示</div>
             <div className="grid gap-2 md:grid-cols-2">
               <div>
-                <div className="text-[12px] mb-1">带前缀</div>
+                <div className="text-theme-12 mb-1">带前缀</div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 text-sm text-[var(--text-muted)]">+86</span>
                   <Input value={inputValue} onChange={(e) => setInputValue(e.currentTarget.value)} placeholder="手机号" />
@@ -57,7 +57,7 @@ export function ComponentPreview() {
               </div>
 
               <div>
-                <div className="text-[12px] mb-1">带后缀 / 错误提示</div>
+                <div className="text-theme-12 mb-1">带后缀 / 错误提示</div>
                 <div>
                   <div className="flex items-center gap-2">
                     <Input value={inputValue} onChange={(e) => setInputValue(e.currentTarget.value)} placeholder="数量" />

@@ -90,7 +90,7 @@ export function StringGeneratorDialog({ lang, onClose }: { lang: Lang; onClose: 
     }`;
 
   const chipClass = (active: boolean) =>
-    `rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+    `rounded-full border px-3 py-1 text-theme-11 font-medium transition-all ${
       active
         ? "border-[var(--accent)] bg-[var(--accent)] text-white"
         : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
@@ -101,7 +101,7 @@ export function StringGeneratorDialog({ lang, onClose }: { lang: Lang; onClose: 
       <div className="space-y-5">
         {/* ── Quick presets ── */}
         <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          <div className="mb-2 text-theme-11 font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             {lang === "zh" ? "快速预设" : "Quick Presets"}
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -128,39 +128,39 @@ export function StringGeneratorDialog({ lang, onClose }: { lang: Lang; onClose: 
 
         {/* ── Character sets ── */}
         <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          <div className="mb-2 text-theme-11 font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             {lang === "zh" ? "字符池" : "Character Pool"} <span className="font-normal lowercase text-[var(--text-muted)]/60">({pool.length || 0} {lang === "zh" ? "个字符" : "chars"})</span>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => toggle("upper")} className={btnClass(charSet.upper)}>
               <span className="text-sm">A-Z</span>
-              <span className="ml-1.5 text-[10px] opacity-70">{lang === "zh" ? "大写" : "Upper"}</span>
+              <span className="ml-1.5 text-theme-10 opacity-70">{lang === "zh" ? "大写" : "Upper"}</span>
             </button>
             <button type="button" onClick={() => toggle("lower")} className={btnClass(charSet.lower)}>
               <span className="text-sm">a-z</span>
-              <span className="ml-1.5 text-[10px] opacity-70">{lang === "zh" ? "小写" : "Lower"}</span>
+              <span className="ml-1.5 text-theme-10 opacity-70">{lang === "zh" ? "小写" : "Lower"}</span>
             </button>
             <button type="button" onClick={() => toggle("digits")} className={btnClass(charSet.digits)}>
               <span className="text-sm">0-9</span>
-              <span className="ml-1.5 text-[10px] opacity-70">{lang === "zh" ? "数字" : "Digits"}</span>
+              <span className="ml-1.5 text-theme-10 opacity-70">{lang === "zh" ? "数字" : "Digits"}</span>
             </button>
             <button type="button" onClick={() => toggle("special")} className={btnClass(charSet.special)}>
               <span className="text-sm">!@#$%</span>
-              <span className="ml-1.5 text-[10px] opacity-70">{lang === "zh" ? "特殊" : "Special"}</span>
+              <span className="ml-1.5 text-theme-10 opacity-70">{lang === "zh" ? "特殊" : "Special"}</span>
             </button>
             <button type="button" onClick={() => toggle("space")} className={btnClass(charSet.space)}>
               <span className="text-sm">␣</span>
-              <span className="ml-1.5 text-[10px] opacity-70">{lang === "zh" ? "空格" : "Space"}</span>
+              <span className="ml-1.5 text-theme-10 opacity-70">{lang === "zh" ? "空格" : "Space"}</span>
             </button>
           </div>
           {!activeCount && (
-            <p className="mt-1.5 text-[10px] text-rose-500">{lang === "zh" ? "请至少选择一种字符类型" : "Select at least one character type"}</p>
+            <p className="mt-1.5 text-theme-10 text-rose-500">{lang === "zh" ? "请至少选择一种字符类型" : "Select at least one character type"}</p>
           )}
         </div>
 
         {/* ── Length ── */}
         <div>
-          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          <div className="mb-2 flex items-center justify-between text-theme-11 font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             <span>{lang === "zh" ? "长度" : "Length"}</span>
             <span className="font-mono text-[var(--text-primary)]">{length}</span>
           </div>
@@ -200,7 +200,7 @@ export function StringGeneratorDialog({ lang, onClose }: { lang: Lang; onClose: 
         {/* ── Result ── */}
         {result && (
           <div className="rounded-xl border-2 border-[var(--accent)]/20 bg-[var(--bg-input)] p-4">
-            <div className="mb-2 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+            <div className="mb-2 flex items-center justify-between text-theme-10 text-[var(--text-muted)]">
               <span>{result.length} {lang === "zh" ? "个字符" : "chars"}</span>
               <span>{new TextEncoder().encode(result).length} {lang === "zh" ? "字节" : "bytes"}</span>
             </div>
@@ -293,7 +293,7 @@ export function StringCheckerDialog({ lang, onClose }: { lang: Lang; onClose: ()
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
-      <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{label}</div>
+      <div className="text-theme-10 text-[var(--text-muted)] uppercase tracking-wider">{label}</div>
       <div className="mt-0.5 text-lg font-bold font-mono text-[var(--text-primary)]">{value.toLocaleString()}</div>
     </div>
   );

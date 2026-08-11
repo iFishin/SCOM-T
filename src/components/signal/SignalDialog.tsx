@@ -62,7 +62,7 @@ export function SignalDialog({ lang, isConnected, config, signalStates, onClose 
                     />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium text-[var(--text-primary)]">{label}</span>
-                      <span className={`text-[10px] ${active ? "text-emerald-500" : "text-[var(--text-muted)]/50"}`}>
+                      <span className={`text-theme-10 ${active ? "text-emerald-500" : "text-[var(--text-muted)]/50"}`}>
                         {source === "out" ? (lang === "zh" ? "输出" : "Output") : (lang === "zh" ? "输入" : "Input")}
                         {active ? (lang === "zh" ? " · 高" : " · High") : (lang === "zh" ? " · 低" : " · Low")}
                       </span>
@@ -72,7 +72,7 @@ export function SignalDialog({ lang, isConnected, config, signalStates, onClose 
               })}
             </div>
           )}
-          <div className="mt-3 text-[10px] text-[var(--text-muted)]/60 text-center">
+          <div className="mt-3 text-theme-10 text-[var(--text-muted)]/60 text-center">
             {isConnected ? (lang === "zh" ? "每 500ms 自动刷新" : "Auto-refresh every 500ms") : ""}
           </div>
         </div>

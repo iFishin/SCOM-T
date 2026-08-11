@@ -138,7 +138,7 @@ export function MockSerialSettings({ lang, mockSerial, onMockSerialChange }: Moc
             className="w-24 text-center"
           />
           <span className="text-xs text-[var(--text-muted)]">ms</span>
-          <span className="ml-2 text-[10px] text-[var(--text-muted)] opacity-60">
+          <span className="ml-2 text-theme-10 text-[var(--text-muted)] opacity-60">
             {lang === "zh" ? "范围: 0-5000ms" : "Range: 0-5000ms"}
           </span>
         </div>
@@ -230,7 +230,7 @@ export function MockSerialSettings({ lang, mockSerial, onMockSerialChange }: Moc
                       e.stopPropagation();
                       addAllFromGroup(group);
                     }}
-                    className="text-[10px] px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80"
+                    className="text-theme-10 px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80"
                   >
                     {lang === "zh" ? "全部添加" : "Add All"}
                   </Button>
@@ -254,7 +254,7 @@ export function MockSerialSettings({ lang, mockSerial, onMockSerialChange }: Moc
                           type="button"
                           onClick={() => addTemplateResponse(template)}
                           disabled={exists}
-                          className={`text-[10px] px-2 py-0.5 rounded ${
+                          className={`text-theme-10 px-2 py-0.5 rounded ${
                             exists
                               ? "bg-[var(--border)] text-[var(--text-muted)] cursor-not-allowed"
                               : "bg-[var(--accent)] text-white hover:opacity-80"
@@ -320,7 +320,7 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
           <Button
             type="button"
             onClick={handleCancel}
-            className="text-[10px] px-2 py-0.5 rounded border border-[var(--border)] text-[var(--text-muted)]"
+            className="text-theme-10 px-2 py-0.5 rounded border border-[var(--border)] text-[var(--text-muted)]"
           >
             {lang === "zh" ? "取消" : "Cancel"}
           </Button>
@@ -328,7 +328,7 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
             type="button"
             onClick={handleSave}
             disabled={!editCommand.trim() || !editResponse.trim()}
-            className="text-[10px] px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-50"
+            className="text-theme-10 px-2 py-0.5 rounded bg-[var(--accent)] text-white hover:opacity-80 disabled:opacity-50"
           >
             {lang === "zh" ? "保存" : "Save"}
           </Button>
@@ -347,7 +347,7 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
       />
       <div className="flex-1 min-w-0">
         <div className="font-mono text-xs text-[var(--text-primary)]">{response.command}</div>
-        <div className="text-[10px] text-[var(--text-muted)] whitespace-pre-wrap break-all max-h-16 overflow-y-auto">
+        <div className="text-theme-10 text-[var(--text-muted)] whitespace-pre-wrap break-all max-h-16 overflow-y-auto">
           {response.response}
         </div>
       </div>

@@ -55,7 +55,7 @@ export function HotkeysEditor({ hotkeys, customEnders, onHotkeysChange, lang }: 
       </div>
 
             <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-        <div className="grid grid-cols-[32px_90px_minmax(140px,1fr)_68px_60px_60px_100px_52px] gap-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-2 text-center text-[11px] font-semibold text-[var(--text-muted)]">
+        <div className="grid grid-cols-[32px_90px_minmax(140px,1fr)_68px_60px_60px_100px_52px] gap-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-2 py-2 text-center text-theme-11 font-semibold text-[var(--text-muted)]">
           <div>#</div>
           <div>标签</div>
           <div>串口指令 / 内置</div>

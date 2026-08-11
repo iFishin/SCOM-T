@@ -98,7 +98,7 @@ export function ConfigPanel({
               type="button"
               onClick={() => setConnectionType(ct)}
               disabled={isConnected || isBusy}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-all ${
+              className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-theme-11 font-semibold transition-all ${
                 config.connectionType === ct
                   ? "bg-[var(--accent)] text-white shadow-sm"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -122,7 +122,7 @@ export function ConfigPanel({
         {isSerialMode && (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
+              <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
               <select
                 className={`${sel} mt-0.5 truncate`}
                 title={config.path}
@@ -138,7 +138,7 @@ export function ConfigPanel({
               </select>
             </div>
             <div className="w-28 shrink-0">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
+              <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
               <select
                 className={sel}
                 value={config.baudRate}
@@ -193,9 +193,9 @@ export function ConfigPanel({
         {/* ── TCP Client mode ── */}
         {isTcpClient && (
           <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 gap-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_host", lang)}</label>
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_port", lang)}</label>
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_protocol", lang)}</label>
+            <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("tcp_host", lang)}</label>
+            <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("tcp_port", lang)}</label>
+            <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("tcp_protocol", lang)}</label>
             <div></div>
 
             <input
@@ -272,7 +272,7 @@ export function ConfigPanel({
           <>
             <div className="flex items-end gap-2">
               <div className="flex-1 min-w-0">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
+                <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("port", lang)}</label>
                 <select
                   className={`${sel} w-full mt-0.5`}
                   title={config.path}
@@ -288,7 +288,7 @@ export function ConfigPanel({
                 </select>
               </div>
               <div className="w-20">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
+                <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("baud", lang)}</label>
                 <select
                   className={`${sel} w-full mt-0.5`}
                   value={config.baudRate}
@@ -301,7 +301,7 @@ export function ConfigPanel({
                 </select>
               </div>
               <div className="w-20">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">{t("tcp_server_listen_port", lang)}</label>
+                <label className="text-theme-11 font-medium text-[var(--text-muted)]">{t("tcp_server_listen_port", lang)}</label>
                 <input
                   className={`${sel} w-full mt-0.5`}
                   type="number" min={1} max={65535}
@@ -349,20 +349,20 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <p className="text-[10px] text-[var(--text-muted)] leading-tight mt-1">
+            <p className="text-theme-10 text-[var(--text-muted)] leading-tight mt-1">
               {t("tcp_server_hint", lang)}
             </p>
 
             {tcpServerClients.length > 0 && (
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] font-medium text-[var(--text-muted)]">
+                <span className="text-theme-10 font-medium text-[var(--text-muted)]">
                   {t("tcp_server_clients", lang)} ({tcpServerClients.length})
                 </span>
                 <div className="flex-1 max-h-16 overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg-input)] p-1">
                   {tcpServerClients.map((client) => (
                     <div
                       key={client.id}
-                      className="flex items-center gap-2 rounded px-2 py-0.5 text-[10px] text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                      className="flex items-center gap-2 rounded px-2 py-0.5 text-theme-10 text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
                     >
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                       <span className="truncate">{client.address}</span>
@@ -379,16 +379,16 @@ export function ConfigPanel({
       <Button
         type="button"
         onClick={() => setAdvOpen((v) => !v)}
-        className="flex w-full items-center gap-1 border-t border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+        className="flex w-full items-center gap-1 border-t border-[var(--border)] px-3 py-1.5 text-theme-11 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
       >
         {advOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className="font-semibold uppercase tracking-widest">
           {t("advanced", lang)}
         </span>
         {isTcpClient && config.tcpProtocol === "rfc2217" && (
-          <span className="ml-1 text-[9px] opacity-70">RFC 2217</span>
+          <span className="ml-1 text-theme-9 opacity-70">RFC 2217</span>
         )}
-        <span className="ml-auto text-[10px] opacity-70">
+        <span className="ml-auto text-theme-10 opacity-70">
           {config.dataBits}N{config.stopBits}
           {config.parity !== "none" ? ` ${config.parity[0].toUpperCase()}` : ""}
         </span>
@@ -398,7 +398,7 @@ export function ConfigPanel({
         <div className="space-y-2 p-2 pt-0">
           <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <div className="mb-0.5 text-[10px] text-[var(--text-muted)]">{t("data_bits", lang)}</div>
+              <div className="mb-0.5 text-theme-10 text-[var(--text-muted)]">{t("data_bits", lang)}</div>
               <select
                 className={sel}
                 value={config.dataBits}
@@ -413,7 +413,7 @@ export function ConfigPanel({
               </select>
             </div>
             <div>
-              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("stop_bits", lang)}</div>
+              <div className="mb-1 text-theme-10 text-[var(--text-muted)]">{t("stop_bits", lang)}</div>
               <select
                 className={sel}
                 value={config.stopBits}
@@ -428,7 +428,7 @@ export function ConfigPanel({
               </select>
             </div>
             <div>
-              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("parity", lang)}</div>
+              <div className="mb-1 text-theme-10 text-[var(--text-muted)]">{t("parity", lang)}</div>
               <select
                 className={sel}
                 value={config.parity}
@@ -446,7 +446,7 @@ export function ConfigPanel({
 
           <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("flow_control", lang)}</div>
+              <div className="mb-1 text-theme-10 text-[var(--text-muted)]">{t("flow_control", lang)}</div>
               <select
                 className={sel}
                 value={config.flowControl}
@@ -461,7 +461,7 @@ export function ConfigPanel({
               </select>
             </div>
             <div>
-              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("rts", lang)}</div>
+              <div className="mb-1 text-theme-10 text-[var(--text-muted)]">{t("rts", lang)}</div>
               <select
                 className={sel}
                 value={config.rts ? "high" : "low"}
@@ -477,7 +477,7 @@ export function ConfigPanel({
               </select>
             </div>
             <div>
-              <div className="mb-1 text-[10px] text-[var(--text-muted)]">{t("dtr", lang)}</div>
+              <div className="mb-1 text-theme-10 text-[var(--text-muted)]">{t("dtr", lang)}</div>
               <select
                 className={sel}
                 value={config.dtr ? "high" : "low"}
@@ -494,7 +494,7 @@ export function ConfigPanel({
             </div>
           </div>
 
-          <p className="text-[10px] text-[var(--text-muted)]">
+          <p className="text-theme-10 text-[var(--text-muted)]">
             {isTcpClient && config.tcpProtocol === "rfc2217"
               ? "RFC 2217 模式下，串口参数将通过 Telnet 协商发送到远程设备。"
               : isTcpServer

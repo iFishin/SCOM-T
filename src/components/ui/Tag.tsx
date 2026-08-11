@@ -44,7 +44,7 @@ export function Tag({
   className = "",
   filled = false,
 }: TagProps) {
-  const sizeClass = size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-xs";
+  const sizeClass = size === "sm" ? "px-1.5 py-0.5 text-theme-10" : "px-2 py-1 text-xs";
   const colors = filled ? VARIANT_CLASS[variant].filled : VARIANT_CLASS[variant].outlined;
 
   return (

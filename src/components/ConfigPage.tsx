@@ -175,7 +175,7 @@ export function ConfigPage({ lang, activeConfigFile = "prompts.yaml", onActiveCo
       {/* ── Footer ── */}
       <footer className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5">
         <Save size={11} className="text-[var(--text-muted)]" />
-        <span className="text-[10px] text-[var(--text-muted)]">
+        <span className="text-theme-10 text-[var(--text-muted)]">
           {currentFile === "prompts.yaml"
             ? lang === "zh"
               ? "自动保存至 ~/SCOM-T/prompts.yaml"

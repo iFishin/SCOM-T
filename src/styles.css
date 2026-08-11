@@ -35,7 +35,7 @@
                    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --mono-font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
   --font-size:     13px;
-  --control-font-size: 12px;
+  --control-font-size: calc(var(--font-size) * 0.92);
   --font-weight:   400;
 
   /* spacing tokens */
@@ -87,6 +87,15 @@ html, body, #root {
 
 button, input, select, textarea { font: inherit; }
 textarea { resize: none; }
+
+/* 随主题 --font-size 缩放的派生字号（13px 基准下 ≈9-12px）。
+   Tailwind 命名字号（text-xs/sm 等）基于 rem，会随 :root 的
+   font-size: var(--font-size) 一起缩放；这里覆盖硬编码的 text-[Npx]
+   （纯 px，绝对单位不随主题缩放），统一改为比例字号。 */
+.text-theme-9  { font-size: calc(var(--font-size) * 0.69); }
+.text-theme-10 { font-size: calc(var(--font-size) * 0.77); }
+.text-theme-11 { font-size: calc(var(--font-size) * 0.85); }
+.text-theme-12 { font-size: calc(var(--font-size) * 0.92); }
 
 /* ── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar        { width: 5px; height: 5px; }
@@ -290,7 +299,7 @@ textarea { resize: none; }
   --control-gap:   0.25rem;
   --panel-padding: 0.25rem;
   --font-size:     12px;
-  --control-font-size: 11px;
+  --control-font-size: calc(var(--font-size) * 0.92);
 }
 
 /* ── About panel: easter egg animations ────────────────────── */
@@ -427,4 +436,94 @@ textarea.font-mono.text-transparent::selection {
 
 .animate-logo-blip {
   animation: logo-blip 0.5s ease-out forwards;
+}
+
+/* ── Markdown 帮助文档（.help-md 容器） ── */
+.help-md {
+  color: var(--text-primary);
+  line-height: 1.7;
+  word-break: break-word;
+}
+.help-md h1 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0 0 0.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+.help-md h2 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+}
+.help-md h3 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 1em 0 0.3em;
+}
+.help-md p {
+  margin: 0.5em 0;
+}
+.help-md ul, .help-md ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.help-md li {
+  margin: 0.2em 0;
+}
+.help-md code {
+  font-family: var(--mono-font-family);
+  font-size: 0.9em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.help-md pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.7em;
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.help-md pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.help-md blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 0.6em 0;
+  padding: 0.1em 0.9em;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 0 6px 6px 0;
+}
+.help-md table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  width: 100%;
+  font-size: 0.95em;
+}
+.help-md th, .help-md td {
+  border: 1px solid var(--border);
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.help-md th {
+  background: var(--bg-input);
+  font-weight: 600;
+}
+.help-md a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.help-md a:hover {
+  text-decoration: underline;
+}
+.help-md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
 }

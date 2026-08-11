@@ -124,11 +124,11 @@ export function LayoutEditor({ layout, lang, onLayoutChange, onReset }: Props) {
                   key={key}
                   className={`flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] shadow-sm transition-shadow hover:shadow-md ${color}`}
                 >
-                  <div className="flex items-center gap-1 border-b border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
-                    <span className="text-[10px] select-none">⠿</span>
+                  <div className="flex items-center gap-1 border-b border-[var(--border)] px-2 py-1 text-theme-11 font-semibold text-[var(--text-muted)]">
+                    <span className="text-theme-10 select-none">⠿</span>
                     {label}
                   </div>
-                  <div className="flex flex-1 items-center justify-center p-1 text-[10px] text-[var(--text-muted)] opacity-50">
+                  <div className="flex flex-1 items-center justify-center p-1 text-theme-10 text-[var(--text-muted)] opacity-50">
                     {key === "config" && "端口 · 波特率 · 高级"}
                     {key === "send" && "ASCII/HEX · Enter 发送"}
                     {key === "filesend" && "选择文件 · 发送"}

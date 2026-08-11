@@ -159,11 +159,11 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
         <div className="p-4 space-y-3">
           {/* Presets */}
           <div>
-            <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-1.5 flex items-center justify-between">
+            <div className="text-theme-11 font-semibold text-[var(--text-muted)] mb-1.5 flex items-center justify-between">
               <span>{lang === "zh" ? "预设" : "Presets"}</span>
               {!saving && (
                 <button type="button" onClick={() => setSaving(true)}
-                  className="flex items-center gap-1 text-[10px] text-[var(--accent)] hover:opacity-80 transition-opacity"
+                  className="flex items-center gap-1 text-theme-10 text-[var(--accent)] hover:opacity-80 transition-opacity"
                 >
                   <Plus size={11} />
                   {lang === "zh" ? "保存当前" : "Save Current"}
@@ -178,22 +178,22 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
                   onKeyDown={(e) => { if (e.key === "Enter") handleSavePreset(); if (e.key === "Escape") { setSaving(false); setPresetName(""); } }}
                   autoFocus
                 />
-                <Button type="button" variant="primary" size="sm" onClick={handleSavePreset} disabled={!presetName.trim() || !pattern} className="text-[10px] px-2 py-1">
+                <Button type="button" variant="primary" size="sm" onClick={handleSavePreset} disabled={!presetName.trim() || !pattern} className="text-theme-10 px-2 py-1">
                   {lang === "zh" ? "保存" : "Save"}
                 </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setSaving(false); setPresetName(""); }} className="text-[10px] px-2 py-1">
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setSaving(false); setPresetName(""); }} className="text-theme-10 px-2 py-1">
                   {t("close", lang)}
                 </Button>
               </div>
             )}
             <div className="flex flex-wrap gap-1.5">
               {presets.map((p, i) => (
-                <div key={i} className="group relative flex items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-input)] pl-1.5 pr-1 py-1 text-[11px] transition-colors hover:border-[var(--accent)]">
+                <div key={i} className="group relative flex items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-input)] pl-1.5 pr-1 py-1 text-theme-11 transition-colors hover:border-[var(--accent)]">
                   <button type="button" onClick={() => {
                     const list = presets.map((pp, ii) => ii === i ? { ...pp, pinned: !pp.pinned } : pp);
                     savePresets(list);
                   }}
-                    className={`text-[9px] font-mono transition-colors w-3.5 text-center ${p.pinned ? "text-[var(--accent)]" : "text-[var(--text-muted)] opacity-30 hover:opacity-100"}`}
+                    className={`text-theme-9 font-mono transition-colors w-3.5 text-center ${p.pinned ? "text-[var(--accent)]" : "text-[var(--text-muted)] opacity-30 hover:opacity-100"}`}
                     title={p.pinned ? (lang === "zh" ? "取消固定" : "Unpin") : (lang === "zh" ? "固定到侧边栏" : "Pin to sidebar")}
                   >
                     {p.pinned ? "P" : "-"}
@@ -216,7 +216,7 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
           <div className="h-px bg-[var(--border)]" />
 
           <div>
-            <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+            <div className="text-theme-11 font-semibold text-[var(--text-muted)] mb-1">
               {lang === "zh" ? "正则表达式" : "Regex Pattern"}
             </div>
             <input value={pattern} onChange={(e) => setPattern(e.currentTarget.value)}
@@ -226,7 +226,7 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
             />
           </div>
           <div>
-            <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+            <div className="text-theme-11 font-semibold text-[var(--text-muted)] mb-1">
               {lang === "zh" ? "替换为" : "Replacement"}
             </div>
             <input value={replacement} onChange={(e) => setReplacement(e.currentTarget.value)}
@@ -236,12 +236,12 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
           </div>
 
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-[11px] font-semibold text-[var(--text-muted)]">
+            <span className="text-theme-11 font-semibold text-[var(--text-muted)]">
               {lang === "zh" ? "模式" : "Mode"}
             </span>
             {(["replace", "keep", "drop"] as const).map((m) => (
               <button key={m} type="button" onClick={() => setMode(m)}
-                className={`rounded px-2.5 py-1 text-[11px] transition-colors ${
+                className={`rounded px-2.5 py-1 text-theme-11 transition-colors ${
                   mode === m
                     ? "bg-[var(--accent)] text-white"
                     : "border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -260,10 +260,10 @@ export function RegexCleanDialog({ text, lang, onApply, onClose }: Props) {
 
           {preview !== null && (
             <div>
-              <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-1 flex items-center gap-1">
+              <div className="text-theme-11 font-semibold text-[var(--text-muted)] mb-1 flex items-center gap-1">
                 <Search size={12} />
                 {lang === "zh" ? "预览结果" : "Preview"}
-                <span className="text-[10px] opacity-60">
+                <span className="text-theme-10 opacity-60">
                   ({lang === "zh" ? `${text.length} → ${preview.length} 字符` : `${text.length} → ${preview.length} chars`})
                 </span>
               </div>

@@ -80,7 +80,7 @@ export function CommandLineSettings({ lang, customEnders, onCustomEndersChange }
             className="w-32 font-mono text-xs"
           />
           {newHexValid !== null && (
-            <span className={`text-[10px] ${newHexValid ? "text-emerald-500" : "text-rose-500"}`}>
+            <span className={`text-theme-10 ${newHexValid ? "text-emerald-500" : "text-rose-500"}`}>
               {newHexValid
                 ? bytesToHex(parseHexString(normalizeHex(newHex)))
                 : lang === "zh" ? "无效 HEX" : "Invalid HEX"}
@@ -128,7 +128,7 @@ export function CommandLineSettings({ lang, customEnders, onCustomEndersChange }
                     onChange={(ev) => updateEnder(e.id, { hex: ev.currentTarget.value })}
                     className={`w-32 font-mono text-xs ${valid ? "" : "border-rose-500 text-rose-500"}`}
                   />
-                  <span className={`text-[10px] font-mono ${valid ? "text-[var(--text-muted)]" : "text-rose-500"}`}>
+                  <span className={`text-theme-10 font-mono ${valid ? "text-[var(--text-muted)]" : "text-rose-500"}`}>
                     {valid ? preview : lang === "zh" ? "无效 HEX" : "Invalid"}
                   </span>
                   <button

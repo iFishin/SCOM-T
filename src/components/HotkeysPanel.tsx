@@ -15,7 +15,7 @@ export function HotkeysPanel({ hotkeys, onHotkeySend, lang, borderless }: Props)
     <div className={`bg-[var(--bg-surface)] ${borderless ? "p-2" : "rounded-lg border border-[var(--border)] p-2"}`}>
       {/* Hide internal title when borderless — parent already shows it */}
       {!borderless && (
-        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+        <div className="mb-1.5 text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)]">
           {t("hotkeys_title", lang)}
         </div>
       )}
@@ -25,11 +25,11 @@ export function HotkeysPanel({ hotkeys, onHotkeySend, lang, borderless }: Props)
             key={hotkey.id}
             type="button"
             onClick={() => onHotkeySend(hotkey)}
-            className="flex flex-col items-start gap-0.5 overflow-hidden px-2 py-1 text-[11px]"
+            className="flex flex-col items-start gap-0.5 overflow-hidden px-2 py-1 text-theme-11"
           >
             <span className="truncate font-medium">{hotkey.label}</span>
             {hotkey.shortcut && (
-              <span className="rounded bg-[var(--bg-input)] px-1 py-[1px] text-[9px] text-[var(--text-muted)] leading-tight">
+              <span className="rounded bg-[var(--bg-input)] px-1 py-[1px] text-theme-9 text-[var(--text-muted)] leading-tight">
                 {hotkey.shortcut}
               </span>
             )}

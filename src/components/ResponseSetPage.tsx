@@ -211,7 +211,7 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar */}
         <div className="w-64 shrink-0 border-r border-[var(--border)] p-3 flex flex-col">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
+          <div className="text-theme-10 font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
             {t("response_set_list", lang)}
             <span className="ml-1 font-normal normal-case">({setNames.length})</span>
           </div>
@@ -234,7 +234,7 @@ export function ResponseSetPage({ lang, onClose, onApply }: ResponseSetPageProps
               </button>
             ))}
             {setNames.length === 0 && (
-              <div className="text-[10px] text-[var(--text-muted)] text-center py-8">
+              <div className="text-theme-10 text-[var(--text-muted)] text-center py-8">
                 {lang === "zh" ? "暂无响应集\n点击上方「新建」创建" : "No response sets\nClick 'New' to create"}
               </div>
             )}

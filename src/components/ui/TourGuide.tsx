@@ -146,7 +146,7 @@ export function TourGuide({ steps, lang, onFinish, onSkip }: TourGuideProps) {
             top: rect.top - 24,
             pointerEvents: "none",
           }}
-          className="text-[10px] font-semibold tracking-wider text-[var(--accent)]"
+          className="text-theme-10 font-semibold tracking-wider text-[var(--accent)]"
         >
           {current + 1} / {steps.length}
         </div>
@@ -171,7 +171,7 @@ export function TourGuide({ steps, lang, onFinish, onSkip }: TourGuideProps) {
             <button
               type="button"
               onClick={onSkip}
-              className="text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+              className="text-theme-11 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
             >
               {L.skip}
             </button>
@@ -217,7 +217,7 @@ export function TourGuide({ steps, lang, onFinish, onSkip }: TourGuideProps) {
             <button
               type="button"
               onClick={onSkip}
-              className="text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+              className="text-theme-11 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
             >
               {L.skip}
             </button>

@@ -236,7 +236,7 @@ ${Array.from({ length: 10 }, (_, i) => `  - command: ''
                   <span className="text-sm truncate">prompts.yaml</span>
                 </div>
                 {currentFile === "prompts.yaml" && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/20 text-white">
+                  <span className="text-theme-10 px-1.5 py-0.5 rounded bg-white/20 text-white">
                     {t("config_active", lang)}
                   </span>
                 )}
@@ -282,7 +282,7 @@ ${Array.from({ length: 10 }, (_, i) => `  - command: ''
                         </div>
                         <div className="hidden group-hover:flex items-center gap-1">
                           {currentFile === file && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/20 text-white mr-1">
+                            <span className="text-theme-10 px-1.5 py-0.5 rounded bg-white/20 text-white mr-1">
                               {t("config_active", lang)}
                             </span>
                           )}

@@ -245,8 +245,8 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
           </span>
           <div className="text-center">
             <div className="text-lg font-bold tracking-tight">SCOM-T</div>
-            <div className="text-[11px] text-[var(--text-muted)]">v{version}</div>
-            <div className="text-[10px] text-[var(--text-muted)]/60">{formatBuildTime(BUILD_TIME)}</div>
+            <div className="text-theme-11 text-[var(--text-muted)]">v{version}</div>
+            <div className="text-theme-10 text-[var(--text-muted)]/60">{formatBuildTime(BUILD_TIME)}</div>
           </div>
         </div>
 
@@ -295,7 +295,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
         <Bell size={14} />
         {lang === "zh" ? "查看历史通知" : "Notification History"}
         {rawItems.length > 0 && (
-          <span className="text-[10px] text-[var(--text-muted)]">({rawItems.length})</span>
+          <span className="text-theme-10 text-[var(--text-muted)]">({rawItems.length})</span>
         )}
       </Button>
 
@@ -328,7 +328,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
         {/* Watch for parent updateAvailable to sync UI */}
         {updateCheck.status === "idle" && updateAvailable && (
           <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+            <div className="flex items-center gap-1.5 text-theme-11 font-semibold text-emerald-700">
               <Download size={13} />
               {lang === "zh" ? "有新版本可用" : "New version available"}
             </div>
@@ -337,7 +337,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
                 variant="primary"
                 size="sm"
                 onClick={() => { openUrl(`https://github.com/iFishin/SCOM-T/releases/latest`); }}
-                className="flex items-center gap-1 text-[10px]"
+                className="flex items-center gap-1 text-theme-10"
               >
                 <Download size={11} />
                 {t("update_download", lang)}
@@ -347,14 +347,14 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
         )}
 
         {updateCheck.status === "checking" && (
-          <div className="mt-2 text-[11px] text-[var(--text-muted)] animate-pulse">
+          <div className="mt-2 text-theme-11 text-[var(--text-muted)] animate-pulse">
             {t("update_checking", lang)}
           </div>
         )}
 
         {updateCheck.status === "latest" && (
           <div className="mt-2 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] text-emerald-700">
+            <div className="flex items-center gap-1.5 text-theme-11 text-emerald-700">
               <CheckCircle size={13} />
               <span>
                 {lang === "zh"
@@ -365,7 +365,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
             <button
               type="button"
               onClick={() => { openUrl(`https://github.com/${GITHUB_REPO}/releases/latest`); }}
-              className="text-[10px] text-emerald-600 underline hover:text-emerald-700"
+              className="text-theme-10 text-emerald-600 underline hover:text-emerald-700"
             >
               {lang === "zh" ? "查看" : "View"}
             </button>
@@ -374,12 +374,12 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
 
         {updateCheck.status === "available" && (
           <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+            <div className="flex items-center gap-1.5 text-theme-11 font-semibold text-emerald-700">
               <Download size={13} />
               {t("update_available", lang)} v{updateCheck.version}
             </div>
             {updateCheck.body && (
-              <div className="mt-1 max-h-20 overflow-y-auto text-[10px] text-emerald-600/80 leading-relaxed whitespace-pre-wrap">
+              <div className="mt-1 max-h-20 overflow-y-auto text-theme-10 text-emerald-600/80 leading-relaxed whitespace-pre-wrap">
                 {updateCheck.body}
               </div>
             )}
@@ -388,7 +388,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
                 variant="primary"
                 size="sm"
                 onClick={() => { openUrl(updateCheck.url || `https://github.com/${GITHUB_REPO}/releases/latest`); }}
-                className="flex items-center gap-1 text-[10px]"
+                className="flex items-center gap-1 text-theme-10"
               >
                 <Download size={11} />
                 {t("update_download", lang)}
@@ -398,7 +398,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
         )}
 
         {updateCheck.status === "error" && (
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-rose-500">
+          <div className="mt-2 flex items-center gap-1.5 text-theme-11 text-rose-500">
             <AlertCircle size={12} />
             {t("update_error", lang)}: {updateCheck.message}
           </div>
@@ -418,7 +418,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
           ))}
 
           {revealed > EASTER_EGG_LINES.length && (
-            <div className="mt-2.5 border-t border-[var(--border)] pt-2.5 font-sans text-[11px] leading-relaxed text-[var(--text-muted)] not-italic">
+            <div className="mt-2.5 border-t border-[var(--border)] pt-2.5 font-sans text-theme-11 leading-relaxed text-[var(--text-muted)] not-italic">
               {t("developer_text", lang)}
             </div>
           )}
@@ -428,7 +428,7 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
           )}
 
           {typingDone && (
-            <div className="mt-2 text-center text-[10px] text-[var(--text-muted)]/40">
+            <div className="mt-2 text-center text-theme-10 text-[var(--text-muted)]/40">
               // end of transmission
             </div>
           )}
