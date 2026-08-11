@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, RotateCcw, WifiOff } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Lang } from "../i18n.ts";
 import { Button } from "./ui/Button.tsx";
 
@@ -128,7 +129,7 @@ export function HelpDialog({ open, lang, helpUrl, onClose }: HelpDialogProps) {
 
           {state.status === "ready" && (
             <div className="help-md">
-              <ReactMarkdown>{state.markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.markdown}</ReactMarkdown>
             </div>
           )}
         </div>
