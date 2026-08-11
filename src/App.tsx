@@ -1059,11 +1059,13 @@ function App() {
 
       <ErrorBoundary>
 
-      {page === "config" ? (
+      {page === "config" && (
         <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
-      ) : page === "responseSet" ? (
+      )}
+      {page === "responseSet" && (
         <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
-      ) : page === "marketplace" ? (
+      )}
+      {page === "marketplace" && (
         <MarketplacePage
           lang={lang}
           serverUrl={settings.cloudServerUrl ?? ""}
@@ -1077,7 +1079,10 @@ function App() {
             setPage("config");
           }}
         />
-      ) : (<>
+      )}
+      {/* 主界面始终挂载：切到配置/响应集/市场页时用 hidden 隐藏而非卸载，
+          避免 SessionManager/useSerialPort 重建导致串口断开、日志清空 */}
+      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${page === "main" ? "" : "hidden"}`}>
         {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="flex max-h-[80vh] w-[640px] max-w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl">
@@ -1500,7 +1505,7 @@ function App() {
           onClose={() => setCtxMenu(null)}
         />
       )}
-      </>)}
+      </div>
       </ErrorBoundary>
     </div>
   );
