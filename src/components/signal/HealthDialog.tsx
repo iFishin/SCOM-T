@@ -79,7 +79,7 @@ export function HealthDialog({ lang, isConnected, connectionType, latencyMs, lat
                 <Wifi size={14} className="text-emerald-500 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{connectedPort?.path ?? "—"}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">{connectedPort?.baudRate ?? "—"} baud · {isTcp ? "TCP" : connectionType}</div>
+                  <div className="text-theme-10 text-[var(--text-muted)]">{connectedPort?.baudRate ?? "—"} baud · {isTcp ? "TCP" : connectionType}</div>
                 </div>
               </div>
 
@@ -95,7 +95,7 @@ export function HealthDialog({ lang, isConnected, connectionType, latencyMs, lat
                   <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-2">
                     <Sparkline data={latencyHistory} />
                   </div>
-                  <div className="flex justify-between mt-1 text-[10px] text-[var(--text-muted)]">
+                  <div className="flex justify-between mt-1 text-theme-10 text-[var(--text-muted)]">
                     <span>{t("health_avg", lang)}: {avg !== null ? `${avg}ms` : "—"}</span>
                     <span>{t("health_max", lang)}: {max !== null ? `${max}ms` : "—"}</span>
                     <span>{lang === "zh" ? "样本" : "Samples"}: {latencyHistory.length}</span>

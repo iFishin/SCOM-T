@@ -144,7 +144,8 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
           className="overflow-y-auto resize-none flex-1 min-w-0 border-0 bg-transparent py-2 px-3 text-[var(--text-primary)] outline-none"
           style={{
             fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
-            fontSize: "12px",
+            // 跟随主题字号（13px 基准下 ≈12px），避免内联硬编码 px 不随主题缩放
+            fontSize: "calc(var(--font-size) * 0.92)",
             lineHeight: "20px",
           }}
         />
@@ -152,14 +153,14 @@ export function LogEditor({ initialContent, lang, onClose }: LogEditorProps) {
 
       {/* ── Footer ── */}
       <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-input)] px-4 py-2">
-        <span className="text-[10px] text-[var(--text-muted)]">
+        <span className="text-theme-10 text-[var(--text-muted)]">
           {cursorLine}/{lines.length}{" "}
           {lang === "zh" ? "行" : "lines"}
         </span>
         <button
           type="button"
           onClick={handleCopy}
-          className="ml-auto flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
+          className="ml-auto flex items-center gap-1 rounded px-2 py-1 text-theme-11 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
         >
           {copyFeedback ? <Check size={12} /> : <Copy size={12} />}
           {copyFeedback

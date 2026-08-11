@@ -15,7 +15,8 @@ type Props = {
 
 const EDITOR_FONT = {
   fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
-  fontSize: "12px",
+  // 跟随主题字号（13px 基准下 ≈12px），避免内联硬编码 px 不随主题缩放
+  fontSize: "calc(var(--font-size) * 0.92)",
   lineHeight: "20px",
 };
 
@@ -91,7 +92,7 @@ export function YamlEditor({ value, onChange, error, lang }: Props) {
     >
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-[var(--border)] shrink-0">
-        <Button type="button" variant="ghost" size="sm" onClick={handleFormat} className="text-[11px] px-2 py-0.5">
+        <Button type="button" variant="ghost" size="sm" onClick={handleFormat} className="text-theme-11 px-2 py-0.5">
           {lang === "zh" ? "格式化" : "Format"}
         </Button>
         <button

@@ -308,14 +308,14 @@ export function ReceiveLog({
   return (
     <Panel className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
       <div className="flex shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+        <span className="text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)]">
           {t("received", lang)}
         </span>
 
         {/* ── Send buffer (write queue) indicator ── */}
         {sendQueue.length > 0 && (
           <div
-            className="flex min-w-0 max-w-[240px] items-center gap-1.5 rounded bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700"
+            className="flex min-w-0 max-w-[240px] items-center gap-1.5 rounded bg-amber-50 px-2 py-0.5 text-theme-10 text-amber-700"
             title={lang === "zh" ? "串口发送缓冲区（排队待发送）" : "Serial send buffer (queued)"}
           >
             <span className="shrink-0 font-semibold">
@@ -337,7 +337,7 @@ export function ReceiveLog({
 
         {!pinned && (
           <button type="button" onClick={jumpToBottom} title={t("jump_to_bottom", lang)}
-            className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
+            className="flex items-center gap-1 rounded px-2 py-1 text-theme-11 text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
           >
             <ArrowDownToLine size={12} />
             {t("scroll_follow", lang)}
@@ -382,7 +382,7 @@ export function ReceiveLog({
           <button
             type="button"
             onClick={() => setClearOpen((v) => !v)}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:text-rose-500"
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-theme-11 text-[var(--text-muted)] transition-colors hover:text-rose-500"
           >
             <Trash2 size={14} />
             <ChevronDown size={12} />
@@ -455,7 +455,7 @@ export function ReceiveLog({
       )}
 
       {logCapWarning && !dismissedCapWarning && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-800">
+        <div className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1 text-theme-11 text-amber-800">
           <span className="font-medium">{t("log_cap_title", lang)}</span>
           <span className="opacity-80">{t("log_cap_desc", lang)}</span>
           <button
@@ -552,7 +552,7 @@ export function ReceiveLog({
                   <span className={`shrink-0 font-bold ${tagColor}`}>
                     {tag}
                   </span>
-                  <span className="shrink-0 text-[10px] text-[var(--text-muted)] opacity-60">
+                  <span className="shrink-0 text-theme-10 text-[var(--text-muted)] opacity-60">
                     {ts}
                   </span>
                   <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
@@ -590,7 +590,7 @@ export function ReceiveLog({
               const tag = isReceived ? "RX" : "TX";
               return (
                 <div key={log.id} data-seq={log.seq} className="group border-b border-[var(--border)]/40 last:border-b-0">
-                  <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-[10px] text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-theme-10 text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
                     <span className={`shrink-0 font-bold ${tagColor} ${isReceived ? "" : "opacity-60"}`}>
                       {tag}
                     </span>
@@ -606,7 +606,7 @@ export function ReceiveLog({
                     )}
                   </div>
                   {bytes.length === 0 ? (
-                    <div className="px-1 pb-1 text-[11px] text-[var(--text-muted)] opacity-40 italic">
+                    <div className="px-1 pb-1 text-theme-11 text-[var(--text-muted)] opacity-40 italic">
                       {t("no_data", lang)}
                     </div>
                   ) : (
@@ -653,7 +653,7 @@ export function ReceiveLog({
                   data-seq={group.entries.map(e => e.seq).join(",")}
                   className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1"
                 >
-                  <div className="mb-0.5 flex items-center gap-2 text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                  <div className="mb-0.5 flex items-center gap-2 text-theme-10 uppercase tracking-widest text-[var(--text-muted)]">
                     <span
                       className={`rounded px-1 py-0.5 font-bold ${
                         first.source === "tcp-server"
@@ -673,7 +673,7 @@ export function ReceiveLog({
                     )}
                     <span className="opacity-60">{first.mode.toUpperCase()}</span>
                     {group.entries.length > 1 && (
-                      <span className="text-[9px] text-[var(--text-muted)]/50">({group.entries.length} packets)</span>
+                      <span className="text-theme-9 text-[var(--text-muted)]/50">({group.entries.length} packets)</span>
                     )}
                   </div>
                   <div className="break-all whitespace-pre-wrap leading-tight text-[var(--text-primary)]">
@@ -736,7 +736,7 @@ export function ReceiveLog({
                   <span className="text-sm font-semibold text-[var(--text-primary)]">
                     {lang === "zh" ? "日志管理" : "Log Manager"}
                   </span>
-                  <span className="ml-2 text-[10px] text-[var(--text-muted)]">
+                  <span className="ml-2 text-theme-10 text-[var(--text-muted)]">
                     {lang === "zh" ? `${logs.length} 条记录` : `${logs.length} entries`}
                   </span>
                 </div>
@@ -760,7 +760,7 @@ export function ReceiveLog({
                       <FolderOpen size={13} className="shrink-0" />
                       <span className="font-medium">{lang === "zh" ? "文件路径" : "File Path"}</span>
                     </div>
-                    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 font-mono text-[11px] text-[var(--text-primary)] break-all leading-relaxed select-all">
+                    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 font-mono text-theme-11 text-[var(--text-primary)] break-all leading-relaxed select-all">
                       {savePath}
                     </div>
                   </div>
@@ -768,19 +768,19 @@ export function ReceiveLog({
                   {/* Stats row */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-3 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">
+                      <div className="flex items-center gap-1.5 text-theme-10 text-[var(--text-muted)] uppercase tracking-wider">
                         <Database size={12} />
                         <span>{lang === "zh" ? "写入条目" : "Written"}</span>
                       </div>
                       <span className="text-lg font-bold text-[var(--text-primary)] tabular-nums">
                         {logs.length} {lang === "zh" ? "条" : "entries"}
                       </span>
-                      <span className="block text-[10px] text-[var(--text-muted)]">
+                      <span className="block text-theme-10 text-[var(--text-muted)]">
                         ~{logs.length > 0 ? Math.round(logs.reduce((s, l) => s + l.payload.length + 40, 0) / 1024) : 0} KB
                       </span>
                     </div>
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-3 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">
+                      <div className="flex items-center gap-1.5 text-theme-10 text-[var(--text-muted)] uppercase tracking-wider">
                         <Activity size={12} />
                         <span>{lang === "zh" ? "写入模式" : "Mode"}</span>
                       </div>
@@ -789,7 +789,7 @@ export function ReceiveLog({
                           ? (lang === "zh" ? "实时" : "Realtime")
                           : (lang === "zh" ? "手动" : "Manual")}
                       </span>
-                      <span className="block text-[10px] text-[var(--text-muted)]">
+                      <span className="block text-theme-10 text-[var(--text-muted)]">
                         {realTimeLog
                           ? (lang === "zh" ? "每 2 秒自动写入" : "Every 2 seconds")
                           : (lang === "zh" ? "需手动点击写入" : "Flush manually")}
@@ -808,7 +808,7 @@ export function ReceiveLog({
                           <div className="text-xs font-semibold text-[var(--text-primary)]">
                             {lang === "zh" ? "实时写入" : "Real-time Write"}
                           </div>
-                          <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                          <div className="text-theme-10 text-[var(--text-muted)] mt-0.5">
                             {realTimeLog
                               ? (lang === "zh" ? "日志到达时自动写入磁盘" : "Auto-write entries to disk as they arrive")
                               : (lang === "zh" ? "手动保存日志到文件" : "Save logs to file manually")}
@@ -876,7 +876,7 @@ export function ReceiveLog({
 
             {/* Footer */}
             <div className="flex shrink-0 items-center justify-end border-t border-[var(--border)] bg-[var(--bg-input)] px-5 py-2.5">
-              <span className="text-[10px] text-[var(--text-muted)] mr-auto opacity-60">
+              <span className="text-theme-10 text-[var(--text-muted)] mr-auto opacity-60">
                 {lang === "zh" ? "提示：日志文件存储在本地，不会自动上传" : "Logs are stored locally and never uploaded"}
               </span>
               <Button variant="ghost" size="sm" onClick={() => setLogManagerOpen(false)} className="text-xs">

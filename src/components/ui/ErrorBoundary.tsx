@@ -106,7 +106,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
 
           {/* ── System tray fallback hint ── */}
-          <div className="mt-4 text-center text-[11px] text-[var(--text-muted)] opacity-50">
+          <div className="mt-4 text-center text-theme-11 text-[var(--text-muted)] opacity-50">
             如果无法恢复，右键系统托盘图标 → 重新加载
           </div>
         </div>

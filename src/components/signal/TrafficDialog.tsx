@@ -48,7 +48,7 @@ export function TrafficDialog({ lang, isConnected, txBytes, rxBytes, txRate, rxR
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-sky-500">{t("traffic_tx", lang)}</span>
-                  <span className="text-[11px] text-[var(--text-muted)]">
+                  <span className="text-theme-11 text-[var(--text-muted)]">
                     {formatRate(txRate)} / {formatBytes(txBytes)}
                   </span>
                 </div>
@@ -64,7 +64,7 @@ export function TrafficDialog({ lang, isConnected, txBytes, rxBytes, txRate, rxR
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-emerald-500">{t("traffic_rx", lang)}</span>
-                  <span className="text-[11px] text-[var(--text-muted)]">
+                  <span className="text-theme-11 text-[var(--text-muted)]">
                     {formatRate(rxRate)} / {formatBytes(rxBytes)}
                   </span>
                 </div>
@@ -80,11 +80,11 @@ export function TrafficDialog({ lang, isConnected, txBytes, rxBytes, txRate, rxR
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[var(--border)]">
                 <div className="text-center">
                   <div className="text-lg font-bold text-sky-500">{formatBytes(txBytes)}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">{t("traffic_tx", lang)} {t("traffic_bytes", lang)}</div>
+                  <div className="text-theme-10 text-[var(--text-muted)]">{t("traffic_tx", lang)} {t("traffic_bytes", lang)}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold text-emerald-500">{formatBytes(rxBytes)}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">{t("traffic_rx", lang)} {t("traffic_bytes", lang)}</div>
+                  <div className="text-theme-10 text-[var(--text-muted)]">{t("traffic_rx", lang)} {t("traffic_bytes", lang)}</div>
                 </div>
               </div>
             </>

@@ -53,7 +53,7 @@ export function LogViewer({ lang, logFiles, selectedFile, content, onSelectFile,
       <div className="flex min-h-0 flex-1">
         <div className="flex w-48 shrink-0 flex-col border-r border-[var(--border)]">
           <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-1.5">
-            <span className="text-[11px] font-semibold text-[var(--text-muted)]">{lang === "zh" ? "日志文件" : "Log Files"}</span>
+            <span className="text-theme-11 font-semibold text-[var(--text-muted)]">{lang === "zh" ? "日志文件" : "Log Files"}</span>
           </div>
           <div className="flex-1 overflow-y-auto">
             {logFiles.length === 0 ? (

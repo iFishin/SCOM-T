@@ -35,7 +35,7 @@
                    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --mono-font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
   --font-size:     13px;
-  --control-font-size: 12px;
+  --control-font-size: calc(var(--font-size) * 0.92);
   --font-weight:   400;
 
   /* spacing tokens */
@@ -87,6 +87,15 @@ html, body, #root {
 
 button, input, select, textarea { font: inherit; }
 textarea { resize: none; }
+
+/* 随主题 --font-size 缩放的派生字号（13px 基准下 ≈9-12px）。
+   Tailwind 命名字号（text-xs/sm 等）基于 rem，会随 :root 的
+   font-size: var(--font-size) 一起缩放；这里覆盖硬编码的 text-[Npx]
+   （纯 px，绝对单位不随主题缩放），统一改为比例字号。 */
+.text-theme-9  { font-size: calc(var(--font-size) * 0.69); }
+.text-theme-10 { font-size: calc(var(--font-size) * 0.77); }
+.text-theme-11 { font-size: calc(var(--font-size) * 0.85); }
+.text-theme-12 { font-size: calc(var(--font-size) * 0.92); }
 
 /* ── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar        { width: 5px; height: 5px; }
@@ -290,7 +299,7 @@ textarea { resize: none; }
   --control-gap:   0.25rem;
   --panel-padding: 0.25rem;
   --font-size:     12px;
-  --control-font-size: 11px;
+  --control-font-size: calc(var(--font-size) * 0.92);
 }
 
 /* ── About panel: easter egg animations ────────────────────── */

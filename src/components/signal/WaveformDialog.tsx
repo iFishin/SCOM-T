@@ -269,7 +269,7 @@ export function WaveformDialog({ lang, isConnected, getSignalHistory, onClose }:
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--text-muted)]">
+        <div className="flex shrink-0 items-center justify-between border-t border-[var(--border)] px-4 py-2 text-theme-10 text-[var(--text-muted)]">
           <span>
             {visible.length} {lang === "zh" ? "个采样点" : "samples"}
             {paused && ` · ${lang === "zh" ? "已暂停" : "Paused"}`}

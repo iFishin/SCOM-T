@@ -809,7 +809,7 @@ export function PromptPanel({
 
   const gridContent = (
     <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
+      <div className="grid grid-cols-[24px_24px_52px_minmax(80px,1fr)_30px_72px_60px_50px] items-center gap-x-1 border-b border-[var(--border)] bg-[var(--bg-input)] px-1.5 py-0.5 text-theme-10 font-semibold uppercase tracking-widest text-[var(--text-muted)] text-center">
         <button onClick={clearAllStatuses} className="hover:text-[var(--text-primary)] transition-colors" title={lang === "zh" ? "点击清空所有状态" : "Clear all statuses"}>#</button>
         <div className="flex justify-center">
           <Checkbox checked={allSelected} onChange={() => toggleSelectAll()} />
@@ -849,21 +849,21 @@ export function PromptPanel({
                     <Loader2 size={10} className="animate-spin" />
                   </span>
                 ) : (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[10px] font-medium text-[var(--text-muted)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-theme-10 font-medium text-[var(--text-muted)]">
                     {row.id}
                   </span>
                 )}
               </div>
               <div className="flex justify-center"><Checkbox checked={row.selected} onChange={(e) => updatePromptRow(row.id, { selected: e.currentTarget.checked })} /></div>
-              <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)} className="text-[10px] px-1.5 py-0.5">{t("prompt_sender", lang)}</Button>
-              <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-[11px]" />
+              <Button type="button" variant="primary" size="sm" onClick={() => handleSendPromptRow(row)} className="text-theme-10 px-1.5 py-0.5">{t("prompt_sender", lang)}</Button>
+              <Input value={row.command} onChange={(e) => updatePromptRow(row.id, { command: e.currentTarget.value })} onKeyDown={(e) => handleCommandKeyDown(e, row)} ref={(el: HTMLInputElement) => { commandRefs.current[row.id] = el; }} placeholder={t("command_placeholder", lang)} className="bg-transparent text-theme-11" />
               <div className="flex justify-center"><Checkbox checked={row.isHex} onChange={(e) => updatePromptRow(row.id, { isHex: e.currentTarget.checked })} /></div>
-              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value })} className="text-[11px]" style={{ paddingLeft: "4px" } as React.CSSProperties}>
+              <Select value={row.ender} onChange={(e) => updatePromptRow(row.id, { ender: e.currentTarget.value })} className="text-theme-11" style={{ paddingLeft: "4px" } as React.CSSProperties}>
                 {appendEnderFallback(enderOptions, row.ender, lang).map((o, i) => (
                   <option key={i} value={o.value}>{o.label}</option>
                 ))}
               </Select>
-              <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-[11px] placeholder:text-[11px]" />
+              <Input value={row.interval} onChange={(e) => updatePromptRow(row.id, { interval: e.currentTarget.value })} placeholder={t("interval_placeholder", lang)} className="text-center text-theme-11 placeholder:text-theme-11" />
               <div className="flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity gap-1">
                 <button
                   type="button"
@@ -889,7 +889,7 @@ export function PromptPanel({
             {expandedRowId === row.id && (
               <div className="border-b border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] font-semibold text-[var(--text-muted)]">
+                  <label className="block text-theme-10 font-semibold text-[var(--text-muted)]">
                     {t("prompt_expected_responses", lang)}
                   </label>
                   {responseSetOptions.length > 0 && (
@@ -937,7 +937,7 @@ export function PromptPanel({
                             });
                           });
                         }}
-                        className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-muted)] max-w-[90px]"
+                        className="text-theme-10 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-muted)] max-w-[90px]"
                       >
                         <option value="">{lang === "zh" ? "保存到..." : "Save to..."}</option>
                         {responseSetOptions.map((opt) => (
@@ -956,7 +956,7 @@ export function PromptPanel({
                             importResponseSet(set);
                           });
                         }}
-                        className="text-[10px] rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-primary)] max-w-[130px]"
+                        className="text-theme-10 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-primary)] max-w-[130px]"
                       >
                         <option value="">{lang === "zh" ? "从响应集导入..." : "Import from set..."}</option>
                         {responseSetOptions.map((opt) => (
@@ -980,7 +980,7 @@ export function PromptPanel({
                             regex[j] = !regex[j];
                             updatePromptRow(row.id, { expectedResponseRegex: regex });
                           }}
-                          className={`shrink-0 mt-1 px-1.5 py-0.5 text-[9px] font-mono rounded border transition-colors ${
+                          className={`shrink-0 mt-1 px-1.5 py-0.5 text-theme-9 font-mono rounded border transition-colors ${
                             isRegex
                               ? "bg-amber-100 border-amber-300 text-amber-700"
                               : "bg-[var(--bg-primary)] border-[var(--border)] text-[var(--text-muted)]"
@@ -1004,7 +1004,7 @@ export function PromptPanel({
                             ? (lang === "zh" ? "正则表达式" : "Regex pattern")
                             : (lang === "zh" ? "期望响应内容" : "Expected response")
                           }
-                          className="flex-1 text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)] min-h-[24px]"
+                          className="flex-1 text-theme-11 bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)] min-h-[24px]"
                           rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)}
                         />
                         <button
@@ -1033,7 +1033,7 @@ export function PromptPanel({
                         : undefined;
                       updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
                     }}
-                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] px-1 py-0.5"
+                    className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)] hover:text-[var(--accent)] px-1 py-0.5"
                   >
                     <Plus size={10} />
                     {lang === "zh" ? "添加期望结果" : "Add Response"}
@@ -1072,7 +1072,7 @@ export function PromptPanel({
                         "success"
                       );
                     }}
-                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-emerald-600 px-1 py-0.5"
+                    className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)] hover:text-emerald-600 px-1 py-0.5"
                     title={lang === "zh" ? "从最近一次接收中采集实际响应" : "Capture actual response from last receive"}
                   >
                     <Download size={10} />
@@ -1132,13 +1132,13 @@ export function PromptPanel({
               pushToast(lang === "zh" ? `预设执行失败: ${p.name}` : `Failed: ${p.name}`, "error");
             }
           }}
-            className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-[10px] text-[var(--text-muted)] text-center transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
+            className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-theme-10 text-[var(--text-muted)] text-center transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
           >
             {p.name}
           </button>
         ))}
         <button type="button" onClick={() => setRegexCleanOpen(true)}
-          className="rounded border border-dashed border-[var(--border)] bg-transparent px-2 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
+          className="rounded border border-dashed border-[var(--border)] bg-transparent px-2 py-0.5 text-theme-10 text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
         >
           + {lang === "zh" ? "更多" : "More"}
         </button>
@@ -1155,9 +1155,9 @@ export function PromptPanel({
       {activePromptTab === "config" && (
         <>
           <span className="mx-2 text-[var(--border)]">|</span>
-          <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
-          <button type="button" onClick={handleShowLoadList} className="rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
-          <button type="button" onClick={handleOpenConfigDir} className="rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
+          <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-3 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
+          <button type="button" onClick={handleShowLoadList} className="rounded px-3 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
+          <button type="button" onClick={handleOpenConfigDir} className="rounded px-3 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
         </>
       )}
     </div>
@@ -1172,7 +1172,7 @@ export function PromptPanel({
         max={9999}
         value={totalLoops}
         onChange={(e) => setTotalLoops(Math.max(1, parseInt(e.target.value) || 1))}
-        className="w-16 text-center text-[11px]"
+        className="w-16 text-center text-theme-11"
         disabled={batchState.isRunning}
       />
       <span className="text-[var(--text-muted)]">{t("batch_times", lang)}</span>
@@ -1224,11 +1224,11 @@ export function PromptPanel({
   );
 
     const tabBarWithCount = (
-    <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+    <div className="mb-1.5 flex items-center text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)]">
       {tabBar}
       <span className="w-px h-4 bg-[var(--border)] mx-2" />
         {activePromptTab === "grid" && (
-          <label className="flex items-center gap-1 text-[10px] font-normal normal-case">
+          <label className="flex items-center gap-1 text-theme-10 font-normal normal-case">
             {t("prompt_rows", lang)}
             <Input type="number" min={1} max={500} value={rowCountInput}
                    onChange={(e) => setRowCountInput(e.currentTarget.value)}
@@ -1243,7 +1243,7 @@ export function PromptPanel({
             <button
               type="button"
               onClick={() => setMatchLogOpen(true)}
-              className="flex items-center gap-1 text-[10px] font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              className="flex items-center gap-1 text-theme-10 font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
               {waitingResponsesRef.current.size > 0 ? (
                 <span className="flex items-center gap-1 text-amber-500">
@@ -1272,9 +1272,9 @@ export function PromptPanel({
         )}
         {activePromptTab === "config" && (
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
-            <button type="button" onClick={handleShowLoadList} className="rounded px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
-            <button type="button" onClick={handleOpenConfigDir} className="rounded px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
+            <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-2.5 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
+            <button type="button" onClick={handleShowLoadList} className="rounded px-2.5 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
+            <button type="button" onClick={handleOpenConfigDir} className="rounded px-2.5 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
           </div>
         )}
       </div>
@@ -1287,8 +1287,8 @@ export function PromptPanel({
       {configAction === "save" && (
         <div className="flex items-center gap-2 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-input)]">
           <input value={configName} onChange={(e) => setConfigName(e.currentTarget.value)} placeholder={t("config_name_hint", lang)} className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]" onKeyDown={(e) => { if (e.key === "Enter" && configName.trim()) handleSaveConfig(configName.trim()); if (e.key === "Escape") setConfigAction(null); }} autoFocus />
-          <Button type="button" variant="primary" size="sm" disabled={!configName.trim()} onClick={() => handleSaveConfig(configName.trim())} className="px-2 py-1 text-[11px]">{t("save_config", lang)}</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setConfigAction(null)} className="px-2 py-1 text-[11px]">{lang === "zh" ? "取消" : "Cancel"}</Button>
+          <Button type="button" variant="primary" size="sm" disabled={!configName.trim()} onClick={() => handleSaveConfig(configName.trim())} className="px-2 py-1 text-theme-11">{t("save_config", lang)}</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setConfigAction(null)} className="px-2 py-1 text-theme-11">{lang === "zh" ? "取消" : "Cancel"}</Button>
         </div>
       )}
       {configAction === "load" && (
@@ -1300,7 +1300,7 @@ export function PromptPanel({
               {savedConfigs.map((name) => (
                 <div key={name} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)]">
                   <button type="button" className="flex-1 text-left text-[var(--text-primary)]" onClick={() => handleLoadConfig(name)}>{name}</button>
-                  <button type="button" onClick={() => handleDeleteConfig(name)} className="rounded px-1 py-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors text-[10px]">{lang === "zh" ? "删除" : "Del"}</button>
+                  <button type="button" onClick={() => handleDeleteConfig(name)} className="rounded px-1 py-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors text-theme-10">{lang === "zh" ? "删除" : "Del"}</button>
                 </div>
               ))}
             </div>
@@ -1407,7 +1407,7 @@ export function PromptPanel({
             <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3 shrink-0">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold">{lang === "zh" ? "匹配日志" : "Match Log"}</span>
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-theme-10 text-[var(--text-muted)]">
                   {lang === "zh"
                     ? `成功 ${matchLog.filter(e => e.status === "success").length} / 失败 ${matchLog.filter(e => e.status === "error").length} / 等待 ${waitingResponsesRef.current.size}`
                     : `OK ${matchLog.filter(e => e.status === "success").length} / Fail ${matchLog.filter(e => e.status === "error").length} / Wait ${waitingResponsesRef.current.size}`
@@ -1428,14 +1428,14 @@ export function PromptPanel({
                       pushToast(lang === "zh" ? "已复制到剪贴板" : "Copied to clipboard", "success");
                     }).catch(() => {});
                   }}
-                  className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  className="text-theme-10 px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   {lang === "zh" ? "复制" : "Copy"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMatchLog([])}
-                  className="text-[10px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  className="text-theme-10 px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   {lang === "zh" ? "清空" : "Clear"}
                 </button>
@@ -1472,14 +1472,14 @@ export function PromptPanel({
                           ) : entry.status === "error" ? (
                             <X size={12} className="text-rose-500" />
                           ) : entry.detail.startsWith("[RECV]") ? (
-                            <span className="text-[10px] text-[var(--text-muted)]">&gt;</span>
+                            <span className="text-theme-10 text-[var(--text-muted)]">&gt;</span>
                           ) : entry.detail.startsWith("[MATCH]") ? (
-                            <span className="text-[10px] text-amber-500">~</span>
+                            <span className="text-theme-10 text-amber-500">~</span>
                           ) : (
                             <Loader2 size={10} className="animate-spin text-amber-500" />
                           )}
                         </span>
-                        <span className={`text-[11px] ${
+                        <span className={`text-theme-11 ${
                           entry.status === "success" ? "text-emerald-600" :
                           entry.status === "error" ? "text-rose-600" :
                           "text-[var(--text-primary)]"
@@ -1488,13 +1488,13 @@ export function PromptPanel({
                         </span>
                       </div>
                       {entry.expected && (
-                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 ml-5">
+                        <div className="text-theme-10 text-[var(--text-muted)] mt-0.5 ml-5">
                           <span className="opacity-60">EXPECT: </span>
                           <span className="font-mono">{entry.expected}</span>
                         </div>
                       )}
                       {entry.received && (
-                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 ml-5">
+                        <div className="text-theme-10 text-[var(--text-muted)] mt-0.5 ml-5">
                           <span className="opacity-60">RECV: </span>
                           <span className="font-mono break-all">{entry.received}</span>
                         </div>

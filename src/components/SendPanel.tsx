@@ -154,7 +154,7 @@ export function SendPanel({
       {/* Send command — collapsible */}
       <div className="overflow-hidden rounded-lg border border-[var(--border)]">
         <div
-          className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+          className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-2 py-1 text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
           onClick={toggleExpanded}
         >
           <span className="flex items-center gap-1">
@@ -200,7 +200,7 @@ export function SendPanel({
                             onPushToast?.(err?.message || String(err), "warn");
                           }
                         }}
-                        className="px-2 py-0.5 text-[11px]"
+                        className="px-2 py-0.5 text-theme-11"
                       >
                         {t("ascii2hex", lang)}
                       </Button>
@@ -214,12 +214,12 @@ export function SendPanel({
                             onPushToast?.(err?.message || String(err), "warn");
                           }
                         }}
-                        className="px-2 py-0.5 text-[11px]"
+                        className="px-2 py-0.5 text-theme-11"
                       >
                         {t("hex2ascii", lang)}
                       </Button>
                     </div>
-                    <div className="text-[11px] text-[var(--text-muted)]">
+                    <div className="text-theme-11 text-[var(--text-muted)]">
                       {(() => {
                         try {
                           const count = sendMode === "hex" ? parseHexString(value || "").length : new TextEncoder().encode(value || "").length;
@@ -242,7 +242,7 @@ export function SendPanel({
                       value={appendNewline}
                       onChange={(e) => onAppendNewlineChange(e.currentTarget.value as AppendNewline)}
                       title={t("ender_crlf", lang)}
-                      className="text-[11px]"
+                      className="text-theme-11"
                     >
                       {appendEnderFallback(enderOptions, appendNewline, lang).map((o, i) => (
                         <option key={i} value={o.value}>{o.label}</option>
@@ -283,7 +283,7 @@ export function SendPanel({
           {/* File send — collapsible */}
           <div className="overflow-hidden rounded-lg border border-[var(--border)]">
             <div
-              className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+              className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-2 py-1 text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
               onClick={() => onSendPanelFileCollapsedChange?.(!fileSendCollapsed)}
             >
               <span className="flex items-center gap-1">
@@ -315,7 +315,7 @@ export function SendPanel({
           {/* Hotkeys — collapsible */}
           <div className="overflow-hidden rounded-lg border border-[var(--border)]">
             <div
-              className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
+              className="flex cursor-pointer items-center justify-between bg-[var(--bg-surface)] px-2 py-1 text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)] select-none transition-colors hover:bg-[var(--bg-input)]"
               onClick={() => onSendPanelHotkeysCollapsedChange?.(!hotkeysCollapsed)}
             >
               <span className="flex items-center gap-1">

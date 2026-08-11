@@ -448,7 +448,7 @@ export function MarketplacePage({
       {/* Upload panel */}
       {showUpload && (
         <div className="border-b border-[var(--border)] p-3 space-y-2 shrink-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          <div className="text-theme-10 font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             {t("marketplace_upload_hint", lang)}
           </div>
           <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] overflow-hidden w-fit">
@@ -459,7 +459,7 @@ export function MarketplacePage({
                 setUploadTarget("");
                 if (uploadIdAutoFilled) setUploadId(idPrefixFor("response_set"));
               }}
-              className={`px-2.5 py-1 text-[10px] transition-colors flex items-center gap-1 ${
+              className={`px-2.5 py-1 text-theme-10 transition-colors flex items-center gap-1 ${
                 uploadType === "response_set"
                   ? "bg-[var(--accent)] text-white"
                   : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
@@ -475,7 +475,7 @@ export function MarketplacePage({
                 setUploadTarget("");
                 if (uploadIdAutoFilled) setUploadId(idPrefixFor("prompt_config"));
               }}
-              className={`px-2.5 py-1 text-[10px] transition-colors flex items-center gap-1 ${
+              className={`px-2.5 py-1 text-theme-10 transition-colors flex items-center gap-1 ${
                 uploadType === "prompt_config"
                   ? "bg-[var(--accent)] text-white"
                   : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
@@ -491,7 +491,7 @@ export function MarketplacePage({
                 setUploadTarget("");
                 if (uploadIdAutoFilled) setUploadId(idPrefixFor("command_text"));
               }}
-              className={`px-2.5 py-1 text-[10px] transition-colors flex items-center gap-1 ${
+              className={`px-2.5 py-1 text-theme-10 transition-colors flex items-center gap-1 ${
                 uploadType === "command_text"
                   ? "bg-[var(--accent)] text-white"
                   : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
@@ -507,7 +507,7 @@ export function MarketplacePage({
               onChange={(e) => setUploadText(e.target.value)}
               placeholder={t("marketplace_command_text_placeholder", lang)}
               rows={6}
-              className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-input)] p-2 font-mono text-[11px] text-[var(--text-primary)]"
+              className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-input)] p-2 font-mono text-theme-11 text-[var(--text-primary)]"
             />
           ) : (
             <select
@@ -584,7 +584,7 @@ export function MarketplacePage({
                 key={tf}
                 type="button"
                 onClick={() => setTypeFilter(tf)}
-                className={`px-2 py-1 rounded-md border text-[10px] transition-colors ${
+                className={`px-2 py-1 rounded-md border text-theme-10 transition-colors ${
                   typeFilter === tf
                     ? "bg-[var(--accent)] border-[var(--accent)] text-white"
                     : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
@@ -597,23 +597,23 @@ export function MarketplacePage({
               </button>
             ))}
           </div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
+          <div className="text-theme-10 font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
             {t("marketplace_list", lang)}
             <span className="ml-1 font-normal normal-case">({filteredItems.length})</span>
           </div>
           <div className="flex-1 overflow-y-auto space-y-1">
             {fetchState === "loading" && (
-              <div className="text-[10px] text-[var(--text-muted)] text-center py-8">
+              <div className="text-theme-10 text-[var(--text-muted)] text-center py-8">
                 {t("marketplace_loading", lang)}
               </div>
             )}
             {fetchState === "error" && (
-              <div className="text-[10px] text-rose-500 text-center py-8">
+              <div className="text-theme-10 text-rose-500 text-center py-8">
                 {fetchError || t("marketplace_fetch_error", lang)}
               </div>
             )}
             {fetchState === "loaded" && filteredItems.length === 0 && (
-              <div className="text-[10px] text-[var(--text-muted)] text-center py-8">
+              <div className="text-theme-10 text-[var(--text-muted)] text-center py-8">
                 {t("marketplace_empty", lang)}
               </div>
             )}
@@ -630,7 +630,7 @@ export function MarketplacePage({
               >
                 <TypeIcon type={item.type} />
                 <span className="truncate flex-1">{item.name}</span>
-                <span className="shrink-0 text-[9px] opacity-70 uppercase">
+                <span className="shrink-0 text-theme-9 opacity-70 uppercase">
                   {item.type === "prompt_config" ? "cfg" : item.type === "command_text" ? "txt" : "set"}
                 </span>
               </button>
@@ -642,7 +642,7 @@ export function MarketplacePage({
         <div className="flex-1 flex flex-col min-h-0">
           {selected ? (
             <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-0">
-              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+              <div className="flex items-center gap-1.5 text-theme-10 uppercase tracking-wider text-[var(--text-muted)]">
                 <TypeIcon type={selected.type} size={12} />
                 {typeLabel(selected.type, lang)}
               </div>
@@ -655,7 +655,7 @@ export function MarketplacePage({
                 className="w-full text-xs"
               />
               {(selected.uploadedBy || selected.updatedAt) && (
-                <div className="text-[10px] text-[var(--text-muted)] space-y-0.5">
+                <div className="text-theme-10 text-[var(--text-muted)] space-y-0.5">
                   {selected.uploadedBy && (
                     <div>
                       {t("marketplace_uploaded_by", lang)}: {selected.uploadedBy}
@@ -670,13 +670,13 @@ export function MarketplacePage({
               )}
 
               {editing && (
-                <div className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider">
+                <div className="text-theme-10 font-semibold text-amber-600 uppercase tracking-wider">
                   {t("marketplace_editing", lang)}
                 </div>
               )}
 
               {previewState === "loading" && (
-                <div className="text-[10px] text-[var(--text-muted)] py-4 text-center">
+                <div className="text-theme-10 text-[var(--text-muted)] py-4 text-center">
                   {t("marketplace_loading", lang)}
                 </div>
               )}
@@ -685,7 +685,7 @@ export function MarketplacePage({
               {previewState === "loaded" && preview && !editing && (
                 <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-2 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    <span className="flex items-center gap-1.5 text-theme-10 font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                       <Terminal size={12} />
                       {t("marketplace_commands_text", lang)}
                     </span>
@@ -693,7 +693,7 @@ export function MarketplacePage({
                       type="button"
                       onClick={handleCopyCommands}
                       disabled={!commandsAsText()}
-                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-40"
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-theme-10 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-40"
                     >
                       {copied ? <Check size={11} /> : <Copy size={11} />}
                       {copied ? t("marketplace_copied", lang) : t("marketplace_copy_commands", lang)}
@@ -703,7 +703,7 @@ export function MarketplacePage({
                     readOnly
                     value={commandsAsText()}
                     rows={Math.min(10, Math.max(3, commandsAsText().split("\n").length))}
-                    className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2 font-mono text-[11px] text-[var(--text-primary)]"
+                    className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2 font-mono text-theme-11 text-[var(--text-primary)]"
                     onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                   />
                 </div>
@@ -725,17 +725,17 @@ export function MarketplacePage({
                         value={editedText}
                         onChange={(e) => setEditedText(e.target.value)}
                         rows={Math.min(16, Math.max(4, editedText.split("\n").length))}
-                        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-input)] p-2 font-mono text-[11px] text-[var(--text-primary)]"
+                        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-input)] p-2 font-mono text-theme-11 text-[var(--text-primary)]"
                       />
                     ) : null
                   ) : preview.type === "response_set" ? (
                     <>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-1">
+                      <div className="text-theme-10 font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-1">
                         {t("marketplace_commands", lang)}
                         <span className="ml-1 font-normal normal-case">({preview.set.commands.length})</span>
                       </div>
                       {preview.set.commands.length === 0 ? (
-                        <div className="text-[10px] text-[var(--text-muted)] py-4 text-center">
+                        <div className="text-theme-10 text-[var(--text-muted)] py-4 text-center">
                           {t("marketplace_no_commands", lang)}
                         </div>
                       ) : (
@@ -749,14 +749,14 @@ export function MarketplacePage({
                                 <span className="font-mono text-xs text-[var(--text-primary)] truncate">
                                   {c.command}
                                 </span>
-                                <span className="shrink-0 text-[10px] text-[var(--text-muted)] uppercase">
+                                <span className="shrink-0 text-theme-10 text-[var(--text-muted)] uppercase">
                                   {c.matchMode}
                                 </span>
                               </div>
                               {c.expectedResponses.length > 0 ? (
                                 <div className="space-y-0.5">
                                   {c.expectedResponses.map((r, i) => (
-                                    <div key={i} className="font-mono text-[11px] text-[var(--text-muted)] truncate">
+                                    <div key={i} className="font-mono text-theme-11 text-[var(--text-muted)] truncate">
                                       {c.expectedResponseRegex?.[i] ? "/" : ""}
                                       {r}
                                       {c.expectedResponseRegex?.[i] ? "/" : ""}
@@ -764,7 +764,7 @@ export function MarketplacePage({
                                   ))}
                                 </div>
                               ) : (
-                                <div className="text-[11px] text-[var(--text-muted)] italic">
+                                <div className="text-theme-11 text-[var(--text-muted)] italic">
                                   {t("marketplace_no_expected_response", lang)}
                                 </div>
                               )}
@@ -775,12 +775,12 @@ export function MarketplacePage({
                     </>
                   ) : preview.type === "prompt_config" ? (
                     <>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-1">
+                      <div className="text-theme-10 font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-1">
                         {t("marketplace_commands", lang)}
                         <span className="ml-1 font-normal normal-case">({preview.rows.length})</span>
                       </div>
                       {preview.rows.length === 0 ? (
-                        <div className="text-[10px] text-[var(--text-muted)] py-4 text-center">
+                        <div className="text-theme-10 text-[var(--text-muted)] py-4 text-center">
                           {t("marketplace_no_commands", lang)}
                         </div>
                       ) : (
@@ -794,14 +794,14 @@ export function MarketplacePage({
                                 <span className="font-mono text-xs text-[var(--text-primary)] truncate">
                                   {r.command}
                                 </span>
-                                <span className="shrink-0 text-[10px] text-[var(--text-muted)] uppercase">
+                                <span className="shrink-0 text-theme-10 text-[var(--text-muted)] uppercase">
                                   {r.isHex ? "HEX" : ""} {r.ender ? r.ender.replace("\r\n", "CRLF").replace("\r", "CR").replace("\n", "LF") : "None"}
                                 </span>
                               </div>
                               {r.expectedResponses && r.expectedResponses.length > 0 && (
                                 <div className="space-y-0.5">
                                   {r.expectedResponses.map((resp, i) => (
-                                    <div key={i} className="font-mono text-[11px] text-[var(--text-muted)] truncate">
+                                    <div key={i} className="font-mono text-theme-11 text-[var(--text-muted)] truncate">
                                       {resp}
                                     </div>
                                   ))}

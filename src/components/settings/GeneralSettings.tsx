@@ -147,7 +147,7 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
           <span className="text-xs text-[var(--text-muted)]">
             {lang === "zh" ? "天" : "days"}
           </span>
-          <span className="ml-2 text-[10px] text-[var(--text-muted)] opacity-60">
+          <span className="ml-2 text-theme-10 text-[var(--text-muted)] opacity-60">
             {lang === "zh" ? "启动时自动清理" : "Cleanup on startup"}
           </span>
         </div>

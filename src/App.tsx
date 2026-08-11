@@ -687,14 +687,14 @@ function App() {
         {/* Editing toggle */}
         <div className="shrink-0 flex items-center justify-end gap-2 px-2 py-1">
           {gridEditing && (
-            <span className="text-[10px] text-[var(--accent)] font-semibold">
+            <span className="text-theme-10 text-[var(--accent)] font-semibold">
               {lang === "zh" ? "📐 编辑模式 — 拖拽卡片调整布局" : "📐 Edit mode — drag cards to rearrange"}
             </span>
           )}
           <button
             type="button"
             onClick={() => setGridEditing((v) => !v)}
-            className={`rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+            className={`rounded px-2 py-0.5 text-theme-10 font-semibold transition-colors ${
               gridEditing
                 ? "bg-[var(--accent)] text-white"
                 : "border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -1155,7 +1155,7 @@ function App() {
                   onClick={() => updateTopCollapsed(false)}
                   className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 transition-colors hover:bg-[var(--bg-input)]"
                 >
-                  <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                  <div className="flex items-center gap-2 text-theme-11 text-[var(--text-muted)]">
                     <ChevronDown size={14} />
                     <span className="font-semibold uppercase tracking-widest">
                       {currentPortLabel}
@@ -1272,7 +1272,7 @@ function App() {
                     onClick={() => updateRightSendCollapsed(false)}
                     className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 transition-colors hover:bg-[var(--bg-input)]"
                   >
-                    <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--text-muted)]">
+                    <div className="flex items-center justify-center gap-2 text-theme-11 text-[var(--text-muted)]">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
                         <ChevronDown size={10} />
                       </span>
@@ -1372,7 +1372,7 @@ function App() {
                     {n.severity && n.severity !== "info" && (
                       <div className={`flex items-center gap-1.5 mb-2 text-${severity}-600`}>
                         <span className={`inline-block w-2 h-2 rounded-full bg-${severity}-500`} />
-                        <span className="text-[11px] font-semibold">
+                        <span className="text-theme-11 font-semibold">
                           {lang === "zh"
                             ? n.severity === "warning" ? "通知" : "重要通知"
                             : n.severity === "warning" ? "Notice" : "Important"}
@@ -1380,7 +1380,7 @@ function App() {
                       </div>
                     )}
                     {n.date && (
-                      <div className="text-[10px] text-[var(--text-muted)]/60 mb-1">{n.date}</div>
+                      <div className="text-theme-10 text-[var(--text-muted)]/60 mb-1">{n.date}</div>
                     )}
                     {n.title && (
                       <div className="text-sm font-semibold text-[var(--text-primary)] mb-2">{n.title}</div>

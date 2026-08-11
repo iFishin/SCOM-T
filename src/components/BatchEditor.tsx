@@ -15,9 +15,10 @@ type BatchEditorProps = {
 };
 
 /** Shared monospace font style for pixel-perfect alignment between textarea and LineNumbers */
-const MONO_STYLE = {
+const MONO_STYLE: React.CSSProperties = {
   fontFamily: `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
-  fontSize: "12px",
+  // 跟随主题字号（13px 基准下 ≈12px），避免内联硬编码 px 不随主题缩放。
+  fontSize: "calc(var(--font-size) * 0.92)",
   lineHeight: "20px",
 };
 
@@ -173,7 +174,7 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
 
       {/* Bottom toolbar */}
       <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1">
-        <span className="text-[10px] text-[var(--text-muted)]">
+        <span className="text-theme-10 text-[var(--text-muted)]">
           {cursorLine}/{lines.length} {lang === "zh" ? "行" : "lines"}
         </span>
         <div className="ml-auto flex items-center gap-1">
@@ -182,7 +183,7 @@ export function BatchEditor({ value, onChange, placeholder, lang }: BatchEditorP
             variant="ghost"
             size="sm"
             onClick={() => setSearchOpen((v) => !v)}
-            className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition-colors ${
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-theme-11 transition-colors ${
               searchOpen
                 ? "bg-[var(--accent)] text-white"
                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
