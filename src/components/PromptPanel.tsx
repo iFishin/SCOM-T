@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Download } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Download, Replace, ListFilter, Slice } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
@@ -1134,6 +1134,9 @@ export function PromptPanel({
           }}
             className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-0.5 text-theme-10 text-[var(--text-muted)] text-center transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] whitespace-nowrap"
           >
+            <span className="mr-0.5 opacity-70">
+              {p.mode === "extract" ? <Slice size={12} /> : p.mode === "keep" ? <ListFilter size={12} /> : p.mode === "drop" ? <Trash2 size={12} /> : <Replace size={12} />}
+            </span>
             {p.name}
           </button>
         ))}
