@@ -96,6 +96,8 @@ export type AppSettings = {
   layoutMode?: "classic" | "grid";
   gridLayout?: GridItemLayout[];
   notificationUrl?: string;
+  /** 帮助文档地址（支持 {lang} 占位符，空则用默认云端 URL）。 */
+  helpUrl?: string;
   timestampFormat?: "time" | "datetime" | "none";
   sendMode?: SendMode;
   receiveMode?: ReceiveMode;
@@ -240,6 +242,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   cloudServerUrl: "https://scom-t-marketplace.ifishin.top",
   cloudAuthToken: "",
   cloudUploaderName: "",
+  helpUrl: "",
   rxIdleFlushMs: 50,
   logBatchFlushMs: 50,
   customEnders: [],
@@ -323,6 +326,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
         }))
       : DEFAULT_GRID_LAYOUT,
     notificationUrl: typeof raw.notificationUrl === "string" ? raw.notificationUrl : "",
+    helpUrl: typeof raw.helpUrl === "string" ? raw.helpUrl : "",
     timestampFormat: raw.timestampFormat === "time" || raw.timestampFormat === "datetime" || raw.timestampFormat === "none"
       ? raw.timestampFormat : "datetime",
     sendMode: raw.sendMode === "hex" ? "hex" : "ascii",
@@ -514,6 +518,10 @@ export function useSettings() {
     setSettings((current) => ({ ...current, notificationUrl: url }));
   }
 
+  function updateHelpUrl(url: string) {
+    setSettings((current) => ({ ...current, helpUrl: url }));
+  }
+
   function updateTimestampFormat(format: "time" | "datetime" | "none") {
     setSettings((current) => ({ ...current, timestampFormat: format }));
   }
@@ -636,6 +644,7 @@ export function useSettings() {
     updateLayoutMode,
     updateGridLayout,
     updateNotificationUrl,
+    updateHelpUrl,
     updateTimestampFormat,
     updateSendMode,
     updateReceiveMode,

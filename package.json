@@ -1,7 +1,7 @@
 {
   "name": "scom-t",
   "private": true,
-  "version": "0.3.68",
+  "version": "0.3.69",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -25,6 +25,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-grid-layout": "^2.2.3",
+    "react-markdown": "^10.1.0",
     "tauri-plugin-serialplugin-api": "^2.22.0"
   },
   "devDependencies": {

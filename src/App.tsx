@@ -6,6 +6,8 @@ import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { AboutPanel } from "./components/settings/AboutPanel.tsx";
+import { HelpDialog } from "./components/HelpDialog.tsx";
+import { ShortcutsDialog } from "./components/ShortcutsDialog.tsx";
 import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
@@ -120,6 +122,9 @@ function App() {
   const [waveformOpen, setWaveformOpen] = useState(false);
   const [vizMenu, setVizMenu] = useState<{ x: number; y: number } | null>(null);
   const [toolMenu, setToolMenu] = useState<{ x: number; y: number } | null>(null);
+  const [helpMenu, setHelpMenu] = useState<{ x: number; y: number } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [stringGenOpen, setStringGenOpen] = useState(false);
   const [stringCheckOpen, setStringCheckOpen] = useState(false);
   const [codecOpen, setCodecOpen] = useState(false);
@@ -892,13 +897,31 @@ function App() {
           </Button>
           <Button
             type="button"
-            onClick={() => setTourOpen(true)}
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setHelpMenu({ x: rect.left, y: rect.bottom + 4 });
+            }}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] transition-colors bg-transparent hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
             style={{ WebkitAppRegion: "no-drag", appRegion: "no-drag" } as React.CSSProperties}
           >
             <HelpCircle size={14} />
             <span>{t("help", lang)}</span>
           </Button>
+          {helpMenu && (
+            <ContextMenu
+              x={helpMenu.x}
+              y={helpMenu.y}
+              onClose={() => setHelpMenu(null)}
+              items={[
+                { id: "guide", label: lang === "zh" ? "新手引导" : "Tour Guide", onClick: () => setTourOpen(true) },
+                { id: "docs", label: lang === "zh" ? "帮助文档" : "Help Docs", onClick: () => setHelpOpen(true) },
+                { id: "shortcuts", label: lang === "zh" ? "快捷键" : "Shortcuts", onClick: () => setShortcutsOpen(true) },
+                { id: "sep", label: "", separator: true, onClick: () => {} },
+                { id: "logs", label: lang === "zh" ? "查看程序日志" : "App Logs", onClick: handleOpenLogViewer },
+                { id: "about", label: lang === "zh" ? "关于" : "About", onClick: () => setAboutOpen(true) },
+              ]}
+            />
+          )}
           <Button
             type="button"
             onClick={handleOpenLogViewer}
@@ -1070,6 +1093,20 @@ function App() {
           </div>
         </div>
       )}
+
+      <HelpDialog
+        open={helpOpen}
+        lang={lang}
+        helpUrl={settings.helpUrl}
+        onClose={() => setHelpOpen(false)}
+      />
+
+      <ShortcutsDialog
+        open={shortcutsOpen}
+        lang={lang}
+        hotkeys={settings.hotkeys ?? []}
+        onClose={() => setShortcutsOpen(false)}
+      />
 
       {signalOpen && (
         <SignalDialog
