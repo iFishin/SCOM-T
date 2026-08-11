@@ -4,9 +4,9 @@ import ReactMarkdown from "react-markdown";
 import type { Lang } from "../i18n.ts";
 import { Button } from "./ui/Button.tsx";
 
-/** 默认云端帮助文档仓库。文档文件 docs.zh.md / docs.en.md。 */
+/** 默认帮助文档地址：SCOM-T 仓库 docs/help 目录（docs.zh.md / docs.en.md）。 */
 const DEFAULT_HELP_REPO =
-  "https://raw.githubusercontent.com/iFishin/help/main/SCOM-T";
+  "https://raw.githubusercontent.com/iFishin/SCOM-T/main/docs/help";
 
 type HelpDialogProps = {
   open: boolean;
