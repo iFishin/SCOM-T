@@ -1,0 +1,91 @@
+name: 🐛 Bug 报告
+description: 报告 SCOM-T 的功能异常或错误
+title: "[Bug] 简要描述问题"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题！请尽量填写以下信息，帮助快速定位。
+  - type: textarea
+    id: describe
+    attributes:
+      label: 问题描述
+      description: 发生了什么？期望是什么？
+      placeholder: 例如：打开串口后无法收到设备响应，日志一直为空
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 一步步如何复现
+      placeholder: |
+        1. 打开串口（COM3, 115200）
+        2. 发送 AT 指令
+        3. 观察日志无响应
+    validations:
+      required: true
+  - type: dropdown
+    id: conn-type
+    attributes:
+      label: 连接类型
+      description: 出问题时使用的连接方式
+      options:
+        - 串口
+        - TCP 客户端
+        - TCP 服务器
+        - 模拟串口
+    validations:
+      required: true
+  - type: input
+    id: serial-config
+    attributes:
+      label: 串口配置
+      description: 端口 / 波特率 / 数据位-校验位-停止位 / 流控
+      placeholder: COM3, 115200, 8-N-1, None
+  - type: textarea
+    id: logs
+    attributes:
+      label: 收发日志（RX / TX）
+      description: 贴出相关日志片段，含时间戳与结尾符
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 设置 → 关于 中查看，或 package.json 中的版本号
+      placeholder: v0.3.72
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS
+        - Linux
+  - type: input
+    id: device
+    attributes:
+      label: 设备 / 硬件
+      description: 连接的模块型号或 USB 转串口芯片（如 Quectel、CH340、CP2102）
+      placeholder: Quectel / CH340 / CP2102 …
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / 视频
+      description: 拖入图片或粘贴链接，能极大帮助定位
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认项
+      options:
+        - label: 已使用最新版本复现该问题
+        - label: 该问题在其它串口工具中也出现（或仅 SCOM-T 出现）
+  - type: markdown
+    attributes:
+      value: |
+        提交前请确认日志中不含敏感信息（如 WiFi 密码、个人数据）。
