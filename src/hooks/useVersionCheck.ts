@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { fetchLatestVersion } from "../utils/versionCheck.ts";
 
-const GITHUB_REPO = "iFishin/SCOM-T";
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours
 const LAST_CHECK_KEY = "scom_t_last_version_check";
 const LAST_VERSION_KEY = "scom_t_last_checked_version";
@@ -30,10 +29,10 @@ export function useVersionCheck(currentVersion: string) {
     if (!ver || ver === "0.0.0") return;
 
     try {
-      const res = await fetch(GITHUB_API);
-      if (!res.ok) return;
-      const data = await res.json();
-      const latestTag: string = (data.tag_name || "").replace(/^v/, "");
+      // 优先 GitHub API，403 限流时自动回退 raw package.json（不限 API 配额）
+      const result = await fetchLatestVersion();
+      if ("error" in result) return;
+      const latestTag = result.version;
 
       // Only update if the version hasn't changed during the fetch
       if (versionRef.current.replace(/^v/, "") !== ver) return;

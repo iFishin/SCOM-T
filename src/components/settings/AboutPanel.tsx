@@ -5,11 +5,11 @@ import { t } from "../../i18n";
 import type { Lang } from "../../i18n";
 import { NotificationHistory } from "./NotificationHistory.tsx";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { fetchLatestVersion } from "../../utils/versionCheck.ts";
 
 const BUILD_TIME = __BUILD_TIME__;
 
 const GITHUB_REPO = "iFishin/SCOM-T";
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 type CheckState =
   | { status: "idle" }
@@ -134,26 +134,26 @@ export function AboutPanel({ lang, appVersion, updateAvailable }: { lang: Lang; 
   async function checkForUpdate() {
     setUpdateCheck({ status: "checking" });
     try {
-      const res = await fetch(GITHUB_API);
-      if (!res.ok) {
-        setUpdateCheck({ status: "error", message: `GitHub API: ${res.status} ${res.statusText}` });
+      // 优先 GitHub API，403 限流时自动回退 raw package.json（不限 API 配额）
+      const result = await fetchLatestVersion();
+      if ("error" in result) {
+        setUpdateCheck({ status: "error", message: result.error });
         return;
       }
-      const data = await res.json();
-      const latestTag: string = (data.tag_name || "").replace(/^v/, "");
+      const latestTag = result.version;
       const currentVer = version.replace(/^v/, "");
       if (compareVersion(latestTag, currentVer) > 0) {
         setUpdateCheck({
           status: "available",
           version: latestTag,
-          url: data.html_url || `https://github.com/${GITHUB_REPO}/releases/latest`,
-          body: data.body || "",
+          url: `https://github.com/${GITHUB_REPO}/releases/latest`,
+          body: "",
         });
       } else {
         setUpdateCheck({
           status: "latest",
           version: latestTag,
-          url: data.html_url || `https://github.com/${GITHUB_REPO}/releases/latest`,
+          url: `https://github.com/${GITHUB_REPO}/releases/latest`,
         });
       }
     } catch (err) {
