@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
@@ -354,6 +354,17 @@ function App() {
     if (el) ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // 从配置/响应集/市场返回主界面时，主界面曾用 display:none（hidden）隐藏，
+  // 期间 gridWidth 被测量为 0；ResizeObserver 要到下一帧才恢复，导致网格
+  // 面板闪烁/错位/延迟渲染。这里在绘制前同步重新测量，消除延迟帧。
+  useLayoutEffect(() => {
+    if (page !== "main") return;
+    const el = gridWidthRef.current?.parentElement;
+    if (el) {
+      setGridWidth(el.clientWidth - 16);
+    }
+  }, [page]);
 
   const prevError = useRef<string | null>(null);
   useEffect(() => {
