@@ -110,6 +110,7 @@ export function useSerialPort({
   mockSerial,
   rxIdleFlushMs = 50,
   logBatchFlushMs = 50,
+  initialLogs,
 }: {
   config: SerialConfig;
   receiveMode: ReceiveMode;
@@ -117,6 +118,8 @@ export function useSerialPort({
   mockSerial?: MockSerialConfig;
   rxIdleFlushMs?: number;
   logBatchFlushMs?: number;
+  /** Seed logs recovered from a crash-recovery file, applied once at mount. */
+  initialLogs?: SerialLogEntry[];
 }) {
   const serialRef = useRef<ISerialService | null>(null);
   const portOwnerRef = useRef(Symbol("serial-session"));
@@ -132,7 +135,7 @@ export function useSerialPort({
   const logSubscribersRef = useRef(new Set<(entry: SerialLogEntry) => void>());
   // Keep configRef in sync so callback closures always read latest config
   configRef.current = config;
-  const seqCounter = useRef(0);
+  const seqCounter = useRef(initialLogs?.reduce((max, l) => Math.max(max, l.seq), 0) ?? 0);
   // Batch pending log entries to reduce React state updates
   const MAX_LOGS = 10_000;
   const BATCH_MAX_SIZE = 50;
@@ -160,8 +163,8 @@ export function useSerialPort({
   const [logCapWarning, setLogCapWarning] = useState(false);
   const logCapWarningRef = useRef(false);
   const [ports, setPorts] = useState<PortSummary[]>([]);
-  const [logs, setLogs] = useState<SerialLogEntry[]>([]);
-  const logsRef = useRef<SerialLogEntry[]>([]);
+  const [logs, setLogs] = useState<SerialLogEntry[]>(() => initialLogs ?? []);
+  const logsRef = useRef<SerialLogEntry[]>(logs);
   const [isConnected, setIsConnected] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [statusText, setStatusText] = useState("未连接");
