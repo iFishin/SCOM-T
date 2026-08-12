@@ -391,7 +391,12 @@ export function useSerialPort({
       // Wire up serial disconnect callback
       serialRef.current.onDisconnect(() => {
         flushLineBuffer(); // flush any remaining buffered data
+        // 释放旧 service 的 native 资源（SerialPort 连接、读取线程、事件监听）。
+        // 若只置 null 不关闭，设备掉电重启后重连会残留旧读取线程，新旧线程并存
+        // 导致同一条响应被派发两次（重复响应）。
+        const svc = serialRef.current;
         serialRef.current = null;
+        if (svc) svc.dispose().catch(() => undefined);
         releaseClaimedPort();
         setIsConnected(false);
         setConnectedPort(null);
