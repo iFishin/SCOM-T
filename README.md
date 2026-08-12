@@ -1,4 +1,4 @@
-# SCOM-T
+<h1 align="center">SCOM-T</h1>
 
 <p align="center">
   <strong>Serial Command Tool</strong> — 基于 Tauri + React + TypeScript 的现代化串口调试工具。
