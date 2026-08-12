@@ -1,7 +1,3 @@
-<div align="center">
-  <img src="public/SCOM-T_Banner.png" alt="SCOM-T Banner" width="100%" />
-</div>
-
 # SCOM-T
 
 <p align="center">
@@ -17,16 +13,20 @@
   <img src="https://img.shields.io/badge/Runtime-Tauri-FFC131?logo=tauri" alt="Tauri" />
 </p>
 
+<div align="center">
+  <img src="public/SCOM-T_Banner.png" alt="SCOM-T Banner" width="100%" />
+</div>
+
 ---
 
 ## 目录
 
 - [简介](#简介)
-- [界面预览](#界面预览)
 - [功能特性](#功能特性)
 - [系统要求](#系统要求)
 - [安装](#安装)
 - [开发与构建](#开发与构建)
+- [版本发布](#版本发布)
 - [常见问题](#常见问题)
 - [贡献指南](#贡献指南)
 - [许可证](#许可证)
@@ -48,6 +48,8 @@ SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的
 | 功能 | 说明 |
 |------|------|
 | 多标签页 | 同时连接多个串口，独立收发，标签切换互不干扰 |
+| 多会话 | 顶部标签页创建多个会话，每个会话独立串口连接与日志 |
+| TCP 客户端 / 服务器 | 通过 TCP 客户端与远端收发，或开启 TCP 服务器广播数据 |
 | Mock 串口 | 内置模拟串口，无需硬件即可测试指令收发 |
 | ASCII / HEX 双模式 | 实时切换文本和十六进制收发 |
 | 自动补全 | 常用波特率、数据位、校验位等参数快速选择 |
@@ -65,6 +67,8 @@ SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的
 | 指令说明 | 每条指令可附加描述文本，导入后显示为行内备注 |
 | HEX 模式标记 | 响应集中的指令可声明为 HEX 模式，导入时自动勾选 |
 | 响应采集 | 发送并收到响应后，一键捕获实际接收文本追加为期望响应 |
+| 正则清洗 | 批量清洗日志文本，支持替换 / 提取 / 保留行 / 删除行四种模式与可自定义预设 |
+| 自定义结尾符 | 按十六进制定义结尾符，应用到发送面板、指令网格、热键等所有入口 |
 | 模板导入 | 从内置 AT 指令模板快速导入常用响应集 |
 
 ### ⌨ 热键系统
@@ -98,6 +102,7 @@ SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的
 | 功能 | 说明 |
 |------|------|
 | 文件记录 | 选择保存路径后实时写入日志文件，支持 UTF-8 BOM |
+| 显示模式 | 卡片 / 文本 / HEX 转储三种模式切换 |
 | 搜索高亮 | 大小写、正则、全词三种搜索模式，当前匹配项橙色高亮 |
 | 日志编辑器 | 内置日志文本编辑器，支持搜索、复制、格式化 |
 | 日志管理 | 每个标签页独立管理日志文件路径和写入状态 |
@@ -109,7 +114,9 @@ SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的
 |------|------|
 | 自定义网格布局 | 自由拖拽排列各面板位置和大小 |
 | 深色/浅色主题 | 内置深色浅色两套主题，支持实时切换 |
+| 主题个性化 | 进阶颜色（悬停/占位符/聚焦）、圆角间距、整体风格预设、字号全局缩放 |
 | 紧凑模式 | 减小面板间距以显示更多内容 |
+| 帮助与快捷键 | 内置帮助文档、新手引导、快捷键对照表 |
 | 多语言 | 中文和 English 界面 |
 
 ---
@@ -167,6 +174,28 @@ npm run tauri:build
 构建产物位于：
 - 便携版：`src-tauri/target/release/SCOM-T.exe`
 - NSIS 安装包：`src-tauri/target/release/bundle/nsis/`
+
+---
+
+## 版本发布
+
+1. 代码合并到 `main`
+2. 更新 `VERSION` 文件为发布版本号（或使用下方 post-tag 钩子自动同步）
+3. 打 tag：`git tag v0.3.76`
+4. 推送：`git push origin main && git push origin v0.3.76`
+
+> 应用「检查更新」优先读取 GitHub release 版本，GitHub API 限流时回退读取仓库根 `VERSION` 文件（静态服务，不受限流）。因此发版时必须保持 `VERSION` 与 tag 版本一致。
+
+### post-tag 钩子（自动同步 VERSION）
+
+安装（本地一次性）：
+
+```bash
+cp scripts/tag-version-hook.sh .git/hooks/post-tag
+chmod +x .git/hooks/post-tag
+```
+
+安装后执行 `git tag vX.Y.Z`，会自动把 `VERSION` 更新为 `X.Y.Z` 并提交，随后提示推送 `main`。
 
 ---
 
