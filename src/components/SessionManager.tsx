@@ -6,6 +6,7 @@ import type { LogDisplayMode, ReceiveMode, SendMode, SerialConfig } from "../hoo
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import type { Lang } from "../i18n.ts";
 import { useSessionManager } from "../hooks/useSessionManager.ts";
+import type { SerialSession } from "../hooks/useSessionManager.ts";
 import { useLogFile } from "../hooks/useLogFile.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 
@@ -187,6 +188,7 @@ type SessionManagerProps = {
   logBatchFlushMs?: number;
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
+  onSessionsChange?: (sessions: SerialSession[]) => void;
 };
 
 export function SessionManager({
@@ -200,6 +202,7 @@ export function SessionManager({
   logBatchFlushMs,
   onActiveSessionData,
   onAddToPrompts,
+  onSessionsChange,
 }: SessionManagerProps) {
   const {
     sessions,
@@ -209,8 +212,9 @@ export function SessionManager({
     renameSession,
     updateSessionConfig,
     setActive,
+    reorderSession,
     maxSessions,
-  } = useSessionManager();
+  } = useSessionManager(onSessionsChange);
 
   // Store per-session data refs, only the active one is synced to App.tsx
   const sessionDataRefs = useRef<Record<string, { current: ActiveSessionData | null }>>({});
@@ -241,6 +245,7 @@ export function SessionManager({
         onClose={closeSession}
         onCreate={createSession}
         onRename={renameSession}
+        onReorder={reorderSession}
       />
       <div className="flex-1 min-h-0 flex flex-col">
         {sessions.map((session) => {

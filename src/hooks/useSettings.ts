@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SendMode, ReceiveMode, LogDisplayMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
+import type { SerialSession } from "./useSessionManager.ts";
 
 /**
  * 结尾符值。内置为 "" / "\r\n" / "\r" / "\n"，自定义结尾符是「字节串」
@@ -114,6 +115,8 @@ export type AppSettings = {
   portFilterMode?: "default" | "all";
   mockSerial?: MockSerialConfig;
   customEnders?: CustomEnder[];
+  /** 会话列表（含顺序），拖拽重排后同步写入 config.yaml。 */
+  sessions?: SerialSession[];
   cloudServerUrl?: string;
   cloudAuthToken?: string;
   cloudUploaderName?: string;
@@ -246,6 +249,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   rxIdleFlushMs: 50,
   logBatchFlushMs: 50,
   customEnders: [],
+  sessions: [],
 };
 
 /** 颜色值（hex）校验：补齐原始 rgb/缩写等不校验，仅回退非字符串。 */
@@ -362,6 +366,15 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             id: e.id || `ender-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             label: typeof e.label === "string" ? e.label : "",
             hex: e.hex.replace(/\s+/g, "").toUpperCase(),
+          }))
+      : [],
+    sessions: Array.isArray(raw.sessions)
+      ? raw.sessions
+          .filter((s: any) => s && typeof s.id === "string")
+          .map((s: any) => ({
+            id: s.id,
+            name: typeof s.name === "string" && s.name ? s.name : "串口",
+            config: s.config && typeof s.config === "object" ? s.config : {},
           }))
       : [],
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",
@@ -594,6 +607,10 @@ export function useSettings() {
     void saveSettingsToFile(next);
   }
 
+  function updateSessions(sessions: SerialSession[]) {
+    setSettings((current) => ({ ...current, sessions }));
+  }
+
   function updateCloudServerUrl(url: string) {
     setSettings((current) => ({ ...current, cloudServerUrl: url }));
   }
@@ -661,6 +678,7 @@ export function useSettings() {
     updatePortFilterMode,
     updateMockSerial,
     updateCustomEnders,
+    updateSessions,
     updateCloudServerUrl,
     updateCloudAuthToken,
     updateCloudUploaderName,

@@ -141,7 +141,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCustomEnders, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -770,6 +770,7 @@ function App() {
                 logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
+                onSessionsChange={updateSessions}
               />
             </div>
 
@@ -1247,6 +1248,7 @@ function App() {
                     logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
+                    onSessionsChange={updateSessions}
                   />
                 </div>
               )}
