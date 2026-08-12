@@ -32,7 +32,14 @@ export function GeneralSettings({ theme, lang, compactMode, closeToTray, allowMu
       bgInput: base.bgInput,
       textPrimary: base.textPrimary,
       textMuted: base.textMuted,
+      accent: base.accent,
       border: base.border,
+      bgHover: base.bgHover,
+      textPlaceholder: base.textPlaceholder,
+      borderFocus: base.borderFocus,
+      accentDark: base.accentDark,
+      accentLight: base.accentLight,
+      accentMuted: base.accentMuted,
     });
   }
 
