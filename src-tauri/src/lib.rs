@@ -38,6 +38,7 @@ fn set_allow_multi_instance(state: tauri::State<AppSettings>, allow: bool) {
             // Re-claim the mutex
             unsafe {
                 let name = "SCOM-T-SingleInstance\0".as_ptr() as *const u8;
+                // 若该 mutex 已被其它进程持有，这里也应持有它（避免误放）。
                 let h = CreateMutexA(std::ptr::null(), 0, name);
                 if h != 0 {
                     *guard = Some(h);
@@ -56,7 +57,9 @@ fn try_claim_instance(state: tauri::State<AppSettings>) -> bool {
     let _ = state;
     #[cfg(windows)]
     {
-        use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
+        use windows_sys::Win32::Foundation::{
+            CloseHandle, GetLastError, SetLastError, ERROR_ALREADY_EXISTS,
+        };
         use windows_sys::Win32::System::Threading::CreateMutexA;
 
         // If the handle already exists, multi-instance is active — allow
@@ -66,11 +69,17 @@ fn try_claim_instance(state: tauri::State<AppSettings>) -> bool {
 
         unsafe {
             let name = "SCOM-T-SingleInstance\0".as_ptr() as *const u8;
+            // 清零 last-error 并加编译器屏障：确保 GetLastError 读到的是
+            // CreateMutexA 的返回结果，避免因 FFI 调用后的残留错误码导致
+            // 「已存在」的 mutex 被误判为新建成功（单实例失效、可多开）。
+            SetLastError(0);
             let handle = CreateMutexA(std::ptr::null(), 0, name);
+            std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+            let err = GetLastError();
             if handle == 0 {
                 return true; // can't determine, allow
             }
-            if GetLastError() == ERROR_ALREADY_EXISTS {
+            if err == ERROR_ALREADY_EXISTS {
                 CloseHandle(handle);
                 return false; // another instance holds the mutex
             }

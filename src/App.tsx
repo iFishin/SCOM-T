@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -12,13 +12,10 @@ import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
-import { ConfigPage } from "./components/ConfigPage.tsx";
 import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
 import { MarketplacePage } from "./components/MarketplacePage.tsx";
 import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
 import { CodecDialog } from "./components/tools/CodecDialog.tsx";
-import { FileSend } from "./components/FileSend.tsx";
-import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { PromptPanel } from "./components/PromptPanel.tsx";
 import { SendPanel } from "./components/SendPanel.tsx";
 import { ReceiveLog, formatLogsAsText } from "./components/ReceiveLog.tsx";
@@ -40,6 +37,7 @@ import { useLogFile } from "./hooks/useLogFile.ts";
 import { t } from "./i18n.ts";
 import type { SerialConfig } from "./hooks/useSerialPort.ts";
 import { SessionManager } from "./components/SessionManager.tsx";
+import type { SerialSession } from "./hooks/useSessionManager.ts";
 import type { ActiveSessionData } from "./components/SessionManager.tsx";
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
@@ -101,7 +99,7 @@ function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
 }
 
 function App() {
-  const [page, setPage] = useState<"main" | "config" | "responseSet" | "marketplace">("main");
+  const [page, setPage] = useState<"main" | "responseSet" | "marketplace">("main");
   const [pendingApplyResponseSet, setPendingApplyResponseSet] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -141,7 +139,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCustomEnders, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateLogFileState } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -195,8 +193,18 @@ function App() {
   const activeTcpClients = tcpServerClients;
   const activeError = error;
 
-  const logFile = useLogFile();
+  const logFile = useLogFile({
+    onStateChange: (savePath, realTime) => updateLogFileState(savePath, realTime),
+  });
   useEffect(() => { logFile.syncLogs(activeLogs); }, [activeLogs]);
+
+  // Restore persisted log file selection once settings have loaded (if it still exists).
+  const logRestoredRef = useRef(false);
+  useEffect(() => {
+    if (logRestoredRef.current || !loaded) return;
+    logRestoredRef.current = true;
+    void logFile.restore(settings.logSavePath ?? null, settings.logRealTime ?? false);
+  }, [loaded, settings.logSavePath, settings.logRealTime, logFile]);
 
   // ── Sync timestamp format setting ──
   useEffect(() => {
@@ -216,6 +224,31 @@ function App() {
   const handleActiveSessionData = useCallback((data: ActiveSessionData) => {
     setSessionData(data);
   }, []);
+
+  // ── Per-session config file management ──
+
+  const handleSessionsChange = useCallback((incoming: SerialSession[]) => {
+    // useSessionManager 内部状态不携带 activeConfigFile，合并保留
+    const prevById = new Map((settings.sessions ?? []).map((s) => [s.id, s]));
+    const merged = incoming.map((s) => ({
+      ...s,
+      activeConfigFile: prevById.get(s.id)?.activeConfigFile ?? "prompts.yaml",
+    }));
+    updateSessions(merged);
+  }, [settings.sessions, updateSessions]);
+
+  const updateSessionConfigFile = useCallback((sessionId: string, fileName: string) => {
+    const next = (settings.sessions ?? []).map((s) =>
+      s.id === sessionId ? { ...s, activeConfigFile: fileName } : s
+    );
+    updateSessions(next);
+  }, [settings.sessions, updateSessions]);
+
+  // Get the current session's activeConfigFile
+  const currentSessionConfigFile = useMemo(() => {
+    const session = (settings.sessions ?? []).find((s) => s.id === sessionData?.sessionId);
+    return session?.activeConfigFile ?? "prompts.yaml";
+  }, [settings.sessions, sessionData?.sessionId]);
 
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
@@ -262,7 +295,6 @@ function App() {
     }
   }, [lang, pushToast]);
 
-  const handleNavigateToConfig = useCallback(() => setPage("config"), []);
   const handleNavigateToResponseSet = useCallback(() => setPage("responseSet"), []);
   const handleNavigateToMarketplace = useCallback(() => setPage("marketplace"), []);
 
@@ -335,7 +367,6 @@ function App() {
 
   const topCollapsed = settings.topCollapsed ?? false;
   const rightCollapsed = settings.rightCollapsed ?? false;
-  const rightSendCollapsed = settings.rightSendCollapsed ?? true;
   const [gridEditing, setGridEditing] = useState(false);
   const gridWidthRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(800);
@@ -354,6 +385,17 @@ function App() {
     if (el) ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // 从配置/响应集/市场返回主界面时，主界面曾用 display:none（hidden）隐藏，
+  // 期间 gridWidth 被测量为 0；ResizeObserver 要到下一帧才恢复，导致网格
+  // 面板闪烁/错位/延迟渲染。这里在绘制前同步重新测量，消除延迟帧。
+  useLayoutEffect(() => {
+    if (page !== "main") return;
+    const el = gridWidthRef.current?.parentElement;
+    if (el) {
+      setGridWidth(el.clientWidth - 16);
+    }
+  }, [page]);
 
   const prevError = useRef<string | null>(null);
   useEffect(() => {
@@ -759,6 +801,10 @@ function App() {
                 logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
+                onSessionsChange={handleSessionsChange}
+                logSavePath={settings.logSavePath}
+                logRealTime={settings.logRealTime}
+                onLogFileStateChange={updateLogFileState}
               />
             </div>
 
@@ -775,7 +821,7 @@ function App() {
                 filePath={filePath}
                 fileSendProgress={fileSendProgress}
                 lang={lang}
-                mode="input-only"
+                mode="tabbed"
                 onChange={setMessage}
                 onSendModeChange={updateSendMode}
                 onReceiveModeChange={updateReceiveMode}
@@ -786,35 +832,12 @@ function App() {
                 onFileSend={() => activeSendFile(filePath)}
                 onHotkeySend={handleHotkeySend}
                 onPushToast={pushToast}
-                sendPanelExpanded={settings.sendPanelExpanded}
-                sendPanelFileCollapsed={settings.sendPanelFileCollapsed}
-                sendPanelHotkeysCollapsed={settings.sendPanelHotkeysCollapsed}
-                onSendPanelExpandedChange={updateSendPanelExpanded}
-                onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
-                onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
                 tcpClientCount={activeTcpClients.length}
                 onBroadcastToClients={(text) => {
                   const bytes = Array.from(new TextEncoder().encode(text));
                   activeTcpServerBroadcast?.(bytes);
                 }}
               />
-            </div>
-
-            <div key="filesend" className="overflow-hidden rounded-lg">
-              <FileSend
-                filePath={filePath}
-                fileSendProgress={fileSendProgress}
-                isBusy={isBusy}
-                lang={lang}
-                isConnected={activeIsConnected}
-                onFileSelect={handleFileSelect}
-                onFileSend={() => activeSendFile(filePath)}
-                onPushToast={pushToast}
-              />
-            </div>
-
-            <div key="hotkeys" className="overflow-hidden rounded-lg">
-              <HotkeysPanel hotkeys={settings.hotkeys} onHotkeySend={handleHotkeySend} lang={lang} />
             </div>
 
             <div key="receive" id="tour-receive" className="overflow-hidden flex flex-col rounded-lg">
@@ -832,13 +855,22 @@ function App() {
                 onSelectLogFile={logFile.selectLogFile}
                 onToggleRealTime={() => logFile.setRealTime((v) => !v)}
                 onFlushLogs={() => logFile.flushAll(logs)}
+                onDumpLogs={async () => {
+                  const ok = await logFile.dumpLogs(logs);
+                  pushToast(
+                    ok
+                      ? (lang === "zh" ? `已追加 ${logs.length} 条日志到文件` : `Appended ${logs.length} logs to file`)
+                      : (lang === "zh" ? "追加失败：请先选择日志文件" : "Append failed: select a log file first"),
+                    ok ? "success" : "error",
+                  );
+                }}
                 onCloseLogFile={logFile.closeLogFile}
                 onAddToPrompts={handleAddToPrompts}
               />
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -865,7 +897,7 @@ function App() {
         </div>
         )}
 
-        {page === "config" || page === "responseSet" || page === "marketplace" ? (
+        {page === "responseSet" || page === "marketplace" ? (
           /* Sub-page header controls — shared breadcrumb style */
           <nav className="flex items-center gap-2 flex-1 min-w-0">
             <Button
@@ -878,9 +910,7 @@ function App() {
               {lang === "zh" ? "返回" : "Back"}
             </Button>
             <span className="text-xs font-semibold text-[var(--text-primary)]">
-              {page === "config"
-                ? (lang === "zh" ? "配置文件管理" : "Config File Manager")
-                : page === "responseSet"
+              {page === "responseSet"
                 ? t("response_set", lang)
                 : t("marketplace_title", lang)}
             </span>
@@ -1059,9 +1089,6 @@ function App() {
 
       <ErrorBoundary>
 
-      {page === "config" && (
-        <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
-      )}
       {page === "responseSet" && (
         <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
       )}
@@ -1075,8 +1102,9 @@ function App() {
           onClose={() => setPage("main")}
           onApply={(id) => setPendingApplyResponseSet(id)}
           onApplyPromptConfig={(name) => {
-            updateActiveConfigFile(`${name}.yaml`);
-            setPage("config");
+            updateSessionConfigFile(sessionData?.sessionId ?? "", `${name}.yaml`);
+            setPage("main");
+            pushToast(lang === "zh" ? `已应用指令配置: ${name}` : `Applied prompt config: ${name}`, "success");
           }}
         />
       )}
@@ -1236,6 +1264,10 @@ function App() {
                     logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
+                    onSessionsChange={handleSessionsChange}
+                    logSavePath={settings.logSavePath}
+                    logRealTime={settings.logRealTime}
+                    onLogFileStateChange={updateLogFileState}
                   />
                 </div>
               )}
@@ -1284,77 +1316,40 @@ function App() {
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {/* Send card */}
                 <div id="tour-send" className="shrink-0">
-                  {!rightSendCollapsed && (
-                    <SendPanel
-                      value={message}
-                      sendMode={sendMode}
-                      appendNewline={appendNewline}
-                      customEnders={customEnders}
-                      receiveMode={receiveMode}
-                      isConnected={activeIsConnected}
-                      isBusy={isBusy}
-                      hotkeys={settings.hotkeys}
-                      filePath={filePath}
-                      fileSendProgress={fileSendProgress}
-                      lang={lang}
-                      mode="combined"
-                      onChange={setMessage}
-                      onSendModeChange={updateSendMode}
-                      onReceiveModeChange={updateReceiveMode}
-                      onAppendNewlineChange={updateAppendNewline}
-                      onSend={() => activeSendData?.(message, sendMode, appendNewline)}
-                      onClearSent={() => clearLogs("sent")}
-                      onFileSelect={handleFileSelect}
-                      onFileSend={() => activeSendFile(filePath)}
-                      onHotkeySend={handleHotkeySend}
-                      onPushToast={pushToast}
-                      sendPanelExpanded={settings.sendPanelExpanded}
-                      sendPanelFileCollapsed={settings.sendPanelFileCollapsed}
-                      sendPanelHotkeysCollapsed={settings.sendPanelHotkeysCollapsed}
-                      onSendPanelExpandedChange={updateSendPanelExpanded}
-                      onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
-                      onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
-                      tcpClientCount={activeTcpClients.length}
-                      onBroadcastToClients={(text) => {
-                        const bytes = Array.from(new TextEncoder().encode(text));
-                        activeTcpServerBroadcast?.(bytes);
-                      }}
-                    />
-                  )}
+                  <SendPanel
+                    value={message}
+                    sendMode={sendMode}
+                    appendNewline={appendNewline}
+                    customEnders={customEnders}
+                    receiveMode={receiveMode}
+                    isConnected={activeIsConnected}
+                    isBusy={isBusy}
+                    hotkeys={settings.hotkeys}
+                    filePath={filePath}
+                    fileSendProgress={fileSendProgress}
+                    lang={lang}
+                    mode="tabbed"
+                    onChange={setMessage}
+                    onSendModeChange={updateSendMode}
+                    onReceiveModeChange={updateReceiveMode}
+                    onAppendNewlineChange={updateAppendNewline}
+                    onSend={() => activeSendData?.(message, sendMode, appendNewline)}
+                    onClearSent={() => clearLogs("sent")}
+                    onFileSelect={handleFileSelect}
+                    onFileSend={() => activeSendFile(filePath)}
+                    onHotkeySend={handleHotkeySend}
+                    onPushToast={pushToast}
+                    tcpClientCount={activeTcpClients.length}
+                    onBroadcastToClients={(text) => {
+                      const bytes = Array.from(new TextEncoder().encode(text));
+                      activeTcpServerBroadcast?.(bytes);
+                    }}
+                  />
                 </div>
-
-                {/* Collapse divider for send card */}
-                {rightSendCollapsed ? (
-                  <div
-                    onClick={() => updateRightSendCollapsed(false)}
-                    className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 transition-colors hover:bg-[var(--bg-input)]"
-                  >
-                    <div className="flex items-center justify-center gap-2 text-theme-11 text-[var(--text-muted)]">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
-                        <ChevronDown size={10} />
-                      </span>
-                      <span className="font-semibold uppercase tracking-widest">
-                        {t("send", lang)}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="group relative flex h-4 shrink-0 items-center justify-center">
-                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-[var(--border)]" />
-                    <button
-                      type="button"
-                      onClick={() => updateRightSendCollapsed(true)}
-                      className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                      title={lang === "zh" ? "折叠发送" : "Collapse Send"}
-                    >
-                      <ChevronUp size={10} />
-                    </button>
-                  </div>
-                )}
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}

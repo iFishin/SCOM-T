@@ -34,6 +34,7 @@ type ReceiveLogProps = {
   onSelectLogFile?: () => void;
   onToggleRealTime?: () => void;
   onFlushLogs?: () => void;
+  onDumpLogs?: () => void;
   onCloseLogFile?: () => void;
   /** Add a log entry's payload to the prompt commands grid */
   onAddToPrompts?: (payload: string) => void;
@@ -111,6 +112,7 @@ export function ReceiveLog({
   onSelectLogFile,
   onToggleRealTime,
   onFlushLogs,
+  onDumpLogs,
   onCloseLogFile,
   onAddToPrompts,
 }: ReceiveLogProps) {
@@ -203,14 +205,25 @@ export function ReceiveLog({
   const handleNavigate = useCallback((idx: number) => {
     const clamped = Math.max(0, Math.min(idx, searchMatches.length - 1));
     setSearchIndex(clamped);
-    if (!containerRef.current || !searchMatches.length) return;
-    const match = searchMatches[clamped];
-    // Calculate the line in logText and scroll to approximate position
-    const lineOfs = logText.substring(0, match.start).split("\n").length - 1;
-    // Each entry in text mode is ~22px; in card mode, estimate ~30px per entry
-    const LINE_H = displayMode === "text" ? 22 : 30;
-    containerRef.current.scrollTop = Math.max(0, lineOfs * LINE_H - 60);
-  }, [searchMatches, logText, displayMode]);
+  }, [searchMatches]);
+
+  // Scroll the actual current-match element into view once it (re)renders,
+  // rather than estimating scrollTop from newline counts — payload wrapping,
+  // grouped cards, and hex dumps all make row height too variable to estimate.
+  // Scrolled manually (not scrollIntoView) so only the log container's own
+  // scrollTop moves — scrollIntoView walks up every scrollable ancestor,
+  // which was dragging the whole page layout around.
+  const activeMatchRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (searchIndex < 0) return;
+    const container = containerRef.current;
+    const el = activeMatchRef.current;
+    if (!container || !el) return;
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const delta = (elRect.top + elRect.height / 2) - (containerRect.top + containerRect.height / 2);
+    container.scrollTop += delta;
+  }, [searchIndex, searchMatches, displayMode]);
 
   // ── Copy log ──
   const handleCopyLog = useCallback(async () => {
@@ -557,7 +570,7 @@ export function ReceiveLog({
                   </span>
                   <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
                     {hlMatch ? hlMatch.map((seg, si) =>
-                      seg.current ? <mark key={si} className="hl-search-current">{seg.text}</mark>
+                      seg.current ? <mark key={si} ref={activeMatchRef} className="hl-search-current">{seg.text}</mark>
                         : seg.match ? <mark key={si} className="hl-search-match">{seg.text}</mark>
                           : <span key={si}>{seg.text}</span>
                     ) : payTrim}
@@ -680,7 +693,7 @@ export function ReceiveLog({
                     {cardSegments.length > 0
                       ? cardSegments.map((seg, si) =>
                           seg.current ? (
-                            <mark key={si} className="hl-search-current">{seg.text}</mark>
+                            <mark key={si} ref={activeMatchRef} className="hl-search-current">{seg.text}</mark>
                           ) : seg.match ? (
                             <mark key={si} className="hl-search-match">{seg.text}</mark>
                           ) : (
@@ -834,22 +847,36 @@ export function ReceiveLog({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2.5">
-                    {!realTimeLog && (
-                      <Button variant="primary" size="sm" onClick={onFlushLogs} className="flex-1 justify-center gap-1.5 text-xs h-9">
-                        <Save size={13} />
-                        {lang === "zh" ? "立即写入" : "Flush Now"}
-                      </Button>
-                    )}
+                  <div className="flex flex-col gap-2.5">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={onCloseLogFile}
-                      className={`${realTimeLog ? "flex-1" : ""} justify-center gap-1.5 text-xs h-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50`}
+                      onClick={onDumpLogs}
+                      disabled={logs.length === 0}
+                      className="w-full justify-center gap-1.5 text-xs h-9 border border-[var(--border)] disabled:opacity-40"
                     >
-                      <X size={13} />
-                      {lang === "zh" ? "关闭文件" : "Close File"}
+                      <Database size={13} />
+                      {lang === "zh"
+                        ? `追加当前日志到文件（${logs.length} 条）`
+                        : `Append current logs (${logs.length})`}
                     </Button>
+                    <div className="flex gap-2.5">
+                      {!realTimeLog && (
+                        <Button variant="primary" size="sm" onClick={onFlushLogs} className="flex-1 justify-center gap-1.5 text-xs h-9">
+                          <Save size={13} />
+                          {lang === "zh" ? "立即写入" : "Flush Now"}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onCloseLogFile}
+                        className={`${realTimeLog ? "flex-1" : ""} justify-center gap-1.5 text-xs h-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50`}
+                      >
+                        <X size={13} />
+                        {lang === "zh" ? "关闭文件" : "Close File"}
+                      </Button>
+                    </div>
                   </div>
                 </>
               ) : (

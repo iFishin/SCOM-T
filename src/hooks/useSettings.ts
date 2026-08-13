@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SendMode, ReceiveMode, LogDisplayMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
+import type { SerialSession } from "./useSessionManager.ts";
 
 /**
  * 结尾符值。内置为 "" / "\r\n" / "\r" / "\n"，自定义结尾符是「字节串」
@@ -114,6 +115,8 @@ export type AppSettings = {
   portFilterMode?: "default" | "all";
   mockSerial?: MockSerialConfig;
   customEnders?: CustomEnder[];
+  /** 会话列表（含顺序），拖拽重排后同步写入 config.yaml。 */
+  sessions?: SerialSession[];
   cloudServerUrl?: string;
   cloudAuthToken?: string;
   cloudUploaderName?: string;
@@ -122,6 +125,10 @@ export type AppSettings = {
   rxIdleFlushMs?: number;
   /** 日志渲染批间隔：合并 `setState` 的延迟（ms）。越大 UI 越平滑，越小日志出现越快。范围 5–1000。 */
   logBatchFlushMs?: number;
+  /** 上次选择的日志文件路径，用于下次启动自动恢复写入。 */
+  logSavePath?: string | null;
+  /** 日志实时写入开关状态，随 logSavePath 一起持久化。 */
+  logRealTime?: boolean;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -246,6 +253,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   rxIdleFlushMs: 50,
   logBatchFlushMs: 50,
   customEnders: [],
+  sessions: [],
 };
 
 /** 颜色值（hex）校验：补齐原始 rgb/缩写等不校验，仅回退非字符串。 */
@@ -364,6 +372,19 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             hex: e.hex.replace(/\s+/g, "").toUpperCase(),
           }))
       : [],
+    sessions: Array.isArray(raw.sessions)
+      ? raw.sessions
+          .filter((s: any) => s && typeof s.id === "string")
+          .map((s: any) => ({
+            id: s.id,
+            name: typeof s.name === "string" && s.name ? s.name : "串口",
+            config: s.config && typeof s.config === "object" ? s.config : {},
+            // 每个 session 独立保存 activeConfigFile；旧版从全局字段迁移
+            activeConfigFile: typeof s.activeConfigFile === "string" && s.activeConfigFile
+              ? s.activeConfigFile
+              : (typeof raw.activeConfigFile === "string" ? raw.activeConfigFile : "prompts.yaml"),
+          }))
+      : [],
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",
     cloudAuthToken: typeof raw.cloudAuthToken === "string" ? raw.cloudAuthToken : "",
     cloudUploaderName: typeof raw.cloudUploaderName === "string" ? raw.cloudUploaderName : "",
@@ -371,6 +392,8 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       ? Math.floor(raw.rxIdleFlushMs) : 50,
     logBatchFlushMs: typeof raw.logBatchFlushMs === "number" && raw.logBatchFlushMs >= 5 && raw.logBatchFlushMs <= 1000
       ? Math.floor(raw.logBatchFlushMs) : 50,
+    logSavePath: typeof raw.logSavePath === "string" ? raw.logSavePath : null,
+    logRealTime: raw.logRealTime === true,
   };
 }
 
@@ -594,6 +617,10 @@ export function useSettings() {
     void saveSettingsToFile(next);
   }
 
+  function updateSessions(sessions: SerialSession[]) {
+    setSettings((current) => ({ ...current, sessions }));
+  }
+
   function updateCloudServerUrl(url: string) {
     setSettings((current) => ({ ...current, cloudServerUrl: url }));
   }
@@ -618,6 +645,10 @@ export function useSettings() {
       ...current,
       logBatchFlushMs: Math.max(5, Math.min(1000, Math.floor(ms))),
     }));
+  }
+
+  function updateLogFileState(logSavePath: string | null, logRealTime: boolean) {
+    setSettings((current) => ({ ...current, logSavePath, logRealTime }));
   }
 
   function resetTheme(mode = settings.theme.mode) {
@@ -661,10 +692,12 @@ export function useSettings() {
     updatePortFilterMode,
     updateMockSerial,
     updateCustomEnders,
+    updateSessions,
     updateCloudServerUrl,
     updateCloudAuthToken,
     updateCloudUploaderName,
     updateRxIdleFlushMs,
     updateLogBatchFlushMs,
+    updateLogFileState,
   };
 }

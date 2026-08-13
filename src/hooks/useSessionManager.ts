@@ -8,6 +8,8 @@ export type SerialSession = {
   id: string;
   name: string;
   config: SerialConfig;
+  /** 该标签页当前使用的指令配置文件，空/缺失时取全局默认 "prompts.yaml"。 */
+  activeConfigFile?: string;
 };
 
 function defaultConfig(): SerialConfig {
@@ -54,7 +56,7 @@ function saveSessions(sessions: SerialSession[]) {
   }
 }
 
-export function useSessionManager() {
+export function useSessionManager(onSessionsChange?: (sessions: SerialSession[]) => void) {
   const [sessions, setSessions] = useState<SerialSession[]>(() => {
     const loaded = loadSessions();
     if (loaded.length === 0) {
@@ -67,7 +69,8 @@ export function useSessionManager() {
   const persist = useCallback((next: SerialSession[]) => {
     setSessions(next);
     saveSessions(next);
-  }, []);
+    onSessionsChange?.(next);
+  }, [onSessionsChange]);
 
   function createSession() {
     if (sessions.length >= MAX_SESSIONS) return;
@@ -107,6 +110,23 @@ export function useSessionManager() {
     setActiveSessionId(id);
   }
 
+  function reorderSession(draggedId: string, targetId: string) {
+    if (draggedId === targetId) return;
+    const from = sessions.findIndex((s) => s.id === draggedId);
+    if (from < 0) return;
+    const next = [...sessions];
+    const [moved] = next.splice(from, 1);
+    // Recompute the target's index *after* removal (rather than reusing its
+    // pre-removal index) so the insertion point is consistent regardless of
+    // drag direction — otherwise removing `from` shifts everything after it
+    // left by one only when from < to, making forward/backward drags land on
+    // opposite sides of the target.
+    const to = next.findIndex((s) => s.id === targetId);
+    if (to < 0) return;
+    next.splice(to, 0, moved);
+    persist(next);
+  }
+
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? sessions[0];
 
   return {
@@ -118,6 +138,7 @@ export function useSessionManager() {
     renameSession,
     updateSessionConfig,
     setActive,
+    reorderSession,
     maxSessions: MAX_SESSIONS,
   };
 }

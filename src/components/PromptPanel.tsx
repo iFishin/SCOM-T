@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Download, Replace, ListFilter, Slice } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Download, Replace, ListFilter, Slice, Save } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
+import { FileSidebar } from "./config/FileSidebar.tsx";
 import { RegexCleanDialog } from "./tools/RegexCleanDialog.tsx";
 import { Button } from "./ui/Button.tsx";
 import { Checkbox } from "./ui/Checkbox.tsx";
@@ -10,7 +11,6 @@ import { Select } from "./ui/Select.tsx";
 import { t } from "../i18n.ts";
 import type { Lang } from "../i18n.ts";
 import { Modal } from "./ui/Modal.tsx";
-import { usePromptConfig } from "../hooks/usePromptConfig.ts";
 import { useResponseSet } from "../hooks/useResponseSet.ts";
 import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
 import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
@@ -62,11 +62,11 @@ type PromptPanelProps = {
   promptRowCount: number;
   updatePromptRowCount: (count: number) => void;
   pushToast: (msg: string, type: "success" | "error" | "warn") => void;
-  onNavigateToConfig?: () => void;
   onNavigateToResponseSet?: () => void;
   pendingApplyResponseSet?: string | null;
   onClearPendingApply?: () => void;
   activeConfigFile?: string;
+  onActiveConfigFileChange?: (fileName: string) => void;
   logs?: SerialLogEntry[];
   /** TCP Server broadcast — sends data to all connected TCP clients */
   tcpServerBroadcast?: (data: number[]) => Promise<void>;
@@ -82,17 +82,15 @@ export function PromptPanel({
   promptRowCount,
   updatePromptRowCount,
   pushToast,
-  onNavigateToConfig,
   onNavigateToResponseSet,
   pendingApplyResponseSet,
   onClearPendingApply,
   activeConfigFile = "prompts.yaml",
+  onActiveConfigFileChange,
   logs = [],
   tcpServerBroadcast,
   tcpClientCount,
 }: PromptPanelProps) {
-  const promptConfig = usePromptConfig();
-
   // ── State ──
 
   const [promptRows, setPromptRows] = useState<PromptRow[]>(() =>
@@ -108,10 +106,8 @@ export function PromptPanel({
   );
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [rowCountInput, setRowCountInput] = useState(String(promptRowCount));
-  const [activePromptTab, setActivePromptTab] = useState<"grid" | "config" | "batch">("grid");
-  const [yamlText, setYamlText] = useState("");
+  const [activePromptTab, setActivePromptTab] = useState<"grid" | "batch">("grid");
   const [batchText, setBatchText] = useState("");
-  const [yamlError, setYamlError] = useState<string | null>(null);
   const [regexCleanOpen, setRegexCleanOpen] = useState(false);
   const [quickPresets, setQuickPresets] = useState<{ name: string; pattern: string; replacement: string; mode?: string; pinned?: boolean }[]>([]);
   const presetsLoaded = useRef(false);
@@ -195,9 +191,10 @@ export function PromptPanel({
     }
   }
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [configAction, setConfigAction] = useState<null | "save" | "load">(null);
-  const [configName, setConfigName] = useState("");
-  const [savedConfigs, setSavedConfigs] = useState<string[]>([]);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configYamlText, setConfigYamlText] = useState("");
+  const [configCurrentFile, setConfigCurrentFile] = useState(activeConfigFile);
+  const [configSidebarOpen, setConfigSidebarOpen] = useState(true);
 
   // ── Import response set with placeholder resolution ──
   const PLACEHOLDER_RE = /\{(\w+)\}/g;
@@ -307,6 +304,15 @@ export function PromptPanel({
           // Update promptRowCount to match the loaded config
           updatePromptRowCount(result.rows.length);
         }
+        setConfigYamlText(text);
+        setConfigCurrentFile(activeConfigFile);
+
+        // Keep batch text view in sync when switching config files
+        if (result.valid && result.rows.length > 0) {
+          let lastIdx = result.rows.length - 1;
+          while (lastIdx >= 0 && !result.rows[lastIdx].command.trim()) lastIdx--;
+          setBatchText(result.rows.slice(0, lastIdx + 1).map((r) => r.command).join("\n"));
+        }
       } catch { /* file may not exist yet */ }
     }
     load();
@@ -327,39 +333,42 @@ export function PromptPanel({
   }, [promptRowCount]);
 
   // Auto-save to config file
+  const savePromptRows = useCallback(async (rows: typeof promptRows, configFile: string) => {
+    try {
+      const { join, homeDir } = await import("@tauri-apps/api/path");
+      const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
+      const dir = await join(await homeDir(), "SCOM-T");
+      await mkdir(dir, { recursive: true }).catch(() => {});
+
+      let savePath: string;
+      if (configFile === "prompts.yaml") {
+        savePath = await join(dir, "prompts.yaml");
+      } else {
+        savePath = await join(dir, "prompts", configFile);
+      }
+
+      await writeTextFile(savePath, serializeToYaml(rows));
+    } catch { /* auto-save failure is non-critical */ }
+  }, []);
+
   useEffect(() => {
     if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
-    promptSaveTimer.current = setTimeout(async () => {
-      try {
-        const { join, homeDir } = await import("@tauri-apps/api/path");
-        const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
-        const dir = await join(await homeDir(), "SCOM-T");
-        await mkdir(dir, { recursive: true }).catch(() => {});
-
-        let savePath: string;
-        if (activeConfigFile === "prompts.yaml") {
-          savePath = await join(dir, "prompts.yaml");
-        } else {
-          savePath = await join(dir, "prompts", activeConfigFile);
-        }
-
-        await writeTextFile(savePath, serializeToYaml(promptRows));
-
-        // Also sync to prompts.yaml if editing a file from prompts directory
-        if (activeConfigFile !== "prompts.yaml") {
-          const mainPath = await join(dir, "prompts.yaml");
-          await writeTextFile(mainPath, serializeToYaml(promptRows));
-        }
-      } catch { /* auto-save failure is non-critical */ }
+    promptSaveTimer.current = setTimeout(() => {
+      savePromptRows(promptRowsRef.current, activeConfigFile);
     }, 800);
     return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
-  }, [promptRows, activeConfigFile]);
+  }, [promptRows, activeConfigFile, savePromptRows]);
 
   useEffect(() => {
-    function flush() { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); }
+    function flush() {
+      if (promptSaveTimer.current) {
+        clearTimeout(promptSaveTimer.current);
+        savePromptRows(promptRowsRef.current, activeConfigFile);
+      }
+    }
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
-  }, []);
+  }, [activeConfigFile, savePromptRows]);
 
   useEffect(() => {
     return () => { if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current); };
@@ -667,14 +676,10 @@ export function PromptPanel({
     }
   }
 
-  function handlePromptTabChange(tab: "grid" | "config" | "batch") {
+  function handlePromptTabChange(tab: "grid" | "batch") {
     if (yamlDebounceRef.current) {
       clearTimeout(yamlDebounceRef.current);
       yamlDebounceRef.current = null;
-    }
-    if (tab === "config") {
-      setYamlText(serializeToYaml(promptRows));
-      setYamlError(null);
     }
     if (tab === "batch") {
       // Find the index of the last non-empty command
@@ -735,73 +740,63 @@ export function PromptPanel({
     updatePromptRowCount(promptRowCount - 1);
   }
 
-  function handleYamlChange(newValue: string) {
-    setYamlText(newValue);
+  function clearAllStatuses() {
+    setPromptRows((current) => current.map((row) => ({ ...row, status: "idle" as PromptRowStatus })));
+  }
+
+  // ── Config dialog handlers ──
+
+  function openConfigDialog() {
+    setConfigYamlText(serializeToYaml(promptRows));
+    setConfigCurrentFile(activeConfigFile);
+    setConfigDialogOpen(true);
+  }
+
+  function handleConfigYamlChange(value: string) {
+    setConfigYamlText(value);
     if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current);
     yamlDebounceRef.current = setTimeout(() => {
-      const result = parseYamlToRows(newValue);
+      const result = parseYamlToRows(value);
       if (result.valid) {
-        setYamlError(null);
         setPromptRows(result.rows);
         updatePromptRowCount(result.rows.length);
-      } else {
-        setYamlError(result.error);
       }
     }, 500);
   }
 
-  async function handleSaveConfig(name: string) {
+  async function handleConfigFileSelect(fileName: string) {
+    if (fileName === configCurrentFile) return;
+    // Save current content before switching
     try {
-      await promptConfig.saveConfig(name, promptRows);
-      pushToast(t("config_saved_ok", lang), "success");
-      setConfigAction(null);
-      setConfigName("");
-    } catch (e) {
-      pushToast(`${t("config_save_err", lang)}: ${e}`, "error");
+      const { join, homeDir } = await import("@tauri-apps/api/path");
+      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+      const dir = await join(await homeDir(), "SCOM-T");
+      if (configCurrentFile === "prompts.yaml") {
+        await writeTextFile(await join(dir, "prompts.yaml"), configYamlText);
+      } else {
+        await writeTextFile(await join(dir, "prompts", configCurrentFile), configYamlText);
+      }
+    } catch { /* ignore */ }
+
+    // Hand off to the activeConfigFile-driven load effect (single source of truth)
+    onActiveConfigFileChange?.(fileName);
+  }
+
+  const handleConfigFileCreate = useCallback((fileName: string) => {
+    onActiveConfigFileChange?.(fileName);
+  }, [onActiveConfigFileChange]);
+
+  const handleConfigFileRename = useCallback((oldName: string, newName: string) => {
+    if (configCurrentFile === oldName) {
+      onActiveConfigFileChange?.(newName);
     }
-  }
+  }, [configCurrentFile, onActiveConfigFileChange]);
 
-  async function handleLoadConfig(name: string) {
-    try {
-      const rows = await promptConfig.loadConfig(name);
-      setPromptRows(rows);
-      updatePromptRowCount(rows.length);
-      setYamlText(serializeToYaml(rows));
-      setYamlError(null);
-      pushToast(t("config_loaded_ok", lang), "success");
-      setConfigAction(null);
-    } catch (e) {
-      pushToast(`${t("config_load_err", lang)}: ${e}`, "error");
+  const handleConfigFileDelete = useCallback((fileName: string) => {
+    if (configCurrentFile === fileName) {
+      onActiveConfigFileChange?.("prompts.yaml");
     }
-  }
-
-  async function handleDeleteConfig(name: string) {
-    try {
-      await promptConfig.deleteConfig(name);
-      setSavedConfigs((prev) => prev.filter((c) => c !== name));
-      pushToast(t("config_deleted_ok", lang), "success");
-    } catch (e) {
-      pushToast(`${t("config_delete_err", lang)}: ${e}`, "error");
-    }
-  }
-
-  async function handleOpenConfigDir() {
-    try {
-      await promptConfig.openConfigDir();
-    } catch (e) {
-      pushToast(`${t("config_open_err", lang)}: ${e}`, "error");
-    }
-  }
-
-  async function handleShowLoadList() {
-    const list = await promptConfig.listConfigs();
-    setSavedConfigs(list);
-    setConfigAction("load");
-  }
-
-  function clearAllStatuses() {
-    setPromptRows((current) => current.map((row) => ({ ...row, status: "idle" as PromptRowStatus })));
-  }
+  }, [configCurrentFile, onActiveConfigFileChange]);
 
   // ── Content blocks ──
 
@@ -1152,17 +1147,9 @@ export function PromptPanel({
   const tabBar = (
     <div className="flex items-center rounded-md border border-[var(--border)] overflow-hidden">
       <button type="button" onClick={() => handlePromptTabChange("grid")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "grid" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_grid", lang)}</button>
-      <button type="button" onClick={() => onNavigateToConfig?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
+      <button type="button" onClick={() => openConfigDialog()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("tab_config", lang)}</button>
       <button type="button" onClick={() => handlePromptTabChange("batch")} className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors border-r border-[var(--border)]/50 ${activePromptTab === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"}`}>{t("tab_batch", lang)}</button>
       <button type="button" onClick={() => onNavigateToResponseSet?.()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-input)]">{t("response_set", lang)}</button>
-      {activePromptTab === "config" && (
-        <>
-          <span className="mx-2 text-[var(--border)]">|</span>
-          <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-3 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
-          <button type="button" onClick={handleShowLoadList} className="rounded px-3 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
-          <button type="button" onClick={handleOpenConfigDir} className="rounded px-3 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
-        </>
-      )}
     </div>
   );
 
@@ -1273,48 +1260,7 @@ export function PromptPanel({
             {lang === "zh" ? "正则清洗" : "Regex"}
           </button>
         )}
-        {activePromptTab === "config" && (
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => { setConfigName(""); setConfigAction("save"); }} className="rounded px-2.5 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("save_config", lang)}</button>
-            <button type="button" onClick={handleShowLoadList} className="rounded px-2.5 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("load_config", lang)}</button>
-            <button type="button" onClick={handleOpenConfigDir} className="rounded px-2.5 py-1.5 text-theme-11 font-semibold uppercase tracking-wider transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]">{t("open_config_dir", lang)}</button>
-          </div>
-        )}
       </div>
-  );
-
-  // ── Config mode content ──
-
-  const configContent = (
-    <>
-      {configAction === "save" && (
-        <div className="flex items-center gap-2 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-input)]">
-          <input value={configName} onChange={(e) => setConfigName(e.currentTarget.value)} placeholder={t("config_name_hint", lang)} className="flex-1 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]" onKeyDown={(e) => { if (e.key === "Enter" && configName.trim()) handleSaveConfig(configName.trim()); if (e.key === "Escape") setConfigAction(null); }} autoFocus />
-          <Button type="button" variant="primary" size="sm" disabled={!configName.trim()} onClick={() => handleSaveConfig(configName.trim())} className="px-2 py-1 text-theme-11">{t("save_config", lang)}</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setConfigAction(null)} className="px-2 py-1 text-theme-11">{lang === "zh" ? "取消" : "Cancel"}</Button>
-        </div>
-      )}
-      {configAction === "load" && (
-        <div className="border-b border-[var(--border)] bg-[var(--bg-input)]">
-          {savedConfigs.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-[var(--text-muted)]">{t("no_configs", lang)}</div>
-          ) : (
-            <div className="divide-y divide-[var(--border)] max-h-32 overflow-y-auto">
-              {savedConfigs.map((name) => (
-                <div key={name} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)]">
-                  <button type="button" className="flex-1 text-left text-[var(--text-primary)]" onClick={() => handleLoadConfig(name)}>{name}</button>
-                  <button type="button" onClick={() => handleDeleteConfig(name)} className="rounded px-1 py-0.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors text-theme-10">{lang === "zh" ? "删除" : "Del"}</button>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="px-3 py-1.5 border-t border-[var(--border)]">
-            <button type="button" onClick={() => setConfigAction(null)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">{lang === "zh" ? "取消" : "Cancel"}</button>
-          </div>
-        </div>
-      )}
-      <YamlEditor value={yamlText} onChange={handleYamlChange} error={yamlError} lang={lang} />
-    </>
   );
 
   // ── Grid layout variant: single card with all content ──
@@ -1324,7 +1270,7 @@ export function PromptPanel({
       {tabBarWithCount}
       {activePromptTab === "grid" && buttonBar}
       <div className="flex flex-col min-h-0 flex-1">
-        {activePromptTab === "grid" ? gridContent : activePromptTab === "batch" ? batchContent : configContent}
+        {activePromptTab === "grid" ? gridContent : batchContent}
       </div>
     </div>
   );
@@ -1341,13 +1287,9 @@ export function PromptPanel({
         <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
           {gridContent}
         </div>
-      ) : activePromptTab === "batch" ? (
+      ) : (
         <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
           {batchContent}
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-          {configContent}
         </div>
       )}
     </>
@@ -1507,6 +1449,59 @@ export function PromptPanel({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Config dialog ── */}
+      {configDialogOpen && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) setConfigDialogOpen(false); }}>
+          <div className="flex h-[75vh] w-[80vw] max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-2.5">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">
+                {t("config_files", lang)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setConfigDialogOpen(false)}
+                className="rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body: sidebar + editor */}
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              <FileSidebar
+                lang={lang}
+                isOpen={configSidebarOpen}
+                onToggle={() => setConfigSidebarOpen(!configSidebarOpen)}
+                currentFile={configCurrentFile}
+                onFileSelect={handleConfigFileSelect}
+                onFileCreate={handleConfigFileCreate}
+                onFileRename={handleConfigFileRename}
+                onFileDelete={handleConfigFileDelete}
+              />
+              <div className="flex flex-col min-h-0 flex-1 min-w-0">
+                <YamlEditor
+                  value={configYamlText}
+                  onChange={handleConfigYamlChange}
+                  error={null}
+                  lang={lang}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <footer className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5">
+              <Save size={11} className="text-[var(--text-muted)]" />
+              <span className="text-theme-10 text-[var(--text-muted)]">
+                {configCurrentFile === "prompts.yaml"
+                  ? lang === "zh" ? "自动保存至 ~/SCOM-T/prompts.yaml" : "Auto-saved to ~/SCOM-T/prompts.yaml"
+                  : lang === "zh" ? `正在编辑: ${configCurrentFile}` : `Editing: ${configCurrentFile}`}
+              </span>
+            </footer>
           </div>
         </div>
       )}

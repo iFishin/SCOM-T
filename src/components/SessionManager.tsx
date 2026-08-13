@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfigPanel } from "./ConfigPanel.tsx";
 import { ReceiveLog } from "./ReceiveLog.tsx";
 import { useSerialPort, BAUD_RATES, DATA_BITS_OPTIONS, PARITY_OPTIONS, STOP_BITS_OPTIONS } from "../hooks/useSerialPort.ts";
@@ -6,12 +6,16 @@ import type { LogDisplayMode, ReceiveMode, SendMode, SerialConfig } from "../hoo
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import type { Lang } from "../i18n.ts";
 import { useSessionManager } from "../hooks/useSessionManager.ts";
+import type { SerialSession } from "../hooks/useSessionManager.ts";
 import { useLogFile } from "../hooks/useLogFile.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
+import { appendCrashLog, readCrashLog, clearCrashLog } from "../utils/crashRecoveryLog.ts";
+import type { SerialLogEntry } from "../serial/types.ts";
 
 // ── Types ──
 
 export type ActiveSessionData = {
+  sessionId: string;
   config: SerialConfig;
   logs: import("../hooks/useSerialPort.ts").SerialLogEntry[];
   isConnected: boolean;
@@ -44,9 +48,44 @@ export type ActiveSessionData = {
   getSignalHistory: () => { time: number; rts: boolean; dtr: boolean; cts: boolean; dsr: boolean; cd: boolean; ri: boolean }[];
 };
 
+// ── Crash-recovery log writer: always-on, independent of the user's optional
+// "save to file" — batches entries and flushes periodically so an unclean
+// exit (crash/reload) loses at most one flush interval's worth of data. ──
+
+function useCrashLogWriter(sessionId: string) {
+  const pendingRef = useRef<SerialLogEntry[]>([]);
+  const writingRef = useRef(false);
+
+  const flush = useCallback(async () => {
+    if (writingRef.current || pendingRef.current.length === 0) return;
+    const batch = pendingRef.current.slice();
+    writingRef.current = true;
+    try {
+      await appendCrashLog(sessionId, batch);
+      pendingRef.current.splice(0, batch.length);
+    } catch {
+      // best-effort; leave batch queued for the next tick
+    } finally {
+      writingRef.current = false;
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    const timer = setInterval(() => void flush(), 2000);
+    return () => clearInterval(timer);
+  }, [flush]);
+
+  const enqueue = useCallback((entry: SerialLogEntry) => {
+    pendingRef.current.push(entry);
+  }, []);
+
+  return enqueue;
+}
+
 // ── SessionContent: each session has its own serial port ──
 
 function SessionContent({
+  sessionId,
   config,
   lang,
   receiveMode,
@@ -61,7 +100,12 @@ function SessionContent({
   isActive,
   onActiveData,
   onAddToPrompts,
+  initialLogs,
+  logSavePath,
+  logRealTime,
+  onLogFileStateChange,
 }: {
+  sessionId: string;
   config: SerialConfig;
   lang: Lang;
   receiveMode: ReceiveMode;
@@ -76,13 +120,30 @@ function SessionContent({
   isActive: boolean;
   onActiveData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
+  initialLogs?: SerialLogEntry[];
+  logSavePath?: string | null;
+  logRealTime?: boolean;
+  onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
 }) {
-  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs });
-  const logFile = useLogFile();
+  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs, initialLogs });
+  const logFile = useLogFile({ onStateChange: onLogFileStateChange });
+  const enqueueCrashLog = useCrashLogWriter(sessionId);
+
+  // Restore persisted log-file selection on startup (only if the file still exists).
+  // Only the initially-active session restores, so multiple sessions don't all grab
+  // the same file and write to it concurrently.
+  const logRestoredRef = useRef(false);
+  useEffect(() => {
+    if (logRestoredRef.current || !isActive) return;
+    logRestoredRef.current = true;
+    void logFile.restore(logSavePath ?? null, logRealTime ?? false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   // Keep the ref up-to-date with the latest serial data
   useEffect(() => {
     const data: ActiveSessionData = {
+      sessionId,
       config,
       logs: serial.logs,
       isConnected: serial.isConnected,
@@ -128,6 +189,8 @@ function SessionContent({
 
   // Persist from the uncapped ordered stream so UI clearing/retention cannot drop file entries.
   useEffect(() => serial.subscribeLogs(logFile.enqueueLog), [serial.subscribeLogs, logFile.enqueueLog]);
+  // Always-on crash-recovery persistence, independent of the user's optional real-time save.
+  useEffect(() => serial.subscribeLogs(enqueueCrashLog), [serial.subscribeLogs, enqueueCrashLog]);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -167,6 +230,7 @@ function SessionContent({
         onSelectLogFile={logFile.selectLogFile}
         onToggleRealTime={() => logFile.setRealTime((v) => !v)}
         onFlushLogs={() => logFile.flushAll(serial.logs)}
+        onDumpLogs={() => { void logFile.dumpLogs(serial.logs); }}
         onCloseLogFile={logFile.closeLogFile}
         onAddToPrompts={onAddToPrompts}
       />
@@ -187,6 +251,10 @@ type SessionManagerProps = {
   logBatchFlushMs?: number;
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
+  onSessionsChange?: (sessions: SerialSession[]) => void;
+  logSavePath?: string | null;
+  logRealTime?: boolean;
+  onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
 };
 
 export function SessionManager({
@@ -200,6 +268,10 @@ export function SessionManager({
   logBatchFlushMs,
   onActiveSessionData,
   onAddToPrompts,
+  onSessionsChange,
+  logSavePath,
+  logRealTime,
+  onLogFileStateChange,
 }: SessionManagerProps) {
   const {
     sessions,
@@ -209,15 +281,43 @@ export function SessionManager({
     renameSession,
     updateSessionConfig,
     setActive,
+    reorderSession,
     maxSessions,
-  } = useSessionManager();
+  } = useSessionManager(onSessionsChange);
 
   // Store per-session data refs, only the active one is synced to App.tsx
   const sessionDataRefs = useRef<Record<string, { current: ActiveSessionData | null }>>({});
 
+  // Crash-recovery logs recovered per session, loaded once at mount for each session id seen.
+  // SessionContent (and its useSerialPort, which seeds logs via a useState lazy initializer)
+  // must not mount until this check resolves — otherwise the initial empty state "wins" and
+  // the recovered logs, once loaded, have no way back in.
+  const [recoveredLogs, setRecoveredLogs] = useState<Record<string, SerialLogEntry[]>>({});
+  const [checkedSessions, setCheckedSessions] = useState<Set<string>>(new Set());
+  const recoveryStartedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    for (const session of sessions) {
+      if (recoveryStartedRef.current.has(session.id)) continue;
+      recoveryStartedRef.current.add(session.id);
+      void readCrashLog(session.id).then((entries) => {
+        void clearCrashLog(session.id);
+        if (entries.length > 0) {
+          setRecoveredLogs((prev) => ({ ...prev, [session.id]: entries }));
+        }
+        setCheckedSessions((prev) => new Set(prev).add(session.id));
+      });
+    }
+  }, [sessions]);
+
   const handleConfigChange = useCallback((sessionId: string, newConfig: SerialConfig) => {
     updateSessionConfig(sessionId, newConfig);
   }, [updateSessionConfig]);
+
+  const handleCloseSession = useCallback((sessionId: string) => {
+    closeSession(sessionId);
+    void clearCrashLog(sessionId);
+  }, [closeSession]);
 
   // Sync active session data to App.tsx
   const syncRef = useRef(onActiveSessionData);
@@ -238,14 +338,21 @@ export function SessionManager({
         maxSessions={maxSessions}
         lang={lang}
         onSelect={setActive}
-        onClose={closeSession}
+        onClose={handleCloseSession}
         onCreate={createSession}
         onRename={renameSession}
+        onReorder={reorderSession}
       />
       <div className="flex-1 min-h-0 flex flex-col">
         {sessions.map((session) => {
           if (!sessionDataRefs.current[session.id]) {
             sessionDataRefs.current[session.id] = { current: null };
+          }
+          if (!checkedSessions.has(session.id)) {
+            // Wait for the crash-recovery check to resolve before mounting SessionContent,
+            // so useSerialPort's initialLogs (a useState lazy initializer) sees the real data
+            // instead of racing it and locking in an empty log list.
+            return null;
           }
           return (
             <div
@@ -254,6 +361,7 @@ export function SessionManager({
               style={{ display: session.id === activeSessionId ? "flex" : "none" }}
             >
               <SessionContent
+                sessionId={session.id}
                 config={session.config}
                 lang={lang}
                 receiveMode={receiveMode}
@@ -268,6 +376,10 @@ export function SessionManager({
                 isActive={session.id === activeSessionId}
                 onActiveData={onActiveSessionData}
                 onAddToPrompts={onAddToPrompts}
+                initialLogs={recoveredLogs[session.id]}
+                logSavePath={logSavePath}
+                logRealTime={logRealTime}
+                onLogFileStateChange={onLogFileStateChange}
               />
             </div>
           );
