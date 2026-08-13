@@ -125,6 +125,10 @@ export type AppSettings = {
   rxIdleFlushMs?: number;
   /** 日志渲染批间隔：合并 `setState` 的延迟（ms）。越大 UI 越平滑，越小日志出现越快。范围 5–1000。 */
   logBatchFlushMs?: number;
+  /** 上次选择的日志文件路径，用于下次启动自动恢复写入。 */
+  logSavePath?: string | null;
+  /** 日志实时写入开关状态，随 logSavePath 一起持久化。 */
+  logRealTime?: boolean;
 };
 
 const STORAGE_KEY = "scom-t-settings";
@@ -388,6 +392,8 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       ? Math.floor(raw.rxIdleFlushMs) : 50,
     logBatchFlushMs: typeof raw.logBatchFlushMs === "number" && raw.logBatchFlushMs >= 5 && raw.logBatchFlushMs <= 1000
       ? Math.floor(raw.logBatchFlushMs) : 50,
+    logSavePath: typeof raw.logSavePath === "string" ? raw.logSavePath : null,
+    logRealTime: raw.logRealTime === true,
   };
 }
 
@@ -641,6 +647,10 @@ export function useSettings() {
     }));
   }
 
+  function updateLogFileState(logSavePath: string | null, logRealTime: boolean) {
+    setSettings((current) => ({ ...current, logSavePath, logRealTime }));
+  }
+
   function resetTheme(mode = settings.theme.mode) {
     const base = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
     // 重置整套主题（含扩展字段）回该 mode 的默认，并标记为「经典」预设
@@ -688,5 +698,6 @@ export function useSettings() {
     updateCloudUploaderName,
     updateRxIdleFlushMs,
     updateLogBatchFlushMs,
+    updateLogFileState,
   };
 }

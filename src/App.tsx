@@ -139,7 +139,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateLogFileState } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -193,8 +193,18 @@ function App() {
   const activeTcpClients = tcpServerClients;
   const activeError = error;
 
-  const logFile = useLogFile();
+  const logFile = useLogFile({
+    onStateChange: (savePath, realTime) => updateLogFileState(savePath, realTime),
+  });
   useEffect(() => { logFile.syncLogs(activeLogs); }, [activeLogs]);
+
+  // Restore persisted log file selection once settings have loaded (if it still exists).
+  const logRestoredRef = useRef(false);
+  useEffect(() => {
+    if (logRestoredRef.current || !loaded) return;
+    logRestoredRef.current = true;
+    void logFile.restore(settings.logSavePath ?? null, settings.logRealTime ?? false);
+  }, [loaded, settings.logSavePath, settings.logRealTime, logFile]);
 
   // ── Sync timestamp format setting ──
   useEffect(() => {
@@ -792,6 +802,9 @@ function App() {
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
                 onSessionsChange={handleSessionsChange}
+                logSavePath={settings.logSavePath}
+                logRealTime={settings.logRealTime}
+                onLogFileStateChange={updateLogFileState}
               />
             </div>
 
@@ -842,6 +855,15 @@ function App() {
                 onSelectLogFile={logFile.selectLogFile}
                 onToggleRealTime={() => logFile.setRealTime((v) => !v)}
                 onFlushLogs={() => logFile.flushAll(logs)}
+                onDumpLogs={async () => {
+                  const ok = await logFile.dumpLogs(logs);
+                  pushToast(
+                    ok
+                      ? (lang === "zh" ? `已追加 ${logs.length} 条日志到文件` : `Appended ${logs.length} logs to file`)
+                      : (lang === "zh" ? "追加失败：请先选择日志文件" : "Append failed: select a log file first"),
+                    ok ? "success" : "error",
+                  );
+                }}
                 onCloseLogFile={logFile.closeLogFile}
                 onAddToPrompts={handleAddToPrompts}
               />
@@ -1243,6 +1265,9 @@ function App() {
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
                     onSessionsChange={handleSessionsChange}
+                    logSavePath={settings.logSavePath}
+                    logRealTime={settings.logRealTime}
+                    onLogFileStateChange={updateLogFileState}
                   />
                 </div>
               )}

@@ -101,6 +101,9 @@ function SessionContent({
   onActiveData,
   onAddToPrompts,
   initialLogs,
+  logSavePath,
+  logRealTime,
+  onLogFileStateChange,
 }: {
   sessionId: string;
   config: SerialConfig;
@@ -118,10 +121,24 @@ function SessionContent({
   onActiveData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
   initialLogs?: SerialLogEntry[];
+  logSavePath?: string | null;
+  logRealTime?: boolean;
+  onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs, initialLogs });
-  const logFile = useLogFile();
+  const logFile = useLogFile({ onStateChange: onLogFileStateChange });
   const enqueueCrashLog = useCrashLogWriter(sessionId);
+
+  // Restore persisted log-file selection on startup (only if the file still exists).
+  // Only the initially-active session restores, so multiple sessions don't all grab
+  // the same file and write to it concurrently.
+  const logRestoredRef = useRef(false);
+  useEffect(() => {
+    if (logRestoredRef.current || !isActive) return;
+    logRestoredRef.current = true;
+    void logFile.restore(logSavePath ?? null, logRealTime ?? false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   // Keep the ref up-to-date with the latest serial data
   useEffect(() => {
@@ -213,6 +230,7 @@ function SessionContent({
         onSelectLogFile={logFile.selectLogFile}
         onToggleRealTime={() => logFile.setRealTime((v) => !v)}
         onFlushLogs={() => logFile.flushAll(serial.logs)}
+        onDumpLogs={() => { void logFile.dumpLogs(serial.logs); }}
         onCloseLogFile={logFile.closeLogFile}
         onAddToPrompts={onAddToPrompts}
       />
@@ -234,6 +252,9 @@ type SessionManagerProps = {
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
   onSessionsChange?: (sessions: SerialSession[]) => void;
+  logSavePath?: string | null;
+  logRealTime?: boolean;
+  onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
 };
 
 export function SessionManager({
@@ -248,6 +269,9 @@ export function SessionManager({
   onActiveSessionData,
   onAddToPrompts,
   onSessionsChange,
+  logSavePath,
+  logRealTime,
+  onLogFileStateChange,
 }: SessionManagerProps) {
   const {
     sessions,
@@ -353,6 +377,9 @@ export function SessionManager({
                 onActiveData={onActiveSessionData}
                 onAddToPrompts={onAddToPrompts}
                 initialLogs={recoveredLogs[session.id]}
+                logSavePath={logSavePath}
+                logRealTime={logRealTime}
+                onLogFileStateChange={onLogFileStateChange}
               />
             </div>
           );

@@ -34,6 +34,7 @@ type ReceiveLogProps = {
   onSelectLogFile?: () => void;
   onToggleRealTime?: () => void;
   onFlushLogs?: () => void;
+  onDumpLogs?: () => void;
   onCloseLogFile?: () => void;
   /** Add a log entry's payload to the prompt commands grid */
   onAddToPrompts?: (payload: string) => void;
@@ -111,6 +112,7 @@ export function ReceiveLog({
   onSelectLogFile,
   onToggleRealTime,
   onFlushLogs,
+  onDumpLogs,
   onCloseLogFile,
   onAddToPrompts,
 }: ReceiveLogProps) {
@@ -845,22 +847,36 @@ export function ReceiveLog({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2.5">
-                    {!realTimeLog && (
-                      <Button variant="primary" size="sm" onClick={onFlushLogs} className="flex-1 justify-center gap-1.5 text-xs h-9">
-                        <Save size={13} />
-                        {lang === "zh" ? "立即写入" : "Flush Now"}
-                      </Button>
-                    )}
+                  <div className="flex flex-col gap-2.5">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={onCloseLogFile}
-                      className={`${realTimeLog ? "flex-1" : ""} justify-center gap-1.5 text-xs h-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50`}
+                      onClick={onDumpLogs}
+                      disabled={logs.length === 0}
+                      className="w-full justify-center gap-1.5 text-xs h-9 border border-[var(--border)] disabled:opacity-40"
                     >
-                      <X size={13} />
-                      {lang === "zh" ? "关闭文件" : "Close File"}
+                      <Database size={13} />
+                      {lang === "zh"
+                        ? `追加当前日志到文件（${logs.length} 条）`
+                        : `Append current logs (${logs.length})`}
                     </Button>
+                    <div className="flex gap-2.5">
+                      {!realTimeLog && (
+                        <Button variant="primary" size="sm" onClick={onFlushLogs} className="flex-1 justify-center gap-1.5 text-xs h-9">
+                          <Save size={13} />
+                          {lang === "zh" ? "立即写入" : "Flush Now"}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onCloseLogFile}
+                        className={`${realTimeLog ? "flex-1" : ""} justify-center gap-1.5 text-xs h-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50`}
+                      >
+                        <X size={13} />
+                        {lang === "zh" ? "关闭文件" : "Close File"}
+                      </Button>
+                    </div>
                   </div>
                 </>
               ) : (

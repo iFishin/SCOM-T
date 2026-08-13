@@ -6,22 +6,31 @@ import type { SerialLogEntry } from "./useSerialPort";
 function formatLogEntry(log: SerialLogEntry): string {
   const dir = log.direction === "received" ? "RX" : "TX";
   const ts = log.timestamp.replace(/^\[|\]$/g, "");
-  const payload = log.rawBytes
+  const rawPayload = log.rawBytes
     ? new TextDecoder().decode(new Uint8Array(log.rawBytes))
     : log.payload;
-  if (payload.length === 0) return `[${ts}] [${dir}] [${log.mode.toUpperCase()}]\n`;
-  return `[${ts}] [${dir}] [${log.mode.toUpperCase()}] ${payload}${payload.endsWith("\n") ? "" : "\n"}`;
+  // Drop trailing CR/LF so the formatter's own newline doesn't produce bare
+  // empty lines in the file. Whitespace/newline-only chunks are skipped entirely.
+  const payload = rawPayload.replace(/[\r\n]+$/, "");
+  if (payload.length === 0) return "";
+  return `[${ts}] [${dir}] [${log.mode.toUpperCase()}] ${payload}\n`;
 }
 
-export function useLogFile() {
-  const [savePath, setSavePath] = useState<string | null>(null);
-  const [realTime, setRealTime] = useState(true);
-  const savePathRef = useRef<string | null>(null);
-  const realTimeRef = useRef(true);
+export function useLogFile(options?: {
+  initialSavePath?: string | null;
+  initialRealTime?: boolean;
+  onStateChange?: (savePath: string | null, realTime: boolean) => void;
+}) {
+  const [savePath, setSavePath] = useState<string | null>(options?.initialSavePath ?? null);
+  const [realTime, setRealTime] = useState(options?.initialRealTime ?? true);
+  const savePathRef = useRef<string | null>(options?.initialSavePath ?? null);
+  const realTimeRef = useRef(options?.initialRealTime ?? true);
   const writingRef = useRef(false);
   const pendingRef = useRef<SerialLogEntry[]>([]);
   const activeWriteRef = useRef<Promise<boolean> | null>(null);
   const logCountRef = useRef(0);
+  const onStateChangeRef = useRef(options?.onStateChange);
+  onStateChangeRef.current = options?.onStateChange;
 
   useEffect(() => {
     savePathRef.current = savePath;
@@ -30,6 +39,17 @@ export function useLogFile() {
   useEffect(() => {
     realTimeRef.current = realTime;
   }, [realTime]);
+
+  // Persist selection + mode so the next launch can auto-resume writing.
+  // Skip the initial mount fire so we don't clobber persisted values before restore().
+  const persistMountedRef = useRef(false);
+  useEffect(() => {
+    if (!persistMountedRef.current) {
+      persistMountedRef.current = true;
+      return;
+    }
+    onStateChangeRef.current?.(savePath, realTime);
+  }, [savePath, realTime]);
 
   /** Receive every ordered log event before UI retention/clearing is applied. */
   const enqueueLog = useCallback((entry: SerialLogEntry) => {
@@ -115,6 +135,44 @@ export function useLogFile() {
     await doWrite(true);
   }, [doWrite]);
 
+  const restoredRef = useRef(false);
+  /** Restore a previously-persisted log file selection on startup, but only if
+   *  the file still exists on disk. Runs once. Returns the restored path or null. */
+  const restore = useCallback(async (path: string | null, wantRealTime: boolean): Promise<string | null> => {
+    if (restoredRef.current) return savePathRef.current;
+    restoredRef.current = true;
+    if (!path) return null;
+    try {
+      const { exists } = await import("@tauri-apps/plugin-fs");
+      if (!(await exists(path))) return null;
+    } catch {
+      return null;
+    }
+    pendingRef.current = [];
+    savePathRef.current = path;
+    realTimeRef.current = wantRealTime;
+    setSavePath(path);
+    setRealTime(wantRealTime);
+    logCountRef.current = 0;
+    return path;
+  }, []);
+
+  /** Append the current on-screen log buffer to the file in one shot.
+   *  Used to persist logs that already existed before a file was selected. */
+  const dumpLogs = useCallback(async (logs: SerialLogEntry[]): Promise<boolean> => {
+    const path = savePathRef.current;
+    if (!path || logs.length === 0) return false;
+    const text = logs.map(formatLogEntry).join("");
+    if (!text) return false;
+    try {
+      await invoke("append_to_file", { path, content: text });
+      return true;
+    } catch (err) {
+      console.error("Log dump failed:", err);
+      return false;
+    }
+  }, []);
+
   const closeLogFile = useCallback(async () => {
     const flushed = await doWrite(true);
     if (!flushed && pendingRef.current.length > 0) {
@@ -137,6 +195,8 @@ export function useLogFile() {
     enqueueLog,
     syncLogs,
     flushAll,
+    dumpLogs,
+    restore,
     closeLogFile,
   };
 }
