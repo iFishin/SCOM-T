@@ -304,6 +304,15 @@ export function PromptPanel({
           // Update promptRowCount to match the loaded config
           updatePromptRowCount(result.rows.length);
         }
+        setConfigYamlText(text);
+        setConfigCurrentFile(activeConfigFile);
+
+        // Keep batch text view in sync when switching config files
+        if (result.valid && result.rows.length > 0) {
+          let lastIdx = result.rows.length - 1;
+          while (lastIdx >= 0 && !result.rows[lastIdx].command.trim()) lastIdx--;
+          setBatchText(result.rows.slice(0, lastIdx + 1).map((r) => r.command).join("\n"));
+        }
       } catch { /* file may not exist yet */ }
     }
     load();
@@ -324,39 +333,42 @@ export function PromptPanel({
   }, [promptRowCount]);
 
   // Auto-save to config file
+  const savePromptRows = useCallback(async (rows: typeof promptRows, configFile: string) => {
+    try {
+      const { join, homeDir } = await import("@tauri-apps/api/path");
+      const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
+      const dir = await join(await homeDir(), "SCOM-T");
+      await mkdir(dir, { recursive: true }).catch(() => {});
+
+      let savePath: string;
+      if (configFile === "prompts.yaml") {
+        savePath = await join(dir, "prompts.yaml");
+      } else {
+        savePath = await join(dir, "prompts", configFile);
+      }
+
+      await writeTextFile(savePath, serializeToYaml(rows));
+    } catch { /* auto-save failure is non-critical */ }
+  }, []);
+
   useEffect(() => {
     if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
-    promptSaveTimer.current = setTimeout(async () => {
-      try {
-        const { join, homeDir } = await import("@tauri-apps/api/path");
-        const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
-        const dir = await join(await homeDir(), "SCOM-T");
-        await mkdir(dir, { recursive: true }).catch(() => {});
-
-        let savePath: string;
-        if (activeConfigFile === "prompts.yaml") {
-          savePath = await join(dir, "prompts.yaml");
-        } else {
-          savePath = await join(dir, "prompts", activeConfigFile);
-        }
-
-        await writeTextFile(savePath, serializeToYaml(promptRows));
-
-        // Also sync to prompts.yaml if editing a file from prompts directory
-        if (activeConfigFile !== "prompts.yaml") {
-          const mainPath = await join(dir, "prompts.yaml");
-          await writeTextFile(mainPath, serializeToYaml(promptRows));
-        }
-      } catch { /* auto-save failure is non-critical */ }
+    promptSaveTimer.current = setTimeout(() => {
+      savePromptRows(promptRowsRef.current, activeConfigFile);
     }, 800);
     return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
-  }, [promptRows, activeConfigFile]);
+  }, [promptRows, activeConfigFile, savePromptRows]);
 
   useEffect(() => {
-    function flush() { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); }
+    function flush() {
+      if (promptSaveTimer.current) {
+        clearTimeout(promptSaveTimer.current);
+        savePromptRows(promptRowsRef.current, activeConfigFile);
+      }
+    }
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
-  }, []);
+  }, [activeConfigFile, savePromptRows]);
 
   useEffect(() => {
     return () => { if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current); };
@@ -753,6 +765,7 @@ export function PromptPanel({
   }
 
   async function handleConfigFileSelect(fileName: string) {
+    if (fileName === configCurrentFile) return;
     // Save current content before switching
     try {
       const { join, homeDir } = await import("@tauri-apps/api/path");
@@ -765,73 +778,23 @@ export function PromptPanel({
       }
     } catch { /* ignore */ }
 
-    // Load new file
-    try {
-      const { join, homeDir } = await import("@tauri-apps/api/path");
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      const dir = await join(await homeDir(), "SCOM-T");
-      const filePath = fileName === "prompts.yaml"
-        ? await join(dir, "prompts.yaml")
-        : await join(dir, "prompts", fileName);
-      const text = await readTextFile(filePath);
-      const result = parseYamlToRows(text);
-      if (result.valid && result.rows.length > 0) {
-        setPromptRows(result.rows);
-        updatePromptRowCount(result.rows.length);
-      }
-      setConfigYamlText(text);
-      setConfigCurrentFile(fileName);
-      onActiveConfigFileChange?.(fileName);
-    } catch { /* file may not exist yet */ }
+    // Hand off to the activeConfigFile-driven load effect (single source of truth)
+    onActiveConfigFileChange?.(fileName);
   }
 
-  const handleConfigFileCreate = useCallback(async (fileName: string) => {
-    setConfigCurrentFile(fileName);
-    // Load the generated template content from disk
-    try {
-      const { join, homeDir } = await import("@tauri-apps/api/path");
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      const dir = await join(await homeDir(), "SCOM-T");
-      const filePath = fileName === "prompts.yaml"
-        ? await join(dir, "prompts.yaml")
-        : await join(dir, "prompts", fileName);
-      const text = await readTextFile(filePath);
-      const result = parseYamlToRows(text);
-      if (result.valid && result.rows.length > 0) {
-        setPromptRows(result.rows);
-        updatePromptRowCount(result.rows.length);
-      }
-      setConfigYamlText(text);
-    } catch { /* ignore */ }
+  const handleConfigFileCreate = useCallback((fileName: string) => {
     onActiveConfigFileChange?.(fileName);
   }, [onActiveConfigFileChange]);
 
   const handleConfigFileRename = useCallback((oldName: string, newName: string) => {
     if (configCurrentFile === oldName) {
-      setConfigCurrentFile(newName);
       onActiveConfigFileChange?.(newName);
     }
   }, [configCurrentFile, onActiveConfigFileChange]);
 
   const handleConfigFileDelete = useCallback((fileName: string) => {
     if (configCurrentFile === fileName) {
-      setConfigCurrentFile("prompts.yaml");
       onActiveConfigFileChange?.("prompts.yaml");
-      // Reload prompts.yaml content
-      (async () => {
-        try {
-          const { join, homeDir } = await import("@tauri-apps/api/path");
-          const { readTextFile } = await import("@tauri-apps/plugin-fs");
-          const filePath = await join(await homeDir(), "SCOM-T", "prompts.yaml");
-          const text = await readTextFile(filePath);
-          const result = parseYamlToRows(text);
-          if (result.valid && result.rows.length > 0) {
-            setPromptRows(result.rows);
-            updatePromptRowCount(result.rows.length);
-          }
-          setConfigYamlText(text);
-        } catch { /* prompts.yaml may not exist */ }
-      })();
     }
   }, [configCurrentFile, onActiveConfigFileChange]);
 
