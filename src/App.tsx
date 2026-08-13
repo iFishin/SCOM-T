@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -16,8 +16,6 @@ import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
 import { MarketplacePage } from "./components/MarketplacePage.tsx";
 import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
 import { CodecDialog } from "./components/tools/CodecDialog.tsx";
-import { FileSend } from "./components/FileSend.tsx";
-import { HotkeysPanel } from "./components/HotkeysPanel.tsx";
 import { PromptPanel } from "./components/PromptPanel.tsx";
 import { SendPanel } from "./components/SendPanel.tsx";
 import { ReceiveLog, formatLogsAsText } from "./components/ReceiveLog.tsx";
@@ -141,7 +139,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -359,7 +357,6 @@ function App() {
 
   const topCollapsed = settings.topCollapsed ?? false;
   const rightCollapsed = settings.rightCollapsed ?? false;
-  const rightSendCollapsed = settings.rightSendCollapsed ?? true;
   const [gridEditing, setGridEditing] = useState(false);
   const gridWidthRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(800);
@@ -811,7 +808,7 @@ function App() {
                 filePath={filePath}
                 fileSendProgress={fileSendProgress}
                 lang={lang}
-                mode="input-only"
+                mode="tabbed"
                 onChange={setMessage}
                 onSendModeChange={updateSendMode}
                 onReceiveModeChange={updateReceiveMode}
@@ -822,35 +819,12 @@ function App() {
                 onFileSend={() => activeSendFile(filePath)}
                 onHotkeySend={handleHotkeySend}
                 onPushToast={pushToast}
-                sendPanelExpanded={settings.sendPanelExpanded}
-                sendPanelFileCollapsed={settings.sendPanelFileCollapsed}
-                sendPanelHotkeysCollapsed={settings.sendPanelHotkeysCollapsed}
-                onSendPanelExpandedChange={updateSendPanelExpanded}
-                onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
-                onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
                 tcpClientCount={activeTcpClients.length}
                 onBroadcastToClients={(text) => {
                   const bytes = Array.from(new TextEncoder().encode(text));
                   activeTcpServerBroadcast?.(bytes);
                 }}
               />
-            </div>
-
-            <div key="filesend" className="overflow-hidden rounded-lg">
-              <FileSend
-                filePath={filePath}
-                fileSendProgress={fileSendProgress}
-                isBusy={isBusy}
-                lang={lang}
-                isConnected={activeIsConnected}
-                onFileSelect={handleFileSelect}
-                onFileSend={() => activeSendFile(filePath)}
-                onPushToast={pushToast}
-              />
-            </div>
-
-            <div key="hotkeys" className="overflow-hidden rounded-lg">
-              <HotkeysPanel hotkeys={settings.hotkeys} onHotkeySend={handleHotkeySend} lang={lang} />
             </div>
 
             <div key="receive" id="tour-receive" className="overflow-hidden flex flex-col rounded-lg">
@@ -1317,73 +1291,36 @@ function App() {
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {/* Send card */}
                 <div id="tour-send" className="shrink-0">
-                  {!rightSendCollapsed && (
-                    <SendPanel
-                      value={message}
-                      sendMode={sendMode}
-                      appendNewline={appendNewline}
-                      customEnders={customEnders}
-                      receiveMode={receiveMode}
-                      isConnected={activeIsConnected}
-                      isBusy={isBusy}
-                      hotkeys={settings.hotkeys}
-                      filePath={filePath}
-                      fileSendProgress={fileSendProgress}
-                      lang={lang}
-                      mode="combined"
-                      onChange={setMessage}
-                      onSendModeChange={updateSendMode}
-                      onReceiveModeChange={updateReceiveMode}
-                      onAppendNewlineChange={updateAppendNewline}
-                      onSend={() => activeSendData?.(message, sendMode, appendNewline)}
-                      onClearSent={() => clearLogs("sent")}
-                      onFileSelect={handleFileSelect}
-                      onFileSend={() => activeSendFile(filePath)}
-                      onHotkeySend={handleHotkeySend}
-                      onPushToast={pushToast}
-                      sendPanelExpanded={settings.sendPanelExpanded}
-                      sendPanelFileCollapsed={settings.sendPanelFileCollapsed}
-                      sendPanelHotkeysCollapsed={settings.sendPanelHotkeysCollapsed}
-                      onSendPanelExpandedChange={updateSendPanelExpanded}
-                      onSendPanelFileCollapsedChange={updateSendPanelFileCollapsed}
-                      onSendPanelHotkeysCollapsedChange={updateSendPanelHotkeysCollapsed}
-                      tcpClientCount={activeTcpClients.length}
-                      onBroadcastToClients={(text) => {
-                        const bytes = Array.from(new TextEncoder().encode(text));
-                        activeTcpServerBroadcast?.(bytes);
-                      }}
-                    />
-                  )}
+                  <SendPanel
+                    value={message}
+                    sendMode={sendMode}
+                    appendNewline={appendNewline}
+                    customEnders={customEnders}
+                    receiveMode={receiveMode}
+                    isConnected={activeIsConnected}
+                    isBusy={isBusy}
+                    hotkeys={settings.hotkeys}
+                    filePath={filePath}
+                    fileSendProgress={fileSendProgress}
+                    lang={lang}
+                    mode="tabbed"
+                    onChange={setMessage}
+                    onSendModeChange={updateSendMode}
+                    onReceiveModeChange={updateReceiveMode}
+                    onAppendNewlineChange={updateAppendNewline}
+                    onSend={() => activeSendData?.(message, sendMode, appendNewline)}
+                    onClearSent={() => clearLogs("sent")}
+                    onFileSelect={handleFileSelect}
+                    onFileSend={() => activeSendFile(filePath)}
+                    onHotkeySend={handleHotkeySend}
+                    onPushToast={pushToast}
+                    tcpClientCount={activeTcpClients.length}
+                    onBroadcastToClients={(text) => {
+                      const bytes = Array.from(new TextEncoder().encode(text));
+                      activeTcpServerBroadcast?.(bytes);
+                    }}
+                  />
                 </div>
-
-                {/* Collapse divider for send card */}
-                {rightSendCollapsed ? (
-                  <div
-                    onClick={() => updateRightSendCollapsed(false)}
-                    className="shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1 transition-colors hover:bg-[var(--bg-input)]"
-                  >
-                    <div className="flex items-center justify-center gap-2 text-theme-11 text-[var(--text-muted)]">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm">
-                        <ChevronDown size={10} />
-                      </span>
-                      <span className="font-semibold uppercase tracking-widest">
-                        {t("send", lang)}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="group relative flex h-4 shrink-0 items-center justify-center">
-                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-[var(--border)]" />
-                    <button
-                      type="button"
-                      onClick={() => updateRightSendCollapsed(true)}
-                      className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                      title={lang === "zh" ? "折叠发送" : "Collapse Send"}
-                    >
-                      <ChevronUp size={10} />
-                    </button>
-                  </div>
-                )}
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
