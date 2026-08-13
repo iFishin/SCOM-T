@@ -2922,7 +2922,7 @@ dependencies = [
 
 [[package]]
 name = "scom-t"
-version = "0.3.81"
+version = "0.3.89"
 dependencies = [
  "bytes",
  "serde",
