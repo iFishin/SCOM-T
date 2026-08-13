@@ -8,6 +8,8 @@ export type SerialSession = {
   id: string;
   name: string;
   config: SerialConfig;
+  /** 该标签页当前使用的指令配置文件，空/缺失时取全局默认 "prompts.yaml"。 */
+  activeConfigFile?: string;
 };
 
 function defaultConfig(): SerialConfig {

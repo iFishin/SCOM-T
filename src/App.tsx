@@ -12,7 +12,6 @@ import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
-import { ConfigPage } from "./components/ConfigPage.tsx";
 import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
 import { MarketplacePage } from "./components/MarketplacePage.tsx";
 import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
@@ -40,6 +39,7 @@ import { useLogFile } from "./hooks/useLogFile.ts";
 import { t } from "./i18n.ts";
 import type { SerialConfig } from "./hooks/useSerialPort.ts";
 import { SessionManager } from "./components/SessionManager.tsx";
+import type { SerialSession } from "./hooks/useSessionManager.ts";
 import type { ActiveSessionData } from "./components/SessionManager.tsx";
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
@@ -101,7 +101,7 @@ function useHSplit(defRatio = 0.5, minLeft = 220, minRight = 280) {
 }
 
 function App() {
-  const [page, setPage] = useState<"main" | "config" | "responseSet" | "marketplace">("main");
+  const [page, setPage] = useState<"main" | "responseSet" | "marketplace">("main");
   const [pendingApplyResponseSet, setPendingApplyResponseSet] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -141,7 +141,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateActiveConfigFile, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
+  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateRightSendCollapsed, updateSendPanelExpanded, updateSendPanelFileCollapsed, updateSendPanelHotkeysCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -217,6 +217,31 @@ function App() {
     setSessionData(data);
   }, []);
 
+  // ── Per-session config file management ──
+
+  const handleSessionsChange = useCallback((incoming: SerialSession[]) => {
+    // useSessionManager 内部状态不携带 activeConfigFile，合并保留
+    const prevById = new Map((settings.sessions ?? []).map((s) => [s.id, s]));
+    const merged = incoming.map((s) => ({
+      ...s,
+      activeConfigFile: prevById.get(s.id)?.activeConfigFile ?? "prompts.yaml",
+    }));
+    updateSessions(merged);
+  }, [settings.sessions, updateSessions]);
+
+  const updateSessionConfigFile = useCallback((sessionId: string, fileName: string) => {
+    const next = (settings.sessions ?? []).map((s) =>
+      s.id === sessionId ? { ...s, activeConfigFile: fileName } : s
+    );
+    updateSessions(next);
+  }, [settings.sessions, updateSessions]);
+
+  // Get the current session's activeConfigFile
+  const currentSessionConfigFile = useMemo(() => {
+    const session = (settings.sessions ?? []).find((s) => s.id === sessionData?.sessionId);
+    return session?.activeConfigFile ?? "prompts.yaml";
+  }, [settings.sessions, sessionData?.sessionId]);
+
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
     if (!appLogger.ready) {
@@ -262,7 +287,6 @@ function App() {
     }
   }, [lang, pushToast]);
 
-  const handleNavigateToConfig = useCallback(() => setPage("config"), []);
   const handleNavigateToResponseSet = useCallback(() => setPage("responseSet"), []);
   const handleNavigateToMarketplace = useCallback(() => setPage("marketplace"), []);
 
@@ -770,7 +794,7 @@ function App() {
                 logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
-                onSessionsChange={updateSessions}
+                onSessionsChange={handleSessionsChange}
               />
             </div>
 
@@ -850,7 +874,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -877,7 +901,7 @@ function App() {
         </div>
         )}
 
-        {page === "config" || page === "responseSet" || page === "marketplace" ? (
+        {page === "responseSet" || page === "marketplace" ? (
           /* Sub-page header controls — shared breadcrumb style */
           <nav className="flex items-center gap-2 flex-1 min-w-0">
             <Button
@@ -890,9 +914,7 @@ function App() {
               {lang === "zh" ? "返回" : "Back"}
             </Button>
             <span className="text-xs font-semibold text-[var(--text-primary)]">
-              {page === "config"
-                ? (lang === "zh" ? "配置文件管理" : "Config File Manager")
-                : page === "responseSet"
+              {page === "responseSet"
                 ? t("response_set", lang)
                 : t("marketplace_title", lang)}
             </span>
@@ -1071,9 +1093,6 @@ function App() {
 
       <ErrorBoundary>
 
-      {page === "config" && (
-        <ConfigPage lang={lang} activeConfigFile={settings.activeConfigFile} onActiveConfigFileChange={updateActiveConfigFile} />
-      )}
       {page === "responseSet" && (
         <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
       )}
@@ -1087,8 +1106,9 @@ function App() {
           onClose={() => setPage("main")}
           onApply={(id) => setPendingApplyResponseSet(id)}
           onApplyPromptConfig={(name) => {
-            updateActiveConfigFile(`${name}.yaml`);
-            setPage("config");
+            updateSessionConfigFile(sessionData?.sessionId ?? "", `${name}.yaml`);
+            setPage("main");
+            pushToast(lang === "zh" ? `已应用指令配置: ${name}` : `Applied prompt config: ${name}`, "success");
           }}
         />
       )}
@@ -1248,7 +1268,7 @@ function App() {
                     logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
-                    onSessionsChange={updateSessions}
+                    onSessionsChange={handleSessionsChange}
                   />
                 </div>
               )}
@@ -1367,7 +1387,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToConfig={handleNavigateToConfig} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={settings.activeConfigFile} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}

@@ -375,6 +375,10 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             id: s.id,
             name: typeof s.name === "string" && s.name ? s.name : "串口",
             config: s.config && typeof s.config === "object" ? s.config : {},
+            // 每个 session 独立保存 activeConfigFile；旧版从全局字段迁移
+            activeConfigFile: typeof s.activeConfigFile === "string" && s.activeConfigFile
+              ? s.activeConfigFile
+              : (typeof raw.activeConfigFile === "string" ? raw.activeConfigFile : "prompts.yaml"),
           }))
       : [],
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",

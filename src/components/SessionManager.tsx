@@ -15,6 +15,7 @@ import type { SerialLogEntry } from "../serial/types.ts";
 // ── Types ──
 
 export type ActiveSessionData = {
+  sessionId: string;
   config: SerialConfig;
   logs: import("../hooks/useSerialPort.ts").SerialLogEntry[];
   isConnected: boolean;
@@ -125,6 +126,7 @@ function SessionContent({
   // Keep the ref up-to-date with the latest serial data
   useEffect(() => {
     const data: ActiveSessionData = {
+      sessionId,
       config,
       logs: serial.logs,
       isConnected: serial.isConnected,
