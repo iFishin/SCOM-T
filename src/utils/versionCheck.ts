@@ -18,6 +18,29 @@ function cleanVersion(v: unknown): string {
   return String(v ?? "").replace(/^v/, "").trim();
 }
 
+/**
+ * Numeric, segment-wise version comparison. Returns >0 if a is newer than b,
+ * <0 if older, 0 if equal. Missing segments count as 0, so "0.4" === "0.4.0"
+ * and "0.3.10" is correctly newer than "0.3.9" (not lexicographic).
+ */
+export function compareVersion(a: string, b: string): number {
+  const pa = cleanVersion(a).split(".").map(Number);
+  const pb = cleanVersion(b).split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] ?? 0;
+    const nb = pb[i] ?? 0;
+    if (Number.isNaN(na) || Number.isNaN(nb)) {
+      // Non-numeric segment: fall back to string comparison of that segment.
+      const sa = String(pa[i] ?? "");
+      const sb = String(pb[i] ?? "");
+      if (sa !== sb) return sa < sb ? -1 : 1;
+    } else if (na !== nb) {
+      return na - nb;
+    }
+  }
+  return 0;
+}
+
 export async function fetchLatestVersion(): Promise<LatestVersionResult> {
   // 1) GitHub API releases/latest
   try {
