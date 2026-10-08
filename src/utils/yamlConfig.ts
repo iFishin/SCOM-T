@@ -12,6 +12,7 @@ export interface PromptRow {
   note?: string;
   expectedResponses?: string[];
   expectedResponseRegex?: boolean[];
+  matchMode?: "all" | "any";
 }
 
 /* ── Type for the YAML document shape ── */
@@ -26,6 +27,7 @@ interface YamlCommand {
   note?: string;
   expected_responses?: string[];
   expected_responses_regex?: boolean[];
+  match_mode?: "all" | "any";
 }
 
 interface YamlDoc {
@@ -62,6 +64,7 @@ export function serializeToYaml(rows: PromptRow[]): string {
       ...(r.note ? { note: r.note } : {}),
       ...(r.expectedResponses?.length ? { expected_responses: r.expectedResponses } : {}),
       ...(hasRegex ? { expected_responses_regex: r.expectedResponseRegex } : {}),
+      ...(r.matchMode === "any" ? { match_mode: "any" as const } : {}),
     };
   });
 
@@ -122,6 +125,7 @@ export function parseYamlToRows(
       note: typeof cmd.note === "string" && cmd.note ? cmd.note : undefined,
       expectedResponses: coerceStringArray(cmd.expected_responses),
       expectedResponseRegex: Array.isArray(cmd.expected_responses_regex) ? cmd.expected_responses_regex.map(Boolean) : undefined,
+      matchMode: cmd.match_mode === "any" ? "any" : undefined,
     });
   }
 
