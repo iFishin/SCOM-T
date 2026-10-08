@@ -48,7 +48,7 @@ export function normalizePluginPayload(payload: unknown): number[] {
     "data" in payload &&
     Array.isArray((payload as { data: unknown }).data)
   ) {
-    return (payload as { data: number[] }).data;
+    return (payload as { data: number[] }).data.map((item) => Number(item) & 0xff);
   }
 
   return [];

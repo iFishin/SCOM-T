@@ -18,6 +18,7 @@ import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 import type { CustomEnder } from "../hooks/useSettings.ts";
 import { feedMatcher } from "../serial/responseMatcher.ts";
 import type { MatchMode } from "../serial/responseMatcher.ts";
+import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 
 type PromptRowStatus = "idle" | "pending" | "success" | "error";
 
@@ -201,18 +202,6 @@ export function PromptPanel({
   const [configSidebarOpen, setConfigSidebarOpen] = useState(true);
 
   // ── Import response set with placeholder resolution ──
-  const PLACEHOLDER_RE = /\{(\w+)\}/g;
-  function collectPlaceholders(commands: string[]): string[] {
-    const names = new Set<string>();
-    for (const cmd of commands) {
-      let m: RegExpExecArray | null;
-      while ((m = PLACEHOLDER_RE.exec(cmd)) !== null) names.add(m[1]);
-    }
-    return [...names];
-  }
-  function expandPlaceholders(cmd: string, values: Record<string, string>): string {
-    return cmd.replace(PLACEHOLDER_RE, (_, name) => values[name] ?? `{${name}}`);
-  }
   function importResponseSet(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }) {
     const allVars = collectPlaceholders(set.commands.map((c) => c.command));
     if (allVars.length > 0) {
@@ -235,55 +224,36 @@ export function PromptPanel({
   }
 
   function applyImportedCommands(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }, placeholders: Record<string, string>) {
-    // Match rules against existing rows by command text; commands with no
-    // matching row are appended as new rows. Previously unmatched commands
-    // were dropped whenever *any* row matched, so a partial import silently
-    // lost the rest — now every command in the set is applied.
-    const byUpper = new Map<string, number>();
-    for (const r of promptRows) {
-      const key = r.command.trim().toUpperCase();
-      if (key) byUpper.set(key, r.id);
-    }
-    let nextId = promptRows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-    const newRows: PromptRow[] = [];
-    let updated = 0;
+    const plan = planResponseImport(set.commands, promptRows, placeholders);
 
-    for (const cmd of set.commands) {
-      const expanded = expandPlaceholders(cmd.command, placeholders).trim();
-      if (!expanded) continue;
-      const key = expanded.toUpperCase();
-      const existingId = byUpper.get(key);
-      if (existingId !== undefined) {
-        updatePromptRow(existingId, {
-          expectedResponses: cmd.expectedResponses.length ? [...cmd.expectedResponses] : undefined,
-          expectedResponseRegex: cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : undefined,
-          matchMode: cmd.matchMode ?? "all",
-        });
-        updated++;
-        continue;
-      }
-      newRows.push({
-        id: nextId,
+    for (const update of plan.updates) {
+      const { rowId, ...patch } = update;
+      updatePromptRow(rowId, patch);
+    }
+
+    let newRows: PromptRow[] = [];
+    if (plan.newRows.length > 0) {
+      let nextId = promptRows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      newRows = plan.newRows.map((n) => ({
+        id: nextId++,
         selected: false,
-        command: expanded,
-        isHex: cmd.isHex || false,
+        command: n.command,
+        isHex: n.isHex,
         ender: "\r\n",
         interval: "",
-        note: cmd.description || undefined,
-        expectedResponses: [...cmd.expectedResponses],
-        expectedResponseRegex: cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : undefined,
-        matchMode: cmd.matchMode ?? "all",
-        status: "idle",
-      });
-      byUpper.set(key, nextId);
-      nextId++;
+        note: n.note,
+        expectedResponses: n.expectedResponses,
+        expectedResponseRegex: n.expectedResponseRegex,
+        matchMode: n.matchMode,
+        status: "idle" as PromptRowStatus,
+      }));
+      setPromptRows((prev) => [...prev, ...newRows]);
     }
 
-    if (newRows.length > 0) setPromptRows((prev) => [...prev, ...newRows]);
     pushToast(
       lang === "zh"
-        ? `已导入「${set.name}」：更新 ${updated} 条，新增 ${newRows.length} 条`
-        : `Imported "${set.name}": ${updated} updated, ${newRows.length} added`,
+        ? `已导入「${set.name}」：更新 ${plan.updates.length} 条，新增 ${newRows.length} 条`
+        : `Imported "${set.name}": ${plan.updates.length} updated, ${newRows.length} added`,
       "success"
     );
   }
