@@ -16,6 +16,9 @@ import { serializeToYaml, parseYamlToRows } from "../utils/yamlConfig.ts";
 import { buildEnderOptions, appendEnderFallback } from "../utils/enderOptions.ts";
 import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 import type { CustomEnder } from "../hooks/useSettings.ts";
+import { feedMatcher } from "../serial/responseMatcher.ts";
+import type { MatchMode } from "../serial/responseMatcher.ts";
+import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 
 type PromptRowStatus = "idle" | "pending" | "success" | "error";
 
@@ -23,6 +26,7 @@ type WaitingResponse = {
   rowId: number;
   expected: string[];
   isRegex: boolean[];
+  matchMode: MatchMode;
   timeout: number;
   startTime: number;
   receivedBuffer: string;
@@ -50,6 +54,7 @@ type PromptRow = {
   note?: string;
   expectedResponses?: string[];
   expectedResponseRegex?: boolean[];
+  matchMode?: MatchMode;
   status?: PromptRowStatus;
 };
 
@@ -197,18 +202,6 @@ export function PromptPanel({
   const [configSidebarOpen, setConfigSidebarOpen] = useState(true);
 
   // ── Import response set with placeholder resolution ──
-  const PLACEHOLDER_RE = /\{(\w+)\}/g;
-  function collectPlaceholders(commands: string[]): string[] {
-    const names = new Set<string>();
-    for (const cmd of commands) {
-      let m: RegExpExecArray | null;
-      while ((m = PLACEHOLDER_RE.exec(cmd)) !== null) names.add(m[1]);
-    }
-    return [...names];
-  }
-  function expandPlaceholders(cmd: string, values: Record<string, string>): string {
-    return cmd.replace(PLACEHOLDER_RE, (_, name) => values[name] ?? `{${name}}`);
-  }
   function importResponseSet(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }) {
     const allVars = collectPlaceholders(set.commands.map((c) => c.command));
     if (allVars.length > 0) {
@@ -231,42 +224,36 @@ export function PromptPanel({
   }
 
   function applyImportedCommands(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }, placeholders: Record<string, string>) {
-    const { applyToGrid } = useResponseSet();
-    // Map response set commands to the format applyToGrid expects (just command for matching)
-    const matchRows = promptRows;
-    const updates = applyToGrid(set as any, matchRows);
-    if (updates.length === 0) {
-      // No existing rows matched — try to add new rows for unmatched commands
-      for (const cmd of set.commands) {
-        const expanded = expandPlaceholders(cmd.command, placeholders);
-        const existing = promptRows.find((r) => r.command.trim().toUpperCase() === expanded.trim().toUpperCase());
-        if (existing) continue;
-        // Add new row
-        const newId = promptRows.length + 1;
-        const newRow: PromptRow = {
-          id: newId,
-          selected: false,
-          command: expanded,
-          isHex: cmd.isHex || false,
-          ender: "\r\n",
-          interval: "",
-          note: cmd.description || undefined,
-          expectedResponses: [...cmd.expectedResponses],
-          expectedResponseRegex: cmd.expectedResponseRegex ? [...cmd.expectedResponseRegex] : undefined,
-          status: "idle",
-        };
-        setPromptRows((prev) => [...prev, newRow]);
-      }
-    } else {
-      // Apply expected responses to matched rows
-      for (const { rowId, expectedResponses, expectedResponseRegex } of updates) {
-        updatePromptRow(rowId, { expectedResponses, expectedResponseRegex });
-      }
+    const plan = planResponseImport(set.commands, promptRows, placeholders);
+
+    for (const update of plan.updates) {
+      const { rowId, ...patch } = update;
+      updatePromptRow(rowId, patch);
     }
+
+    let newRows: PromptRow[] = [];
+    if (plan.newRows.length > 0) {
+      let nextId = promptRows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      newRows = plan.newRows.map((n) => ({
+        id: nextId++,
+        selected: false,
+        command: n.command,
+        isHex: n.isHex,
+        ender: "\r\n",
+        interval: "",
+        note: n.note,
+        expectedResponses: n.expectedResponses,
+        expectedResponseRegex: n.expectedResponseRegex,
+        matchMode: n.matchMode,
+        status: "idle" as PromptRowStatus,
+      }));
+      setPromptRows((prev) => [...prev, ...newRows]);
+    }
+
     pushToast(
       lang === "zh"
-        ? `已导入「${set.name}」`
-        : `Imported "${set.name}"`,
+        ? `已导入「${set.name}」：更新 ${plan.updates.length} 条，新增 ${newRows.length} 条`
+        : `Imported "${set.name}": ${plan.updates.length} updated, ${newRows.length} added`,
       "success"
     );
   }
@@ -400,65 +387,31 @@ export function PromptPanel({
       });
 
       waitingResponsesRef.current.forEach((waiting, rowId) => {
-        waiting.receivedBuffer += receivedText;
-        // Cap buffer at 64 KiB to bound memory; keep trailing suffix for cross-chunk matches
-        if (waiting.receivedBuffer.length > 65536) {
-          waiting.receivedBuffer = waiting.receivedBuffer.slice(-4096);
-        }
+        const result = feedMatcher(
+          { buffer: waiting.receivedBuffer, matchIndex: waiting.matchIndex, satisfied: false },
+          { expected: waiting.expected, isRegex: waiting.isRegex, matchMode: waiting.matchMode },
+          receivedText,
+        );
+        waiting.receivedBuffer = result.state.buffer;
+        waiting.matchIndex = result.state.matchIndex;
 
-        // Try to match expected responses in order
-        while (waiting.matchIndex < waiting.expected.length) {
-          const expected = waiting.expected[waiting.matchIndex];
-          if (!expected.trim()) {
-            waiting.matchIndex++;
-            continue;
-          }
-          const isRegex = waiting.isRegex[waiting.matchIndex] ?? false;
-          let matched = false;
-
-          if (isRegex) {
-            try {
-              const re = new RegExp(expected);
-              const match = re.exec(waiting.receivedBuffer);
-              if (match) {
-                matched = true;
-                waiting.receivedBuffer = waiting.receivedBuffer.slice(match.index + match[0].length);
-              }
-            } catch {
-              matched = waiting.receivedBuffer.includes(expected);
-              if (matched) {
-                const idx = waiting.receivedBuffer.indexOf(expected);
-                waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
-              }
-            }
-          } else {
-            matched = waiting.receivedBuffer.includes(expected);
-            if (matched) {
-              const idx = waiting.receivedBuffer.indexOf(expected);
-              waiting.receivedBuffer = waiting.receivedBuffer.slice(idx + expected.length);
-            }
-          }
-
-          if (matched) {
-            waiting.matchIndex++;
-            const matchedIndex = waiting.matchIndex;
-            setMatchLog((prev) => {
-              const next = [{ rowId, command: "", status: "info" as const, detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
-              return next.slice(0, 100);
-            });
-          } else {
-            break;
-          }
+        for (const idx of result.matched) {
+          const expected = waiting.expected[idx];
+          const matchedIndex = idx + 1;
+          setMatchLog((prev) => {
+            const next = [{ rowId, command: "", status: "info" as const, detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
+            return next.slice(0, 100);
+          });
         }
 
         // All expected responses matched
-        if (waiting.matchIndex >= waiting.expected.length) {
+        if (result.done) {
           clearTimeout(waiting.timer);
           updatePromptRow(rowId, { status: "success" });
           waitingResponsesRef.current.delete(rowId);
           waiting.onComplete?.();
           setMatchLog((prev) => {
-            const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.expected.length} 个期望结果全部匹配成功`, received: "", expected: "" }, ...prev];
+            const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.matchMode === "any" ? "任意期望结果已匹配" : `${waiting.expected.length} 个期望结果全部匹配成功`}`, received: "", expected: "" }, ...prev];
             return next.slice(0, 100);
           });
         }
@@ -541,7 +494,7 @@ export function PromptPanel({
         }).join(" | ") || "";
         const next = [{
           rowId: row.id, command: row.command, status: "pending" as const,
-          detail: `[WAIT] 行 ${row.id}: ${row.command} → 等待 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
+          detail: `[WAIT] 行 ${row.id}: ${row.command} → ${row.matchMode === "any" ? "任意" : "全部"}匹配 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
           received: "", expected: expectedList
         }, ...prev];
         return next.slice(0, 100);
@@ -551,6 +504,7 @@ export function PromptPanel({
         rowId: row.id,
         expected: row.expectedResponses!,
         isRegex: row.expectedResponseRegex ?? row.expectedResponses!.map(() => false),
+        matchMode: row.matchMode ?? "all",
         timeout: validTimeout,
         startTime: Date.now(),
         receivedBuffer: "",
@@ -563,8 +517,7 @@ export function PromptPanel({
             const buffer = waiting.receivedBuffer;
             const next = [{
               rowId: row.id, command: row.command, status: "error" as const,
-              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
-              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
+              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
               expected: ""
             }, ...prev];
             return next.slice(0, 100);
@@ -908,18 +861,20 @@ export function PromptPanel({
                             );
                             const newResponses = row.expectedResponses || [];
                             const newRegex = row.expectedResponseRegex;
+                            const newMode = row.matchMode ?? "all";
                             if (existing >= 0) {
                               set.commands[existing] = {
                                 ...set.commands[existing],
                                 expectedResponses: newResponses,
                                 expectedResponseRegex: newRegex,
+                                matchMode: newMode,
                               };
                             } else {
                               set.commands.push({
                                 command: cmdText,
                                 expectedResponses: newResponses,
                                 expectedResponseRegex: newRegex,
-                                matchMode: "all",
+                                matchMode: newMode,
                               });
                             }
                             saveResponseSet(selectedId, set).then(() => {
@@ -1019,6 +974,7 @@ export function PromptPanel({
                       </div>
                     );
                   })}
+                  <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1033,6 +989,25 @@ export function PromptPanel({
                     <Plus size={10} />
                     {lang === "zh" ? "添加期望结果" : "Add Response"}
                   </button>
+                  {(row.expectedResponses?.filter((r) => r.trim()).length ?? 0) >= 2 && (
+                    <div className="flex items-center rounded border border-[var(--border)] overflow-hidden" title={lang === "zh" ? "多条期望结果的匹配方式" : "How multiple expectations match"}>
+                      <button
+                        type="button"
+                        onClick={() => updatePromptRow(row.id, { matchMode: "all" })}
+                        className={`px-2 py-0.5 text-theme-9 transition-colors ${(row.matchMode ?? "all") === "all" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}
+                      >
+                        {t("response_set_match_all", lang)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updatePromptRow(row.id, { matchMode: "any" })}
+                        className={`px-2 py-0.5 text-theme-9 transition-colors ${row.matchMode === "any" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}
+                      >
+                        {t("response_set_match_any", lang)}
+                      </button>
+                    </div>
+                  )}
+                  </div>
                   {/* Capture response button */}
                   <button
                     type="button"
