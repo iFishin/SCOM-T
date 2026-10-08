@@ -17,6 +17,29 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      output: {
+        // Split vendors so the app chunk stays small and unchanged deps keep a
+        // stable hash across releases. react-markdown & friends only load
+        // because HelpDialog is lazy-imported.
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          if (/node_modules\/(react-dom|react|scheduler)\//.test(id)) return "react";
+          if (
+            id.includes("react-markdown") || id.includes("remark") || id.includes("rehype") ||
+            id.includes("micromark") || id.includes("mdast") || id.includes("hast") ||
+            id.includes("unified") || id.includes("unist")
+          ) return "markdown";
+          if (id.includes("@tauri-apps")) return "tauri";
+          if (id.includes("lucide-react")) return "icons";
+          if (id.includes("js-yaml")) return "yaml";
+          if (id.includes("react-grid-layout") || id.includes("react-resizable")) return "grid";
+          return "vendor";
+        },
+      },
+    },
+  },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,

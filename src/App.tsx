@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ChevronDown, ChevronLeft, ChevronRight, Settings, Eye, Wrench, HelpCircle, FileText, Info, Cloud } from "lucide-react";
 import { GridLayout } from "react-grid-layout";
@@ -6,14 +6,10 @@ import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { AboutPanel } from "./components/settings/AboutPanel.tsx";
-import { HelpDialog } from "./components/HelpDialog.tsx";
-import { ShortcutsDialog } from "./components/ShortcutsDialog.tsx";
 import { SignalDialog } from "./components/signal/SignalDialog.tsx";
 import { TrafficDialog } from "./components/signal/TrafficDialog.tsx";
 import { HealthDialog } from "./components/signal/HealthDialog.tsx";
 import { WaveformDialog } from "./components/signal/WaveformDialog.tsx";
-import { ResponseSetPage } from "./components/ResponseSetPage.tsx";
-import { MarketplacePage } from "./components/MarketplacePage.tsx";
 import { StringGeneratorDialog, StringCheckerDialog } from "./components/tools/StringTools.tsx";
 import { CodecDialog } from "./components/tools/CodecDialog.tsx";
 import { PromptPanel } from "./components/PromptPanel.tsx";
@@ -25,7 +21,6 @@ import { SettingsModal } from "./components/SettingsModal.tsx";
 import { ContextMenu } from "./components/ui/ContextMenu.tsx";
 import { TourGuide, type TourStep } from "./components/ui/TourGuide.tsx";
 import { ToastContainer, useToast } from "./components/ui/Toast.tsx";
-import { LogViewer } from "./components/LogViewer.tsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.tsx";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useHotkeys } from "./hooks/useHotkeys.ts";
@@ -39,6 +34,15 @@ import type { SerialConfig } from "./hooks/useSerialPort.ts";
 import { SessionManager } from "./components/SessionManager.tsx";
 import type { SerialSession } from "./hooks/useSessionManager.ts";
 import type { ActiveSessionData } from "./components/SessionManager.tsx";
+
+// Code-split heavy, on-demand UI: these only load the first time they are
+// shown, keeping react-markdown / marketplace / log-viewer code out of the
+// initial bundle.
+const HelpDialog = lazy(() => import("./components/HelpDialog.tsx").then((m) => ({ default: m.HelpDialog })));
+const ShortcutsDialog = lazy(() => import("./components/ShortcutsDialog.tsx").then((m) => ({ default: m.ShortcutsDialog })));
+const ResponseSetPage = lazy(() => import("./components/ResponseSetPage.tsx").then((m) => ({ default: m.ResponseSetPage })));
+const MarketplacePage = lazy(() => import("./components/MarketplacePage.tsx").then((m) => ({ default: m.MarketplacePage })));
+const LogViewer = lazy(() => import("./components/LogViewer.tsx").then((m) => ({ default: m.LogViewer })));
 
 const DEFAULT_NOTIFICATION_URL = "https://raw.githubusercontent.com/iFishin/notifications/main/scom-t/notifications.json";
 const EMPTY_SIGNAL_STATES = { rts: false, dtr: false, cts: false, dsr: false, cd: false, ri: false };
@@ -1090,9 +1094,12 @@ function App() {
       <ErrorBoundary>
 
       {page === "responseSet" && (
-        <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
+        <Suspense fallback={null}>
+          <ResponseSetPage lang={lang} onClose={() => setPage("main")} onApply={(id) => setPendingApplyResponseSet(id)} />
+        </Suspense>
       )}
       {page === "marketplace" && (
+        <Suspense fallback={null}>
         <MarketplacePage
           lang={lang}
           serverUrl={settings.cloudServerUrl ?? ""}
@@ -1107,6 +1114,7 @@ function App() {
             pushToast(lang === "zh" ? `已应用指令配置: ${name}` : `Applied prompt config: ${name}`, "success");
           }}
         />
+        </Suspense>
       )}
       {/* 主界面始终挂载：切到配置/响应集/市场页时用 hidden 隐藏而非卸载，
           避免 SessionManager/useSerialPort 重建导致串口断开、日志清空 */}
@@ -1130,19 +1138,27 @@ function App() {
         </div>
       )}
 
-      <HelpDialog
-        open={helpOpen}
-        lang={lang}
-        helpUrl={settings.helpUrl}
-        onClose={() => setHelpOpen(false)}
-      />
+      {helpOpen && (
+        <Suspense fallback={null}>
+          <HelpDialog
+            open={helpOpen}
+            lang={lang}
+            helpUrl={settings.helpUrl}
+            onClose={() => setHelpOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <ShortcutsDialog
-        open={shortcutsOpen}
-        lang={lang}
-        hotkeys={settings.hotkeys ?? []}
-        onClose={() => setShortcutsOpen(false)}
-      />
+      {shortcutsOpen && (
+        <Suspense fallback={null}>
+          <ShortcutsDialog
+            open={shortcutsOpen}
+            lang={lang}
+            hotkeys={settings.hotkeys ?? []}
+            onClose={() => setShortcutsOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {signalOpen && (
         <SignalDialog
@@ -1201,6 +1217,7 @@ function App() {
             if (e.target === e.currentTarget) setLogViewerOpen(false);
           }}
         >
+          <Suspense fallback={null}>
           <LogViewer
             lang={lang}
             logFiles={logFiles}
@@ -1210,6 +1227,7 @@ function App() {
             onDeleteFile={handleDeleteLogFile}
             onClose={() => setLogViewerOpen(false)}
           />
+          </Suspense>
         </div>
       )}
 
