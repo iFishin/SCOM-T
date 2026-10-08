@@ -33,6 +33,16 @@ function generateId(): string {
   return `session_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Smallest "串口N" not already in use, so closing + re-adding never collides. */
+export function nextSessionName(existingNames: string[]): string {
+  const taken = new Set(existingNames);
+  for (let n = 1; n <= MAX_SESSIONS + 1; n++) {
+    const name = `串口${n}`;
+    if (!taken.has(name)) return name;
+  }
+  return `串口${existingNames.length + 1}`;
+}
+
 function loadSessions(): SerialSession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -74,10 +84,9 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
 
   function createSession() {
     if (sessions.length >= MAX_SESSIONS) return;
-    const count = sessions.length + 1;
     const newSession: SerialSession = {
       id: generateId(),
-      name: `串口${count}`,
+      name: nextSessionName(sessions.map((s) => s.name)),
       config: defaultConfig(),
     };
     const next = [...sessions, newSession];
