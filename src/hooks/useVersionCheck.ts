@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { fetchLatestVersion } from "../utils/versionCheck.ts";
+import { fetchLatestVersion, compareVersion } from "../utils/versionCheck.ts";
 
 const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours
 const LAST_CHECK_KEY = "scom_t_last_version_check";
@@ -11,17 +11,6 @@ export function useVersionCheck(currentVersion: string) {
 
   // Keep versionRef in sync with currentVersion
   versionRef.current = currentVersion;
-
-  function compareVersion(a: string, b: string): number {
-    const pa = a.split(".").map(Number);
-    const pb = b.split(".").map(Number);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-      const na = pa[i] ?? 0;
-      const nb = pb[i] ?? 0;
-      if (na !== nb) return na - nb;
-    }
-    return 0;
-  }
 
   async function checkForUpdate() {
     // Skip if version is the placeholder
