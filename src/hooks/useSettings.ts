@@ -427,9 +427,11 @@ async function loadSettingsFromFile(): Promise<AppSettings> {
       try {
         const parsed = JSON.parse(raw) as Partial<AppSettings>;
         const merged = mergeSettings(parsed);
-        // Migrate to file
-        await saveSettingsToFile(merged);
-        localStorage.removeItem(STORAGE_KEY);
+        // Migrate to file — only drop the localStorage copy once it landed,
+        // otherwise a failed write would silently discard the user's settings.
+        if (await saveSettingsToFile(merged)) {
+          localStorage.removeItem(STORAGE_KEY);
+        }
         return merged;
       } catch { /* ignore migration errors */ }
     }
@@ -437,8 +439,8 @@ async function loadSettingsFromFile(): Promise<AppSettings> {
   }
 }
 
-/** Save settings to config.yaml. */
-async function saveSettingsToFile(settings: AppSettings): Promise<void> {
+/** Save settings to config.yaml. Returns false when the write failed. */
+async function saveSettingsToFile(settings: AppSettings): Promise<boolean> {
   try {
     await ensureDir();
     const { writeTextFile } = await import("@tauri-apps/plugin-fs");
@@ -446,8 +448,10 @@ async function saveSettingsToFile(settings: AppSettings): Promise<void> {
       indent: 2, lineWidth: -1, noRefs: true, quotingType: "'",
     });
     await writeTextFile(await configPath(), yamlStr);
+    return true;
   } catch (e) {
     console.error("Failed to save settings:", e);
+    return false;
   }
 }
 
