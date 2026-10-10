@@ -5,7 +5,7 @@ import {
   serializeResponseSetDoc,
   type ResponseSet,
   type ResponseSetCommand,
-} from "./useResponseSet";
+} from "./responseSetYaml";
 
 function cmd(over: Partial<ResponseSetCommand> = {}): ResponseSetCommand {
   return {

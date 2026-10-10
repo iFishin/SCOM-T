@@ -140,6 +140,9 @@ export function SearchReplace({
     } else {
       // DOM mode
       const total = matchCount ?? 0;
+      // Guard: with no matches `(x % 0)` is NaN and would be handed to
+      // onNavigate, leaving the parent with a NaN match index.
+      if (total <= 0) return;
       const current = matchIndex ?? 0;
       const next = ((current + dir + total) % total);
       onNavigate?.(next);
@@ -176,7 +179,11 @@ export function SearchReplace({
     if (!isTextareaMode || !value || !query) return;
     const regex = buildSearchRegex(query, options);
     if (!regex) return;
-    const next = value.replace(regex, replaceVal);
+    // In literal mode the replacement must be taken verbatim — a plain string
+    // replacement would interpret `$&` / `$1` as capture references.
+    const next = options.regex
+      ? value.replace(regex, replaceVal)
+      : value.replace(regex, () => replaceVal);
     onValueChange!(next);
   }, [isTextareaMode, value, query, options, replaceVal, onValueChange]);
 
