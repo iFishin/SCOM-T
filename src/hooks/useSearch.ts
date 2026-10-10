@@ -26,6 +26,32 @@ function escapeRegex(str: string): string {
   return str.replace(SPECIAL_REGEX_CHARS, "\\$&");
 }
 
+/** Lookbehind needs WebView2 / WKWebView ≥ 13.3; probe once. */
+const SUPPORTS_LOOKBEHIND = (() => {
+  try {
+    new RegExp("(?<!\\w)x");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+/**
+ * Wrap a pattern for whole-word matching.
+ *
+ * `\b` only forms a boundary next to a word character, so a query with a
+ * non-word edge never matched: `\b\+CSQ\b` demands a word char before "+",
+ * which never holds — i.e. searching an AT command like "+CSQ" (or "25,0")
+ * with whole-word enabled found nothing. Express the real intent with a
+ * lookaround on those edges instead. Falls back to `\b` where lookbehind is
+ * unavailable.
+ */
+function wholeWordWrap(pattern: string, edgeSource: string): string {
+  const left = /^\w/.test(edgeSource) ? "\\b" : SUPPORTS_LOOKBEHIND ? "(?<!\\w)" : "";
+  const right = /\w$/.test(edgeSource) ? "\\b" : SUPPORTS_LOOKBEHIND ? "(?!\\w)" : "";
+  return `${left}${pattern}${right}`;
+}
+
 /** Build a RegExp from a query and options. Returns null on invalid regex. */
 export function buildSearchRegex(query: string, opts: SearchOptions): RegExp | null {
   if (!query) return null;
@@ -38,7 +64,7 @@ export function buildSearchRegex(query: string, opts: SearchOptions): RegExp | n
   }
 
   if (opts.wholeWord) {
-    pattern = `\\b${pattern}\\b`;
+    pattern = wholeWordWrap(pattern, query);
   }
 
   try {
