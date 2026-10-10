@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, useCallback, useMemo, useEffect } from "react";
+import { useLayoutEffect, useRef, useState, useCallback, useMemo, useEffect, memo } from "react";
 import { Search, Trash2, Eraser, ArrowDownToLine, Save, X, ChevronDown, Copy, Check, FileText, Activity, Clock, FolderOpen, Database } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Panel } from "./ui/Panel";
@@ -73,6 +73,173 @@ function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
   }
   return groups;
 }
+
+// ── Memoized row renderers ──
+// Extracted so appending a log only renders the new row: with thousands of
+// entries, re-running the inline maps below on every incoming packet stalls
+// the UI. Each row's props stay referentially stable (log objects are
+// immutable once appended), so memo skips the untouched rows.
+// Search highlighting still works because per-row highlight inputs
+// (offset / current-match range) are passed as primitive props.
+
+type Seg = ReturnType<typeof highlightText>[number];
+
+/** Render one search-highlighted payload, wiring the current match ref. */
+function renderSegments(segments: Seg[], activeMatchRef: React.RefObject<HTMLElement | null>, fallback: string) {
+  return segments.length > 0
+    ? segments.map((seg, si) =>
+        seg.current ? (
+          <mark key={si} ref={activeMatchRef} className="hl-search-current">{seg.text}</mark>
+        ) : seg.match ? (
+          <mark key={si} className="hl-search-match">{seg.text}</mark>
+        ) : (
+          <span key={si}>{seg.text}</span>
+        ),
+      )
+    : fallback;
+}
+
+type TextRowProps = {
+  log: SerialLogEntry;
+  logOffset: number;
+  searchRegex: RegExp | null;
+  curMatch: { start: number; end: number } | null;
+  activeMatchRef: React.RefObject<HTMLElement | null>;
+};
+
+const TextRow = memo(function TextRow({ log, logOffset, searchRegex, curMatch, activeMatchRef }: TextRowProps) {
+  const isReceived = log.direction === "received";
+  const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
+  const tagColor =
+    log.source === "tcp-server"
+      ? "text-amber-600"
+      : log.source === "tcp-client"
+        ? "text-violet-600"
+        : isReceived
+          ? "text-emerald-600"
+          : "text-sky-600";
+  const tag = isReceived ? "RX" : "TX";
+  const rowBg = !isReceived ? "bg-sky-50/40 dark:bg-sky-950/15" : "";
+  const payTrim = log.payload.trimStart();
+  const payTrimOffset = log.payload.length - payTrim.length;
+  const curStart = curMatch ? curMatch.start - logOffset - payTrimOffset : undefined;
+  const curEnd = curMatch ? curMatch.end - logOffset - payTrimOffset : undefined;
+  const inRange = curStart !== undefined && curEnd !== undefined && curStart >= 0 && curEnd <= payTrim.length;
+  const hlMatch = searchRegex
+    ? highlightText(payTrim, searchRegex, inRange ? curStart : undefined, inRange ? curEnd : undefined)
+    : [];
+  return (
+    <div data-seq={log.seq} className={"flex items-baseline gap-1 px-1 py-px leading-relaxed " + rowBg}>
+      <span className={`shrink-0 font-bold ${tagColor}`}>{tag}</span>
+      <span className="shrink-0 text-theme-10 text-[var(--text-muted)] opacity-60">{ts}</span>
+      <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
+        {renderSegments(hlMatch, activeMatchRef, payTrim)}
+        {log.terminator && (
+          <span className="text-[var(--text-muted)] opacity-50"> [{log.terminator}]</span>
+        )}
+      </span>
+    </div>
+  );
+});
+
+type HexRowProps = {
+  log: SerialLogEntry;
+  noDataLabel: string;
+};
+
+const HexRow = memo(function HexRow({ log, noDataLabel }: HexRowProps) {
+  const isReceived = log.direction === "received";
+  const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
+  const base = payloadToBytes(log.payload, log.mode);
+  // ASCII TX 的结尾符单独存于 terminator，这里追加进转储字节，
+  // 否则 hex 视图会丢失结尾符字节。
+  const bytes = log.terminator ? base.concat(parseHexString(log.terminator)) : base;
+  const dumpLines = formatHexDump(bytes);
+  const tagColor =
+    log.source === "tcp-server"
+      ? "text-amber-600"
+      : log.source === "tcp-client"
+        ? "text-violet-600"
+        : isReceived
+          ? "text-emerald-600"
+          : "text-sky-600";
+  const tag = isReceived ? "RX" : "TX";
+  return (
+    <div data-seq={log.seq} className="group border-b border-[var(--border)]/40 last:border-b-0">
+      <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-theme-10 text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
+        <span className={`shrink-0 font-bold ${tagColor} ${isReceived ? "" : "opacity-60"}`}>{tag}</span>
+        <span className="shrink-0">{isReceived ? "[" : "("}{ts}{isReceived ? "]" : ")"}</span>
+        {log.serverTs && <span className="opacity-60">svr:{log.serverTs}</span>}
+        <span className="opacity-50">{log.mode.toUpperCase()}</span>
+        {bytes.length > 0 && <span className="opacity-40">({bytes.length}B)</span>}
+      </div>
+      {bytes.length === 0 ? (
+        <div className="px-1 pb-1 text-theme-11 text-[var(--text-muted)] opacity-40 italic">{noDataLabel}</div>
+      ) : (
+        <div className="px-1 pb-1">
+          {dumpLines.map((line, li) => (
+            <div key={li} className="flex leading-relaxed font-mono whitespace-nowrap">
+              <span className="shrink-0 text-[var(--text-primary)]">{line.hex}</span>
+              <span className="ml-3 text-[var(--text-muted)] opacity-60">│{line.ascii}│</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+type CardRowProps = {
+  group: { entries: SerialLogEntry[]; key: string; mergedPayload: string };
+  groupOffset: number;
+  searchRegex: RegExp | null;
+  curMatch: { start: number; end: number } | null;
+  activeMatchRef: React.RefObject<HTMLElement | null>;
+};
+
+const CardRow = memo(function CardRow({ group, groupOffset, searchRegex, curMatch, activeMatchRef }: CardRowProps) {
+  const first = group.entries[0];
+  const gCurStart = curMatch ? curMatch.start - groupOffset : undefined;
+  const gCurEnd = curMatch ? curMatch.end - groupOffset : undefined;
+  const gInRange = gCurStart !== undefined && gCurEnd !== undefined
+    && gCurStart >= 0 && gCurEnd <= group.mergedPayload.length;
+  const cardSegments = searchRegex
+    ? highlightText(group.mergedPayload, searchRegex, gInRange ? gCurStart : undefined, gInRange ? gCurEnd : undefined)
+    : [];
+  return (
+    <div data-seq={group.entries.map((e) => e.seq).join(",")} className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1">
+      <div className="mb-0.5 flex items-center gap-2 text-theme-10 uppercase tracking-widest text-[var(--text-muted)]">
+        <span
+          className={`rounded px-1 py-0.5 font-bold ${
+            first.source === "tcp-server"
+              ? "bg-amber-100 text-amber-600"
+              : first.source === "tcp-client"
+                ? "bg-violet-100 text-violet-600"
+                : first.direction === "received"
+                  ? "bg-emerald-100 text-emerald-600"
+                  : "bg-sky-100 text-sky-600"
+          }`}
+        >
+          {first.direction === "received" ? "RX" : "TX"}
+        </span>
+        <span>{displayTimestamp(first.timestamp)}</span>
+        {first.serverTs && (
+          <span className="text-[var(--text-muted)] opacity-70">svr:{first.serverTs}</span>
+        )}
+        <span className="opacity-60">{first.mode.toUpperCase()}</span>
+        {group.entries.length > 1 && (
+          <span className="text-theme-9 text-[var(--text-muted)]/50">({group.entries.length} packets)</span>
+        )}
+      </div>
+      <div className="break-all whitespace-pre-wrap leading-tight text-[var(--text-primary)]">
+        {renderSegments(cardSegments, activeMatchRef, group.mergedPayload.trimStart())}
+        {first.terminator && (
+          <span className="text-[var(--text-muted)] opacity-50"> [{first.terminator}]</span>
+        )}
+      </div>
+    </div>
+  );
+});
 
 /** Format logs as text-view style string for copy / editing */
 export function formatLogsAsText(logs: SerialLogEntry[]): string {
@@ -193,6 +360,27 @@ export function ReceiveLog({
 
   // Grouped cards for display (card view only)
   const cardGroups = useMemo(() => groupAdjacentCards(logs), [logs]);
+
+  // Offset of each card group's first entry inside the full logText. Built as
+  // one pass (the previous `logs.indexOf(first)` per group was O(n·groups)).
+  const cardGroupOffsets = useMemo(() => {
+    const offsets = new Map<(typeof cardGroups)[number], number>();
+    if (cardGroups.length === 0) return offsets;
+    const indexOfLog = new Map<SerialLogEntry, number>();
+    logs.forEach((entry, i) => indexOfLog.set(entry, i));
+    for (const group of cardGroups) {
+      const idx = indexOfLog.get(group.entries[0]);
+      offsets.set(group, idx === undefined ? 0 : idx * LOG_SEPARATOR.length + payloadPrefix[idx]);
+    }
+    return offsets;
+  }, [cardGroups, logs, payloadPrefix]);
+
+  // Current search hit range, or null. Kept as a stable reference between log
+  // appends so memoized rows are not re-rendered by an unrelated keystroke.
+  const curMatch = useMemo(
+    () => (searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex] : null),
+    [searchIndex, searchMatches],
+  );
 
   const handleLogSearch = useCallback((query: string, opts: SearchOptions) => {
     setSearchQuery(query);
@@ -536,178 +724,35 @@ export function ReceiveLog({
           </div>
         ) : displayMode === "text" ? (
           <div className="space-y-0">
-            {logs.map((log, logIdx) => {
-              const isReceived = log.direction === "received";
-              const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
-              const tagColor =
-                log.source === "tcp-server"
-                  ? "text-amber-600"
-                  : log.source === "tcp-client"
-                    ? "text-violet-600"
-                    : isReceived
-                      ? "text-emerald-600"
-                      : "text-sky-600";
-              const tag = isReceived ? "RX" : "TX";
-              /** TX rows get a tinted background */
-              const rowBg = !isReceived
-                ? "bg-sky-50/40 dark:bg-sky-950/15"
-                : "";
-              const payTrim = log.payload.trimStart();
-              const payTrimOffset = log.payload.length - payTrim.length;
-              // Compute offset for current-match detection relative to this payload
-              const logOffset = logIdx * LOG_SEPARATOR.length + payloadPrefix[logIdx];
-              const curStart = searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].start - logOffset - payTrimOffset : undefined;
-              const curEnd = curStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length ? searchMatches[searchIndex].end - logOffset - payTrimOffset : undefined;
-              const inRange = curStart !== undefined && curEnd !== undefined && curStart >= 0 && curEnd <= payTrim.length;
-              const hlMatch = searchRegex ? highlightText(payTrim, searchRegex, inRange ? curStart : undefined, inRange ? curEnd : undefined) : null;
-              return (
-                <div key={log.id} data-seq={log.seq} className={"flex items-baseline gap-1 px-1 py-px leading-relaxed " + rowBg}>
-                  <span className={`shrink-0 font-bold ${tagColor}`}>
-                    {tag}
-                  </span>
-                  <span className="shrink-0 text-theme-10 text-[var(--text-muted)] opacity-60">
-                    {ts}
-                  </span>
-                  <span className="break-all whitespace-pre-wrap text-[var(--text-primary)]">
-                    {hlMatch ? hlMatch.map((seg, si) =>
-                      seg.current ? <mark key={si} ref={activeMatchRef} className="hl-search-current">{seg.text}</mark>
-                        : seg.match ? <mark key={si} className="hl-search-match">{seg.text}</mark>
-                          : <span key={si}>{seg.text}</span>
-                    ) : payTrim}
-                    {log.terminator && (
-                      <span className="text-[var(--text-muted)] opacity-50"> [{log.terminator}]</span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
+            {logs.map((log, logIdx) => (
+              <TextRow
+                key={log.id}
+                log={log}
+                logOffset={logIdx * LOG_SEPARATOR.length + payloadPrefix[logIdx]}
+                searchRegex={searchRegex}
+                curMatch={curMatch}
+                activeMatchRef={activeMatchRef}
+              />
+            ))}
           </div>
         ) : displayMode === "hex" ? (
           <div className="space-y-0">
-            {logs.map((log) => {
-              const isReceived = log.direction === "received";
-              const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
-              const base = payloadToBytes(log.payload, log.mode);
-              // ASCII TX 的结尾符单独存于 terminator，这里追加进转储字节，
-              // 否则 hex 视图会丢失结尾符字节。
-              const bytes = log.terminator ? base.concat(parseHexString(log.terminator)) : base;
-              const dumpLines = formatHexDump(bytes);
-              const tagColor =
-                log.source === "tcp-server"
-                  ? "text-amber-600"
-                  : log.source === "tcp-client"
-                    ? "text-violet-600"
-                    : isReceived
-                      ? "text-emerald-600"
-                      : "text-sky-600";
-              const tag = isReceived ? "RX" : "TX";
-              return (
-                <div key={log.id} data-seq={log.seq} className="group border-b border-[var(--border)]/40 last:border-b-0">
-                  <div className="flex items-baseline gap-2 px-1 pt-1 pb-px text-theme-10 text-[var(--text-muted)] opacity-50 group-hover:opacity-100 transition-opacity">
-                    <span className={`shrink-0 font-bold ${tagColor} ${isReceived ? "" : "opacity-60"}`}>
-                      {tag}
-                    </span>
-                    <span className="shrink-0">
-                      {isReceived ? "[" : "("}{ts}{isReceived ? "]" : ")"}
-                    </span>
-                    {log.serverTs && (
-                      <span className="opacity-60">svr:{log.serverTs}</span>
-                    )}
-                    <span className="opacity-50">{log.mode.toUpperCase()}</span>
-                    {bytes.length > 0 && (
-                      <span className="opacity-40">({bytes.length}B)</span>
-                    )}
-                  </div>
-                  {bytes.length === 0 ? (
-                    <div className="px-1 pb-1 text-theme-11 text-[var(--text-muted)] opacity-40 italic">
-                      {t("no_data", lang)}
-                    </div>
-                  ) : (
-                    <div className="px-1 pb-1">
-                      {dumpLines.map((line, li) => (
-                        <div key={li} className="flex leading-relaxed font-mono whitespace-nowrap">
-                          <span className="shrink-0 text-[var(--text-primary)]">
-                            {line.hex}
-                          </span>
-                          <span className="ml-3 text-[var(--text-muted)] opacity-60">
-                            │{line.ascii}│
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {logs.map((log) => (
+              <HexRow key={log.id} log={log} noDataLabel={t("no_data", lang)} />
+            ))}
           </div>
         ) : (
           <div className="space-y-0.5">
-            {cardGroups.map((group) => {
-              const first = group.entries[0];
-              // Compute offset of this group's mergedPayload in the full logText
-              const firstLogIdx = logs.indexOf(first);
-              const groupOffset = firstLogIdx >= 0
-                ? firstLogIdx * LOG_SEPARATOR.length + payloadPrefix[firstLogIdx]
-                : 0;
-              const gCurStart = searchIndex >= 0 && searchIndex < searchMatches.length
-                ? searchMatches[searchIndex].start - groupOffset
-                : undefined;
-              const gCurEnd = gCurStart !== undefined && searchIndex >= 0 && searchIndex < searchMatches.length
-                ? searchMatches[searchIndex].end - groupOffset
-                : undefined;
-              const gInRange = gCurStart !== undefined && gCurEnd !== undefined
-                && gCurStart >= 0 && gCurEnd <= group.mergedPayload.length;
-              const cardSegments = searchRegex
-                ? highlightText(group.mergedPayload, searchRegex, gInRange ? gCurStart : undefined, gInRange ? gCurEnd : undefined)
-                : [];
-              return (
-                <div
-                  key={group.key}
-                  data-seq={group.entries.map(e => e.seq).join(",")}
-                  className="rounded border border-[var(--border)] bg-[var(--bg-input)] px-2 py-1"
-                >
-                  <div className="mb-0.5 flex items-center gap-2 text-theme-10 uppercase tracking-widest text-[var(--text-muted)]">
-                    <span
-                      className={`rounded px-1 py-0.5 font-bold ${
-                        first.source === "tcp-server"
-                          ? "bg-amber-100 text-amber-600"
-                          : first.source === "tcp-client"
-                            ? "bg-violet-100 text-violet-600"
-                            : first.direction === "received"
-                              ? "bg-emerald-100 text-emerald-600"
-                              : "bg-sky-100 text-sky-600"
-                      }`}
-                    >
-                      {first.direction === "received" ? "RX" : "TX"}
-                    </span>
-                    <span>{displayTimestamp(first.timestamp)}</span>
-                    {first.serverTs && (
-                      <span className="text-[var(--text-muted)] opacity-70">svr:{first.serverTs}</span>
-                    )}
-                    <span className="opacity-60">{first.mode.toUpperCase()}</span>
-                    {group.entries.length > 1 && (
-                      <span className="text-theme-9 text-[var(--text-muted)]/50">({group.entries.length} packets)</span>
-                    )}
-                  </div>
-                  <div className="break-all whitespace-pre-wrap leading-tight text-[var(--text-primary)]">
-                    {cardSegments.length > 0
-                      ? cardSegments.map((seg, si) =>
-                          seg.current ? (
-                            <mark key={si} ref={activeMatchRef} className="hl-search-current">{seg.text}</mark>
-                          ) : seg.match ? (
-                            <mark key={si} className="hl-search-match">{seg.text}</mark>
-                          ) : (
-                            <span key={si}>{seg.text}</span>
-                          ),
-                        )
-                      : group.mergedPayload.trimStart()}
-                    {first.terminator && (
-                      <span className="text-[var(--text-muted)] opacity-50"> [{first.terminator}]</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {cardGroups.map((group) => (
+              <CardRow
+                key={group.key}
+                group={group}
+                groupOffset={cardGroupOffsets.get(group) ?? 0}
+                searchRegex={searchRegex}
+                curMatch={curMatch}
+                activeMatchRef={activeMatchRef}
+              />
+            ))}
           </div>
         )}
       </div>

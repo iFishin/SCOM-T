@@ -40,6 +40,55 @@ interface YamlResponseSet {
   }[];
 }
 
+/** Parse a raw (already YAML-loaded) response-set document into a ResponseSet. */
+export function parseResponseSetDoc(raw: unknown, fallbackName: string): ResponseSet | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const doc = raw as YamlResponseSet;
+  return {
+    id: fallbackName,
+    name: doc.name || fallbackName,
+    description: typeof doc.description === "string" ? doc.description : undefined,
+    commands: Array.isArray(doc.commands)
+      ? doc.commands.map((c) => {
+          const responses = Array.isArray(c.expected_responses) ? c.expected_responses.map(String) : [];
+          const regex = Array.isArray(c.expected_responses_regex) ? c.expected_responses_regex : [];
+          return {
+            command: c.command || "",
+            commandRegex: c.command_regex === true,
+            isHex: c.is_hex === true,
+            group: typeof c.group === "string" ? c.group : undefined,
+            description: typeof c.description === "string" ? c.description : undefined,
+            expectedResponses: responses,
+            expectedResponseRegex: regex.length === responses.length ? regex : undefined,
+            matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
+          };
+        }).filter((c) => c.command)
+      : [],
+  };
+}
+
+/** Serialize a ResponseSet back into its YAML text form. */
+export function serializeResponseSetDoc(set: ResponseSet): string {
+  const yamlDoc: YamlResponseSet = {
+    name: set.name,
+    description: set.description,
+    commands: set.commands.map((c) => {
+      const hasRegex = c.expectedResponseRegex?.some(Boolean);
+      return {
+        command: c.command,
+        command_regex: c.commandRegex || undefined,
+        is_hex: c.isHex || undefined,
+        group: c.group || undefined,
+        description: c.description || undefined,
+        expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
+        expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
+        match_mode: c.matchMode === "any" ? "any" : undefined,
+      };
+    }),
+  };
+  return yaml.dump(yamlDoc, { indent: 2, lineWidth: -1, noRefs: true, quotingType: "'" });
+}
+
 // ── Persistence ──
 
 const RESPONSES_SUBDIR = "SCOM-T/responses";
@@ -85,29 +134,7 @@ export function useResponseSet() {
       const dir = await ensureDir();
       const path = await join(dir, `${sanitizeFileName(name)}.yaml`);
       const text = await readTextFile(path);
-      const raw = yaml.load(text) as YamlResponseSet | null;
-      if (!raw || typeof raw !== "object") return null;
-      return {
-        id: name,
-        name: raw.name || name,
-        description: raw.description,
-        commands: Array.isArray(raw.commands)
-          ? raw.commands.map((c) => {
-              const responses = Array.isArray(c.expected_responses) ? c.expected_responses.map(String) : [];
-              const regex = Array.isArray(c.expected_responses_regex) ? c.expected_responses_regex : [];
-              return {
-                command: c.command || "",
-                commandRegex: c.command_regex === true,
-                isHex: c.is_hex === true,
-                group: typeof c.group === "string" ? c.group : undefined,
-                description: typeof c.description === "string" ? c.description : undefined,
-                expectedResponses: responses,
-                expectedResponseRegex: regex.length === responses.length ? regex : undefined,
-                matchMode: c.match_mode === "any" ? ("any" as const) : ("all" as const),
-              };
-            }).filter((c) => c.command)
-          : [],
-      };
+      return parseResponseSetDoc(yaml.load(text), name);
     } catch {
       return null;
     }
@@ -115,26 +142,8 @@ export function useResponseSet() {
 
   async function saveResponseSet(name: string, set: ResponseSet): Promise<void> {
     const dir = await ensureDir();
-    const yamlDoc: YamlResponseSet = {
-      name: set.name,
-      description: set.description,
-      commands: set.commands.map((c) => {
-        const hasRegex = c.expectedResponseRegex?.some(Boolean);
-        return {
-          command: c.command,
-          command_regex: c.commandRegex || undefined,
-          is_hex: c.isHex || undefined,
-          group: c.group || undefined,
-          description: c.description || undefined,
-          expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
-          expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
-          match_mode: c.matchMode === "any" ? "any" : undefined,
-        };
-      }),
-    };
-    const yamlText = yaml.dump(yamlDoc, { indent: 2, lineWidth: -1, noRefs: true, quotingType: "'" });
     const path = await join(dir, `${sanitizeFileName(name)}.yaml`);
-    await writeTextFile(path, yamlText);
+    await writeTextFile(path, serializeResponseSetDoc(set));
   }
 
   async function deleteResponseSet(name: string): Promise<void> {
@@ -152,45 +161,11 @@ export function useResponseSet() {
     await revealItemInDir(dir);
   }
 
-  /**
-   * Match commands from a response set against prompt rows by command name.
-   * Returns an array of updates to apply to the grid.
-   */
-  function applyToGrid(
-    responseSet: ResponseSet,
-    promptRows: { id: number; command: string }[],
-  ): { rowId: number; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] {
-    const results: { rowId: number; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] = [];
-    for (const row of promptRows) {
-      if (!row.command.trim()) continue;
-      const matched = responseSet.commands.find((c) => {
-        if (c.commandRegex) {
-          try {
-            return new RegExp(c.command).test(row.command.trim());
-          } catch {
-            return false;
-          }
-        }
-        return c.command.trim().toUpperCase() === row.command.trim().toUpperCase();
-      });
-      if (matched && matched.expectedResponses.length > 0) {
-        results.push({
-          rowId: row.id,
-          expectedResponses: [...matched.expectedResponses],
-          expectedResponseRegex: matched.expectedResponseRegex ? [...matched.expectedResponseRegex] : undefined,
-          matchMode: matched.matchMode,
-        });
-      }
-    }
-    return results;
-  }
-
   return {
     listResponseSets,
     loadResponseSet,
     saveResponseSet,
     deleteResponseSet,
     openResponseSetsDir,
-    applyToGrid,
   };
 }
