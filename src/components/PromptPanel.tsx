@@ -269,10 +269,17 @@ export function PromptPanel({
   const promptSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const promptRowsRef = useRef(promptRows);
   promptRowsRef.current = promptRows;
+  /// Which config file the rows currently in state were loaded from. Auto-save
+  /// is gated on this so the initial empty rows (or the previous file's rows)
+  /// cannot overwrite a file before it has been read.
+  const hydratedFileRef = useRef<string | null>(null);
+  /// An edit is waiting to be written (used to flush the outgoing file on switch).
+  const dirtyRef = useRef(false);
 
   // ── Load config file on startup ──
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         const { join, homeDir } = await import("@tauri-apps/api/path");
@@ -286,6 +293,7 @@ export function PromptPanel({
         }
 
         const text = await readTextFile(filePath);
+        if (cancelled) return;
         const result = parseYamlToRows(text);
         if (result.valid && result.rows.length > 0) {
           setPromptRows(result.rows);
@@ -301,9 +309,14 @@ export function PromptPanel({
           while (lastIdx >= 0 && !result.rows[lastIdx].command.trim()) lastIdx--;
           setBatchText(result.rows.slice(0, lastIdx + 1).map((r) => r.command).join("\n"));
         }
-      } catch { /* file may not exist yet */ }
+      } catch {
+        // File may not exist yet — still mark hydrated so edits get saved.
+      } finally {
+        if (!cancelled) hydratedFileRef.current = activeConfigFile;
+      }
     }
     load();
+    return () => { cancelled = true; };
   }, [activeConfigFile]);
 
   // Keep promptRows length in sync with promptRowCount
@@ -339,20 +352,40 @@ export function PromptPanel({
     } catch { /* auto-save failure is non-critical */ }
   }, []);
 
+  // Flush the file we are leaving before loading the new one. Declared ahead of
+  // the auto-save effect so its body runs first; the pending debounce timer has
+  // already been cleared by then, hence the separate dirty flag.
+  const prevConfigFileRef = useRef(activeConfigFile);
+  useEffect(() => {
+    const leaving = prevConfigFileRef.current;
+    if (leaving === activeConfigFile) return;
+    prevConfigFileRef.current = activeConfigFile;
+    if (dirtyRef.current && hydratedFileRef.current === leaving) {
+      void savePromptRows(promptRowsRef.current, leaving);
+      dirtyRef.current = false;
+    }
+    hydratedFileRef.current = null;
+  }, [activeConfigFile, savePromptRows]);
+
   useEffect(() => {
     if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
+    promptSaveTimer.current = undefined;
+    // Never write before the current file's content has been read into state.
+    if (hydratedFileRef.current !== activeConfigFile) return;
+    dirtyRef.current = true;
     promptSaveTimer.current = setTimeout(() => {
       savePromptRows(promptRowsRef.current, activeConfigFile);
+      dirtyRef.current = false;
     }, 800);
     return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
   }, [promptRows, activeConfigFile, savePromptRows]);
 
   useEffect(() => {
     function flush() {
-      if (promptSaveTimer.current) {
-        clearTimeout(promptSaveTimer.current);
-        savePromptRows(promptRowsRef.current, activeConfigFile);
-      }
+      if (!dirtyRef.current || hydratedFileRef.current !== activeConfigFile) return;
+      if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
+      void savePromptRows(promptRowsRef.current, activeConfigFile);
+      dirtyRef.current = false;
     }
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
