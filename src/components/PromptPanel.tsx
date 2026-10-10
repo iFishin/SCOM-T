@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Download, Replace, ListFilter, Slice, Save } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Replace, ListFilter, Slice, Save } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { FileSidebar } from "./config/FileSidebar.tsx";
@@ -20,8 +20,8 @@ import { feedMatcher } from "../serial/responseMatcher.ts";
 import type { MatchMode } from "../serial/responseMatcher.ts";
 import { PendingResponses } from "../serial/pendingResponses.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
-
-type PromptRowStatus = "idle" | "pending" | "success" | "error";
+import { PromptRowEditor } from "./PromptRowEditor.tsx";
+import type { PromptRow, PromptRowStatus } from "./promptRow.ts";
 
 type WaitingResponse = {
   rowId: number;
@@ -42,21 +42,6 @@ type BatchExecutionState = {
   totalLoops: number;
   currentIndex: number;
   selectedRows: PromptRow[];
-};
-
-type PromptRow = {
-  id: number;
-  selected: boolean;
-  command: string;
-  isHex: boolean;
-  ender: string;
-  interval: string;
-  device?: string;
-  note?: string;
-  expectedResponses?: string[];
-  expectedResponseRegex?: boolean[];
-  matchMode?: MatchMode;
-  status?: PromptRowStatus;
 };
 
 type PromptPanelProps = {
@@ -257,6 +242,73 @@ export function PromptPanel({
         : `Imported "${set.name}": ${plan.updates.length} updated, ${newRows.length} added`,
       "success"
     );
+  }
+
+  /** Text of the response received after the command's most recent send. */
+  function captureText(row: PromptRow): string | null {
+    const cmdUpper = row.command.trim().toUpperCase();
+    if (!cmdUpper || !logs || logs.length === 0) return null;
+    let lastSentIdx = -1;
+    for (let i = logs.length - 1; i >= 0; i--) {
+      if (logs[i].direction === "sent" && logs[i].payload.trim().toUpperCase() === cmdUpper) {
+        lastSentIdx = i;
+        break;
+      }
+    }
+    if (lastSentIdx < 0) return null;
+    const received: string[] = [];
+    for (let i = lastSentIdx + 1; i < logs.length; i++) {
+      if (logs[i].direction === "received") received.push(logs[i].payload);
+    }
+    return received.length > 0 ? received.join("\n") : null;
+  }
+
+  function captureRowResponse(row: PromptRow) {
+    const captured = captureText(row);
+    if (!captured) return;
+    const responses = [...(row.expectedResponses || []), captured];
+    const regex = row.expectedResponseRegex ? [...row.expectedResponseRegex, false] : undefined;
+    updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
+    pushToast(
+      lang === "zh" ? `已采集 ${captured.length} 字符` : `Captured ${captured.length} chars`,
+      "success"
+    );
+  }
+
+  /** Upsert this row's expectations into a response set file. */
+  function saveRowToResponseSet(responseSetId: string, row: PromptRow) {
+    const { loadResponseSet, saveResponseSet } = useResponseSet();
+    loadResponseSet(responseSetId).then((set) => {
+      if (!set) return;
+      const cmdText = row.command.trim();
+      if (!cmdText) {
+        pushToast(lang === "zh" ? "当前指令行为空，无法保存" : "Command is empty, cannot save", "warn");
+        return;
+      }
+      const existing = set.commands.findIndex(
+        (c) => c.command.trim().toUpperCase() === cmdText.toUpperCase()
+      );
+      const patch = {
+        expectedResponses: row.expectedResponses || [],
+        expectedResponseRegex: row.expectedResponseRegex,
+        matchMode: row.matchMode ?? ("all" as const),
+      };
+      if (existing >= 0) {
+        set.commands[existing] = { ...set.commands[existing], ...patch };
+      } else {
+        set.commands.push({ command: cmdText, ...patch });
+      }
+      saveResponseSet(responseSetId, set).then(() => {
+        pushToast(lang === "zh" ? `已保存到「${set.name}」` : `Saved to "${set.name}"`, "success");
+      });
+    });
+  }
+
+  function importFromResponseSet(responseSetId: string) {
+    const { loadResponseSet } = useResponseSet();
+    loadResponseSet(responseSetId).then((set) => {
+      if (set) importResponseSet(set);
+    });
   }
 
   const allSelected = promptRows.length > 0 && promptRows.every((r) => r.selected);
@@ -859,221 +911,16 @@ export function PromptPanel({
             </div>
             {/* Expanded expected responses editor */}
             {expandedRowId === row.id && (
-              <div className="border-b border-[var(--border)] bg-[var(--bg-input)] px-3 py-2">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-theme-10 font-semibold text-[var(--text-muted)]">
-                    {t("prompt_expected_responses", lang)}
-                  </label>
-                  {responseSetOptions.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          if (!selectedId) return;
-                          const { loadResponseSet, saveResponseSet } = useResponseSet();
-                          loadResponseSet(selectedId).then((set) => {
-                            if (!set) return;
-                            // Update or add the current command
-                            const cmdText = row.command.trim();
-                            if (!cmdText) {
-                              pushToast(lang === "zh" ? "当前指令行为空，无法保存" : "Command is empty, cannot save", "warn");
-                              return;
-                            }
-                            const existing = set.commands.findIndex(
-                              (c) => c.command.trim().toUpperCase() === cmdText.toUpperCase()
-                            );
-                            const newResponses = row.expectedResponses || [];
-                            const newRegex = row.expectedResponseRegex;
-                            const newMode = row.matchMode ?? "all";
-                            if (existing >= 0) {
-                              set.commands[existing] = {
-                                ...set.commands[existing],
-                                expectedResponses: newResponses,
-                                expectedResponseRegex: newRegex,
-                                matchMode: newMode,
-                              };
-                            } else {
-                              set.commands.push({
-                                command: cmdText,
-                                expectedResponses: newResponses,
-                                expectedResponseRegex: newRegex,
-                                matchMode: newMode,
-                              });
-                            }
-                            saveResponseSet(selectedId, set).then(() => {
-                              pushToast(
-                                lang === "zh"
-                                  ? `已保存到「${set.name}」`
-                                  : `Saved to "${set.name}"`,
-                                "success"
-                              );
-                            });
-                          });
-                        }}
-                        className="text-theme-10 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-muted)] max-w-[90px]"
-                      >
-                        <option value="">{lang === "zh" ? "保存到..." : "Save to..."}</option>
-                        {responseSetOptions.map((opt) => (
-                          <option key={opt.id} value={opt.id}>{opt.name}</option>
-                        ))}
-                      </select>
-                      <span className="w-px h-3 bg-[var(--border)]" />
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          if (!selectedId) return;
-                          const { loadResponseSet } = useResponseSet();
-                          loadResponseSet(selectedId).then((set) => {
-                            if (!set) return;
-                            importResponseSet(set);
-                          });
-                        }}
-                        className="text-theme-10 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[var(--text-primary)] max-w-[130px]"
-                      >
-                        <option value="">{lang === "zh" ? "从响应集导入..." : "Import from set..."}</option>
-                        {responseSetOptions.map((opt) => (
-                          <option key={opt.id} value={opt.id}>{opt.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  {(row.expectedResponses || []).map((resp, j) => {
-                    const isRegex = row.expectedResponseRegex?.[j] ?? false;
-                    return (
-                      <div key={j} className="flex items-start gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const regex = row.expectedResponseRegex
-                              ? [...row.expectedResponseRegex]
-                              : (row.expectedResponses || []).map(() => false);
-                            regex[j] = !regex[j];
-                            updatePromptRow(row.id, { expectedResponseRegex: regex });
-                          }}
-                          className={`shrink-0 mt-1 px-1.5 py-0.5 text-theme-9 font-mono rounded border transition-colors ${
-                            isRegex
-                              ? "bg-amber-100 border-amber-300 text-amber-700"
-                              : "bg-[var(--bg-primary)] border-[var(--border)] text-[var(--text-muted)]"
-                          }`}
-                          title={isRegex
-                            ? (lang === "zh" ? "正则模式" : "Regex mode")
-                            : (lang === "zh" ? "文本模式" : "Text mode")
-                          }
-                        >
-                          {isRegex ? ".*" : "Abc"}
-                        </button>
-                        <textarea
-                          value={resp}
-                          onChange={(e) => {
-                            const responses = [...(row.expectedResponses || [])];
-                            responses[j] = e.target.value;
-                            const filtered = responses.filter((r) => r.trim() !== "");
-                            updatePromptRow(row.id, { expectedResponses: filtered.length > 0 ? filtered : undefined });
-                          }}
-                          placeholder={isRegex
-                            ? (lang === "zh" ? "正则表达式" : "Regex pattern")
-                            : (lang === "zh" ? "期望响应内容" : "Expected response")
-                          }
-                          className="flex-1 text-theme-11 bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 resize-y focus:outline-none focus:border-[var(--accent)] min-h-[24px]"
-                          rows={Math.max(1, (resp.match(/\n/g)?.length || 0) + 1)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const responses = (row.expectedResponses || []).filter((_, k) => k !== j);
-                            const regex = row.expectedResponseRegex?.filter((_, k) => k !== j);
-                            updatePromptRow(row.id, {
-                              expectedResponses: responses.length > 0 ? responses : undefined,
-                              expectedResponseRegex: regex && regex.length > 0 ? regex : undefined,
-                            });
-                          }}
-                          className="text-rose-400 hover:text-rose-600 p-1 mt-1"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const responses = [...(row.expectedResponses || []), ""];
-                      const regex = row.expectedResponseRegex
-                        ? [...row.expectedResponseRegex, false]
-                        : undefined;
-                      updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
-                    }}
-                    className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)] hover:text-[var(--accent)] px-1 py-0.5"
-                  >
-                    <Plus size={10} />
-                    {lang === "zh" ? "添加期望结果" : "Add Response"}
-                  </button>
-                  {(row.expectedResponses?.filter((r) => r.trim()).length ?? 0) >= 2 && (
-                    <div className="flex items-center rounded border border-[var(--border)] overflow-hidden" title={lang === "zh" ? "多条期望结果的匹配方式" : "How multiple expectations match"}>
-                      <button
-                        type="button"
-                        onClick={() => updatePromptRow(row.id, { matchMode: "all" })}
-                        className={`px-2 py-0.5 text-theme-9 transition-colors ${(row.matchMode ?? "all") === "all" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}
-                      >
-                        {t("response_set_match_all", lang)}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updatePromptRow(row.id, { matchMode: "any" })}
-                        className={`px-2 py-0.5 text-theme-9 transition-colors ${row.matchMode === "any" ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]"}`}
-                      >
-                        {t("response_set_match_any", lang)}
-                      </button>
-                    </div>
-                  )}
-                  </div>
-                  {/* Capture response button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Find the most recent received log after the last sent matching this command
-                      if (!logs || logs.length === 0) return;
-                      const cmdUpper = row.command.trim().toUpperCase();
-                      let lastSentIdx = -1;
-                      for (let i = logs.length - 1; i >= 0; i--) {
-                        if (logs[i].direction === "sent" && logs[i].payload.trim().toUpperCase() === cmdUpper) {
-                          lastSentIdx = i;
-                          break;
-                        }
-                      }
-                      if (lastSentIdx < 0) return;
-                      // Collect all received entries after the last send
-                      const received: string[] = [];
-                      for (let i = lastSentIdx + 1; i < logs.length; i++) {
-                        if (logs[i].direction === "received") {
-                          received.push(logs[i].payload);
-                        }
-                      }
-                      if (received.length === 0) return;
-                      const captured = received.join("\n");
-                      const responses = [...(row.expectedResponses || []), captured];
-                      const regex = row.expectedResponseRegex
-                        ? [...row.expectedResponseRegex, false]
-                        : undefined;
-                      updatePromptRow(row.id, { expectedResponses: responses, expectedResponseRegex: regex });
-                      pushToast(
-                        lang === "zh" ? `已采集 ${captured.length} 字符` : `Captured ${captured.length} chars`,
-                        "success"
-                      );
-                    }}
-                    className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)] hover:text-emerald-600 px-1 py-0.5"
-                    title={lang === "zh" ? "从最近一次接收中采集实际响应" : "Capture actual response from last receive"}
-                  >
-                    <Download size={10} />
-                    {lang === "zh" ? "采集响应" : "Capture"}
-                  </button>
-                </div>
-              </div>
+              <PromptRowEditor
+                row={row}
+                lang={lang}
+                responseSetOptions={responseSetOptions}
+                canCapture={captureText(row) !== null}
+                onUpdate={(patch) => updatePromptRow(row.id, patch)}
+                onSaveToResponseSet={(id) => saveRowToResponseSet(id, row)}
+                onImportFromResponseSet={importFromResponseSet}
+                onCapture={() => captureRowResponse(row)}
+              />
             )}
           </div>
         ))}
