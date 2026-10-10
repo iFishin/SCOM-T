@@ -18,6 +18,7 @@ import type { SendMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 import type { CustomEnder } from "../hooks/useSettings.ts";
 import { feedMatcher } from "../serial/responseMatcher.ts";
 import type { MatchMode } from "../serial/responseMatcher.ts";
+import { PendingResponses } from "../serial/pendingResponses.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 
 type PromptRowStatus = "idle" | "pending" | "success" | "error";
@@ -117,7 +118,7 @@ export function PromptPanel({
   const [quickPresets, setQuickPresets] = useState<{ name: string; pattern: string; replacement: string; mode?: string; pinned?: boolean }[]>([]);
   const presetsLoaded = useRef(false);
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
-  const waitingResponsesRef = useRef<Map<number, WaitingResponse>>(new Map());
+  const waitingResponsesRef = useRef(new PendingResponses<WaitingResponse>());
   const lastProcessedLogRef = useRef<number>(-1);
   const sendingRowRef = useRef(false);
   const [batchState, setBatchState] = useState<BatchExecutionState>({
@@ -406,10 +407,8 @@ export function PromptPanel({
 
         // All expected responses matched
         if (result.done) {
-          clearTimeout(waiting.timer);
           updatePromptRow(rowId, { status: "success" });
-          waitingResponsesRef.current.delete(rowId);
-          waiting.onComplete?.();
+          waitingResponsesRef.current.clear(rowId);
           setMatchLog((prev) => {
             const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.matchMode === "any" ? "任意期望结果已匹配" : `${waiting.expected.length} 个期望结果全部匹配成功`}`, received: "", expected: "" }, ...prev];
             return next.slice(0, 100);
@@ -465,33 +464,16 @@ export function PromptPanel({
         updatePromptRow(row.id, { status: "success" });
       }
     } catch (error) {
-      // Remove any pending response wait so it does not linger or false-mark success
-      clearPendingResponse(row.id);
+      // Drop the pending wait so it does not linger or false-mark success
+      waitingResponsesRef.current.clear(row.id);
       updatePromptRow(row.id, { status: "error" });
     } finally {
       sendingRowRef.current = false;
     }
   }
 
-  /**
-   * Drop a row's pending response wait (timer + map entry) and settle its
-   * promise. Used when a send fails so the stale waiter cannot keep consuming
-   * later received data and flip an already-failed row back to success.
-   */
-  function clearPendingResponse(rowId: number) {
-    const existing = waitingResponsesRef.current.get(rowId);
-    if (!existing) return;
-    clearTimeout(existing.timer);
-    waitingResponsesRef.current.delete(rowId);
-    existing.onComplete?.();
-  }
-
   function waitForResponse(row: PromptRow): Promise<void> {
     return new Promise((resolve) => {
-      // Clear existing timer for this row
-      const existing = waitingResponsesRef.current.get(row.id);
-      if (existing) clearTimeout(existing.timer);
-
       const timeout = row.interval ? parseInt(row.interval, 10) : 5000;
       const validTimeout = isNaN(timeout) || timeout < 100 ? 5000 : timeout;
 
@@ -518,19 +500,19 @@ export function PromptPanel({
         receivedBuffer: "",
         matchIndex: 0,
         timer: setTimeout(() => {
-          // Timeout — mark as error
+          // Timeout — mark as error, then drop + settle this wait.
           updatePromptRow(row.id, { status: "error" });
-          waitingResponsesRef.current.delete(row.id);
           setMatchLog((prev) => {
             const buffer = waiting.receivedBuffer;
             const next = [{
               rowId: row.id, command: row.command, status: "error" as const,
-              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
+              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
+              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
               expected: ""
             }, ...prev];
             return next.slice(0, 100);
           });
-          resolve();
+          waitingResponsesRef.current.clear(row.id);
         }, validTimeout),
         onComplete: resolve,
       };
@@ -559,7 +541,7 @@ export function PromptPanel({
     } catch (error) {
       // Same cleanup as the single-send path: a dangling waiter would keep
       // matching later traffic and could flip this failed row back to success.
-      clearPendingResponse(row.id);
+      waitingResponsesRef.current.clear(row.id);
       updatePromptRow(row.id, { status: "error" });
     }
   }
@@ -602,10 +584,8 @@ export function PromptPanel({
   function stopBatchExecution() {
     batchAbortRef.current = true;
 
-    waitingResponsesRef.current.forEach((waiting) => {
-      clearTimeout(waiting.timer);
-    });
-    waitingResponsesRef.current.clear();
+    // Settles every in-flight wait so the batch loop's `await` unblocks.
+    waitingResponsesRef.current.clearAll();
 
     // Interrupted mid-wait — the pending row's status won't resolve on its own, reset it.
     setPromptRows(current => current.map(row => (
