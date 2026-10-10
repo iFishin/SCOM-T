@@ -3,6 +3,25 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import type { SerialLogEntry } from "./useSerialPort";
 
+/**
+ * Upper bound on entries buffered while the log file cannot be written.
+ * The queue is only drained by successful writes, so a persistently failing
+ * path (disk full, deleted directory) would otherwise grow without bound.
+ */
+const MAX_PENDING_ENTRIES = 20_000;
+
+/**
+ * Append to a queue that is only drained by successful writes, dropping the
+ * oldest entries past `max`. Returns how many were dropped.
+ */
+export function enqueueCapped<T>(queue: T[], entry: T, max: number): number {
+  queue.push(entry);
+  if (queue.length <= max) return 0;
+  const dropped = queue.length - max;
+  queue.splice(0, dropped);
+  return dropped;
+}
+
 function formatLogEntry(log: SerialLogEntry): string {
   const dir = log.direction === "received" ? "RX" : "TX";
   const ts = log.timestamp.replace(/^\[|\]$/g, "");
@@ -29,6 +48,7 @@ export function useLogFile(options?: {
   const pendingRef = useRef<SerialLogEntry[]>([]);
   const activeWriteRef = useRef<Promise<boolean> | null>(null);
   const logCountRef = useRef(0);
+  const pendingOverflowWarnedRef = useRef(false);
   const onStateChangeRef = useRef(options?.onStateChange);
   onStateChangeRef.current = options?.onStateChange;
 
@@ -54,7 +74,17 @@ export function useLogFile(options?: {
   /** Receive every ordered log event before UI retention/clearing is applied. */
   const enqueueLog = useCallback((entry: SerialLogEntry) => {
     if (!savePathRef.current) return;
-    pendingRef.current.push(entry);
+    // The queue is only drained by successful writes. If the target path keeps
+    // failing (disk full, revoked permission, deleted directory) it would grow
+    // without bound, so keep the newest and drop the oldest past the cap.
+    const dropped = enqueueCapped(pendingRef.current, entry, MAX_PENDING_ENTRIES);
+    if (dropped > 0 && !pendingOverflowWarnedRef.current) {
+      pendingOverflowWarnedRef.current = true;
+      console.warn(
+        `Log file queue exceeded ${MAX_PENDING_ENTRIES} entries; dropping oldest. ` +
+        `Check that the log path is writable (${savePathRef.current}).`,
+      );
+    }
   }, []);
 
   /** Compatibility no-op: persistence now consumes the uncapped event stream. */
@@ -79,6 +109,8 @@ export function useLogFile(options?: {
         if (text) await invoke("append_to_file", { path, content: text });
         pendingRef.current.splice(0, batch.length);
         logCountRef.current += batch.length;
+        // Writing works again — let a future stall warn afresh.
+        pendingOverflowWarnedRef.current = false;
         return true;
       } catch (err) {
         console.error("Log write failed:", err);
