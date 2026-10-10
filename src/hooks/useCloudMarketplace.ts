@@ -1,5 +1,6 @@
 import yaml from "js-yaml";
-import type { ResponseSet, ResponseSetCommand } from "./useResponseSet";
+import { parseResponseSetDoc, serializeResponseSetDoc } from "../utils/responseSetYaml";
+import type { ResponseSet } from "../utils/responseSetYaml";
 import { serializeToYaml, parseYamlToRows, type PromptRow } from "../utils/yamlConfig";
 
 // ── Types ──
@@ -38,7 +39,7 @@ const MAX_COMMANDS = 500;
 
 // ── Validation ──
 
-function validateResponseSetPayload(id: string, text: string): ValidationResult {
+export function validateResponseSetPayload(id: string, text: string): ValidationResult {
   let raw: unknown;
   try {
     raw = yaml.load(text);
@@ -59,59 +60,13 @@ function validateResponseSetPayload(id: string, text: string): ValidationResult 
     return { valid: false, error: `Too many commands (max ${MAX_COMMANDS})` };
   }
 
-  const commands: ResponseSetCommand[] = [];
-  for (const raw of obj.commands) {
-    if (!raw || typeof raw !== "object") continue;
-    const c = raw as Record<string, unknown>;
-    if (typeof c.command !== "string" || !c.command.trim()) continue;
-    const responses = Array.isArray(c.expected_responses)
-      ? c.expected_responses.filter((r) => typeof r === "string")
-      : [];
-    const regex = Array.isArray(c.expected_responses_regex)
-      ? c.expected_responses_regex.filter((r) => typeof r === "boolean")
-      : [];
-    commands.push({
-      command: c.command,
-      commandRegex: c.command_regex === true,
-      isHex: c.is_hex === true,
-      group: typeof c.group === "string" ? c.group : undefined,
-      description: typeof c.description === "string" ? c.description : undefined,
-      expectedResponses: responses,
-      expectedResponseRegex: regex.length === responses.length ? regex : undefined,
-      matchMode: c.match_mode === "any" ? "any" : "all",
-    });
+  // Delegate the field mapping to the shared parser so the marketplace and the
+  // on-disk store can never drift apart.
+  const set = parseResponseSetDoc(obj, id);
+  if (!set) {
+    return { valid: false, error: "Malformed payload" };
   }
-
-  return {
-    valid: true,
-    set: {
-      id,
-      name: obj.name,
-      description: typeof obj.description === "string" ? obj.description : undefined,
-      commands,
-    },
-  };
-}
-
-function responseSetToYaml(set: ResponseSet): string {
-  const doc = {
-    name: set.name,
-    description: set.description,
-    commands: set.commands.map((c) => {
-      const hasRegex = c.expectedResponseRegex?.some(Boolean);
-      return {
-        command: c.command,
-        command_regex: c.commandRegex || undefined,
-        is_hex: c.isHex || undefined,
-        group: c.group || undefined,
-        description: c.description || undefined,
-        expected_responses: c.expectedResponses.length > 0 ? c.expectedResponses : undefined,
-        expected_responses_regex: hasRegex ? c.expectedResponseRegex : undefined,
-        match_mode: c.matchMode === "any" ? "any" : undefined,
-      };
-    }),
-  };
-  return yaml.dump(doc, { indent: 2, lineWidth: -1, noRefs: true, quotingType: "'" });
+  return { valid: true, set: { ...set, id, name: obj.name } };
 }
 
 function authHeaders(authToken?: string): Record<string, string> {
@@ -204,7 +159,7 @@ export function useCloudMarketplace() {
     const description = type === "response_set" ? (content as ResponseSet).description : undefined;
     const payload =
       type === "response_set"
-        ? responseSetToYaml(content as ResponseSet)
+        ? serializeResponseSetDoc(content as ResponseSet)
         : type === "prompt_config"
           ? serializeToYaml(content as PromptRow[])
           : (content as string);
