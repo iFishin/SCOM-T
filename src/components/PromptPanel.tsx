@@ -466,16 +466,24 @@ export function PromptPanel({
       }
     } catch (error) {
       // Remove any pending response wait so it does not linger or false-mark success
-      const existing = waitingResponsesRef.current.get(row.id);
-      if (existing) {
-        clearTimeout(existing.timer);
-        waitingResponsesRef.current.delete(row.id);
-        existing.onComplete?.();
-      }
+      clearPendingResponse(row.id);
       updatePromptRow(row.id, { status: "error" });
     } finally {
       sendingRowRef.current = false;
     }
+  }
+
+  /**
+   * Drop a row's pending response wait (timer + map entry) and settle its
+   * promise. Used when a send fails so the stale waiter cannot keep consuming
+   * later received data and flip an already-failed row back to success.
+   */
+  function clearPendingResponse(rowId: number) {
+    const existing = waitingResponsesRef.current.get(rowId);
+    if (!existing) return;
+    clearTimeout(existing.timer);
+    waitingResponsesRef.current.delete(rowId);
+    existing.onComplete?.();
   }
 
   function waitForResponse(row: PromptRow): Promise<void> {
@@ -549,6 +557,9 @@ export function PromptPanel({
         updatePromptRow(row.id, { status: "success" });
       }
     } catch (error) {
+      // Same cleanup as the single-send path: a dangling waiter would keep
+      // matching later traffic and could flip this failed row back to success.
+      clearPendingResponse(row.id);
       updatePromptRow(row.id, { status: "error" });
     }
   }
