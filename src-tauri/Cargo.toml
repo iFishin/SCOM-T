@@ -27,6 +27,11 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tokio = { version = "1.52.3", features = ["net", "sync", "io-util", "time", "macros"] }
 bytes = "1"
+
+# 单实例互斥体是 Windows 专有实现（CreateMutexA），所以依赖也要挂在
+# cfg(windows) 下 —— 早先无条件声明，macOS / Linux 上会白拉一个用不到的 crate，
+# 交叉编译时还会因为 features 不存在而报错。
+[target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [profile.release]

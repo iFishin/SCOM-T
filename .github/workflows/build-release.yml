@@ -1,72 +1,260 @@
 name: Build and Release
 
+# 打一个 `v` 开头的 tag 就出四个平台安装包；也可以在 Actions 页面手动跑一次
+# （手动跑只编译 + 传 artifact，不发版，用来验证配置）。
+#
+# 为什么必须是多台 runner 而不是一台机器：**Tauri 不能交叉编译**。macOS 的
+# `.app` / `.dmg` 只能在 macOS 上打，Windows 的 `-setup.exe` 只能在 Windows 上打，
+# Linux 的 `.deb` / `.AppImage` 只能在 Linux 上打。所以「一次出多平台安装包」唯一
+# 的路子是矩阵：每个平台各跑一台，产物汇到同一个 Release 里。
+#
+# 分平台产物由 `src-tauri/tauri.{macos,windows,linux}.conf.json` 决定，不再把
+# targets 写死在主配置里 —— 这样 `npm run tauri build` 在本地各平台也是对的。
+#
+# 现在**没有代码签名**：macOS 首次打开会被 Gatekeeper 拦，Windows 会被 SmartScreen
+# 拦一道。绕法写在 `.github/release-body.md` 里，那份说明会被塞进发布页，用户看得到。
+# 以后拿到证书，在「构建」那一步前面补 codesign / notarytool / signtool 即可，其余不用动。
+
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+# 同一个 tag 重跑时取消上一次，避免两套产物同时往一个 Release 里灌
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
+  # 先把发布建出来，**只跑一次**。
+  #
+  # 这一步单独拆出来：四个构建 job 并行跑，如果每个都去「没有就建一个」，两个 job
+  # 几乎同时完成时就会双双建出草稿，同一个 tag 下出现两份发布、各挂一半产物。
+  # 把「创建」挪到矩阵外面，竞争就不存在。
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+      tag: ${{ steps.create.outputs.tag }}
+      version: ${{ steps.create.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 校验版本并创建/复用发布
+        id: create
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # 版本号只认 tauri.conf.json —— 应用里显示的版本、包文件名都来自它
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" != "push" ]; then
+            # 手动触发：只编译验证，不建发布
+            echo "手动触发，跳过发布创建（仅产出 artifact）"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "release_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          tag="${{ github.ref_name }}"
+          # tag 和配置里的版本对不上，说明有人忘了 bump 或者打错了 tag。
+          # 这时候发出去的东西版本号是错的，宁可早失败。
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::tag ($tag) 与 tauri.conf.json 的版本 (v$version) 不一致，请先执行 npm run bump:* 再打 tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "复用已有发布 $tag（重跑 workflow 会走这里）"
+          else
+            # **先建草稿**：四个平台并行上传，中途有一个挂了，草稿不会被用户看到。
+            # 全部成功后由最后的 summary job 转正。想改成「打完就发」，
+            # 把 --draft 去掉、并删掉最后那步 gh release edit 即可。
+            gh release create "$tag" \
+              --draft \
+              --title "SCOM-T $version" \
+              --notes-file .github/release-body.md \
+              --verify-tag
+            echo "新建草稿发布 $tag"
+          fi
+          id=$(gh release view "$tag" --json databaseId --jq .databaseId)
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: create-release
+    # 建 Release、传产物都要写权限。仓库设置里 Actions 的 Workflow permissions
+    # 默认是 read，job 级这一段会覆盖它 —— 不加就报 "Resource not accessible by integration"。
+    permissions:
+      contents: write
+    timeout-minutes: 90
+
+    strategy:
+      # 一个平台挂了也让别的跑完 —— 想知道的是「哪几个平台有问题」
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon 和 Intel 各打一份：一份 dmg 盖不住两种架构。
+          # x86_64 那行在 arm64 runner 上是交叉编译，靠 rust-toolchain 那步装目标。
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            label: macOS-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows-x64
+          # **钉 22.04 而不是 ubuntu-latest**：产物的 glibc 下限跟着构建机走，在
+          # 24.04 上打出来的包装到 22.04 上会起不来（GLIBC_2.39 not found），
+          # 而 22.04 上打出来的在更新的发行版上照样跑。这是一条不能"顺手升级"的版本号。
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: Linux-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: 安装前端依赖
+        run: npm ci
+
+      # 发版前先跑一遍单测。测试挂了就不该发 —— 这一步是阻断的。
+      - name: 跑单测
+        run: npm test
+
+      # Tauri 打 dmg 走的是 `bundle_dmg.sh`，那个脚本要 `create-dmg` 这个第三方
+      # 命令行工具。GitHub 的 macos 镜像里**碰巧**装了它，但那是镜像的实现细节，
+      # 不是我们声明过的依赖 —— 镜像一升级就可能没掉，而失败时报的是
+      # `error running bundle_dmg.sh`，看不出缺的是哪个工具。
+      - name: 装 create-dmg（打 dmg 用）
+        if: runner.os == 'macOS'
+        run: brew install create-dmg
+
+      # Linux 上要一堆**系统库**，没有一个是 npm / cargo 能带进来的：
+      # webkit2gtk 是 WebView 本体，ayatana-appindicator 是托盘，librsvg 用来渲染
+      # 图标，libudev 是 serialport（串口枚举）的编译期依赖，patchelf 是打 AppImage
+      # 时改 rpath 用的。少一个的表现是构建到一半报一个和缺的库看不出关系的错
+      # （比如 pkg-config 找不到 webkit2gtk）。
+      - name: 装 Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            libudev-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            wget
+
+      # 直接调 tauri build 而不是用 tauri-action：产物命名、portable 包、失败定位
+      # 都更可控，也不需要它替我们猜「往哪个 release 传」。
+      # 分平台打哪些包由 tauri.*.conf.json 决定，这里只指定架构。
+      - name: 构建（${{ matrix.target }}）
+        run: npm run tauri -- build --target ${{ matrix.target }}
+
+      - name: 收集产物
+        shell: bash
+        env:
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          rel="src-tauri/target/${{ matrix.target }}/release"
+          # **不能用 dist/** —— 那是 vite 的前端输出目录，`dist/*` 会把
+          # index.html、assets/ 一起当成安装包传上去。独立一个暂存目录。
+          rm -rf ci-artifacts && mkdir -p ci-artifacts
+          case "${{ runner.os }}" in
+            macOS)
+              cp "$rel"/bundle/dmg/*.dmg ci-artifacts/
+              ;;
+            Windows)
+              cp "$rel"/bundle/nsis/*.exe ci-artifacts/
+              # 免安装版：解压即用，不写注册表、不建开始菜单项
+              cp "$rel/SCOM-T.exe" "ci-artifacts/SCOM-T_${VERSION}_x64_portable.exe"
+              ;;
+            Linux)
+              cp "$rel"/bundle/deb/*.deb ci-artifacts/
+              cp "$rel"/bundle/appimage/*.AppImage ci-artifacts/
+              ;;
+          esac
+          ls -lh ci-artifacts
+
+      - name: 校验产物齐全
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(find ci-artifacts -maxdepth 1 -type f | wc -l | tr -d ' ')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::没有产出任何安装包，检查 tauri.*.conf.json 的 bundle.targets"
+            exit 1
+          fi
+          echo "共 $count 个产物"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SCOM-T-${{ matrix.target }}
+          path: ci-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 上传到 Release
+        if: needs.create-release.outputs.release_id != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" ci-artifacts/* --clobber
+
+  # 收尾：全部平台成功才把草稿转正，否则保持草稿并让整条流水线红掉
+  summary:
+    name: Summary
+    needs: [create-release, build]
+    if: always()
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install frontend dependencies
-        run: npm install
-
-      - name: Build frontend
-        run: npm run build
-
-      - name: Build Tauri app
-        run: npm run tauri build
-
-      - name: Locate and verify portable exe
-        shell: pwsh
+      - name: 检查矩阵结果
         run: |
-          $exe = "src-tauri\target\release\SCOM-T.exe"
-          if (Test-Path $exe) {
-            Copy-Item $exe "src-tauri\target\release\SCOM-T-portable.exe"
-            Write-Host "Portable exe created: $(Get-Item 'src-tauri\target\release\SCOM-T-portable.exe' | Select-Object Length)"
-          } else {
-            # Try alternate name (Tauri 2 fallback)
-            $alt = Get-ChildItem "src-tauri\target\release\*.exe" | Where-Object { $_.Name -notlike "*setup*" } | Select-Object -First 1
-            if ($alt) {
-              Copy-Item $alt.FullName "src-tauri\target\release\SCOM-T-portable.exe"
-              Write-Host "Found alternate exe: $($alt.Name)"
-            } else {
-              Write-Error "No release exe found!"
-              exit 1
-            }
-          }
+          echo "构建结果：${{ needs.build.result }}"
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "::error::有平台构建失败，发布保持草稿状态，见矩阵里对应的 job"
+            exit 1
+          fi
+          echo "全部平台构建成功"
 
-      - name: List build output
-        shell: pwsh
+      - name: 草稿转正
+        if: needs.create-release.outputs.release_id != '' && needs.build.result == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          Write-Host "=== Bundle ==="
-          Get-ChildItem -Recurse "src-tauri\target\release\bundle\" | Select-Object FullName, Length
-          Write-Host "=== Portable ==="
-          Get-ChildItem "src-tauri\target\release\SCOM-T-portable.exe" | Select-Object FullName, Length
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/SCOM-T-portable.exe
-
-
-
-
-
+          gh release edit "${{ needs.create-release.outputs.tag }}" --draft=false
+          echo "已发布：${{ needs.create-release.outputs.tag }}"

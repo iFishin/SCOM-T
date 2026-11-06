@@ -28,9 +28,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Serial / AT command debugging tool",
+    "longDescription": "SCOM-T is a serial port and AT command debugging tool with multi-session support, TCP client/server, YAML response sets and batch execution.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -39,6 +40,9 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"
