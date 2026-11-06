@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -7,6 +7,7 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['**/*.test.ts', '**/*.test.tsx'],
+    exclude: [...configDefaults.exclude, '**/._*'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
