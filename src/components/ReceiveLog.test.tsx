@@ -105,4 +105,14 @@ describe("ReceiveLog rendering", () => {
     const html = render("hex", logs);
     expect(html.match(/data-seq=/g)).toHaveLength(2);
   });
+
+  it("keeps the large-log rendering hooks without changing row markup (#43)", () => {
+    const html = render("text", [entry({ id: "a", seq: 1, payload: "OK" })]);
+    // CSS hooks for skipping off-screen rows must survive refactors, and the
+    // search flag stays off until a hit is active (jump-to-match needs real rects).
+    expect(html).toContain("log-rows");
+    expect(html).toContain("log-rows__list");
+    expect(html).not.toContain("data-log-searching");
+    expect(html).toContain('data-seq="1"');
+  });
 });

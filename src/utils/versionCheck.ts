@@ -12,6 +12,19 @@ const REPO = "iFishin/SCOM-T";
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RAW_VERSION_URL = `https://raw.githubusercontent.com/${REPO}/main/VERSION`;
 
+const FETCH_TIMEOUT_MS = 5000;
+
+/** fetch() has no default timeout; an unreachable host must not hang the check. */
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type LatestVersionResult = { version: string } | { error: string };
 
 function cleanVersion(v: unknown): string {
@@ -24,16 +37,19 @@ function cleanVersion(v: unknown): string {
  * and "0.3.10" is correctly newer than "0.3.9" (not lexicographic).
  */
 export function compareVersion(a: string, b: string): number {
-  const pa = cleanVersion(a).split(".").map(Number);
-  const pb = cleanVersion(b).split(".").map(Number);
+  // Keep the raw segments for the non-numeric fallback: pa/pb are Number()'d,
+  // so comparing them would degrade every pre-release suffix to "NaN".
+  const sa = cleanVersion(a).split(".");
+  const sb = cleanVersion(b).split(".");
+  const pa = sa.map(Number);
+  const pb = sb.map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const na = pa[i] ?? 0;
     const nb = pb[i] ?? 0;
     if (Number.isNaN(na) || Number.isNaN(nb)) {
-      // Non-numeric segment: fall back to string comparison of that segment.
-      const sa = String(pa[i] ?? "");
-      const sb = String(pb[i] ?? "");
-      if (sa !== sb) return sa < sb ? -1 : 1;
+      const left = sa[i] ?? "";
+      const right = sb[i] ?? "";
+      if (left !== right) return left < right ? -1 : 1;
     } else if (na !== nb) {
       return na - nb;
     }
@@ -44,7 +60,7 @@ export function compareVersion(a: string, b: string): number {
 export async function fetchLatestVersion(): Promise<LatestVersionResult> {
   // 1) GitHub API releases/latest
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetchWithTimeout(API_URL, {
       headers: {
         "User-Agent": "SCOM-T",
         Accept: "application/vnd.github+json",
@@ -62,7 +78,7 @@ export async function fetchLatestVersion(): Promise<LatestVersionResult> {
 
   // 2) raw VERSION 文件（仓库根，发布时更新为 release 版本；不限 API 配额）
   try {
-    const res = await fetch(RAW_VERSION_URL, {
+    const res = await fetchWithTimeout(RAW_VERSION_URL, {
       headers: { "User-Agent": "SCOM-T" },
     });
     if (res.ok) {

@@ -21,7 +21,8 @@ import type { MatchMode } from "../serial/responseMatcher.ts";
 import { PendingResponses } from "../serial/pendingResponses.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 import { PromptRowEditor } from "./PromptRowEditor.tsx";
-import { DEFAULT_RESPONSE_TIMEOUT_MS, DEFAULT_LOOP_INTERVAL_MS, parseIntervalMs, resolveLoopGap } from "./promptRow.ts";
+import { DEFAULT_RESPONSE_TIMEOUT_MS, DEFAULT_LOOP_INTERVAL_MS, parseIntervalMs } from "./promptRow.ts";
+import { runBatchLoop } from "./batchLoop.ts";
 import type { PromptRow, PromptRowStatus } from "./promptRow.ts";
 
 type WaitingResponse = {
@@ -680,30 +681,22 @@ export function PromptPanel({
       selectedRows: selected,
     });
 
-    for (let loop = 0; loop < totalLoops; loop++) {
-      if (batchAbortRef.current) break;
-
-      setBatchState(prev => ({ ...prev, currentLoop: loop + 1 }));
-
-      for (let i = 0; i < selected.length; i++) {
-        if (batchAbortRef.current) break;
-
-        setBatchState(prev => ({ ...prev, currentIndex: i }));
-        const startedAt = Date.now();
-        await executeSingleCommand(selected[i]);
-        if (batchAbortRef.current) break;
-
-        // `interval` (per-row) and `loopInterval` (global, default 3000ms) are
-        // real send gaps, not merely match timeouts. A row leaving its own box
-        // blank falls back to the default; a filled box overrides it. Already
-        // elapsed time is subtracted so a matched row is not delayed twice.
-        // Skip the trailing gap after the very last send so the Stop button
-        // reverts to Start right away instead of lingering for one extra gap.
-        const isLast = loop === totalLoops - 1 && i === selected.length - 1;
-        const remaining = resolveLoopGap(selected[i].interval, loopInterval, Date.now() - startedAt);
-        if (!isLast && remaining > 0) await waitForBatchDelay(remaining);
-      }
-    }
+    await runBatchLoop({
+      intervals: selected.map(r => r.interval),
+      totalLoops,
+      loopInterval,
+      now: () => Date.now(),
+      send: (i) => executeSingleCommand(selected[i]),
+      delay: (ms) => waitForBatchDelay(ms),
+      isAborted: () => batchAbortRef.current,
+      onStep: (loop, i) => {
+        setBatchState(prev => ({
+          ...prev,
+          currentLoop: i === 0 ? loop + 1 : prev.currentLoop,
+          currentIndex: i,
+        }));
+      },
+    });
 
     batchDelayWakeRef.current = null;
     resetBatchState();

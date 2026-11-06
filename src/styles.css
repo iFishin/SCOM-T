@@ -528,3 +528,15 @@ textarea.font-mono.text-transparent::selection {
   border-top: 1px solid var(--border);
   margin: 1em 0;
 }
+
+/* ── Large-log rendering (issue #43) ───────────────────────────────
+   Thousands of rows can stay mounted at high baud rates. Let the browser skip
+   layout/paint for off-screen rows. While a search hit is active the container
+   carries data-log-searching and the optimisation is disabled: jump-to-match
+   measures real element rects, and estimated intrinsic sizes would skew
+   scrollTop. Progressive enhancement — browsers without content-visibility
+   simply render as before. */
+.log-rows:not([data-log-searching]) .log-rows__list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 22px;
+}

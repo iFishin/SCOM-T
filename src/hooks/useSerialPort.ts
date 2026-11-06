@@ -250,10 +250,18 @@ export function useSerialPort({
       setSignalStates({ cts: false, dsr: false, cd: false, ri: false });
       return;
     }
+    // readSignals() can outlast the 500ms tick on a slow/unresponsive port.
+    // Never stack requests, and ignore late results after disconnect/unmount.
+    let inFlight = false;
+    let disposed = false;
     const interval = setInterval(async () => {
+      if (inFlight || disposed) return;
       const svc = serialRef.current;
-      if (svc) {
+      if (!svc) return;
+      inFlight = true;
+      try {
         const states = await svc.readSignals();
+        if (disposed) return;
         setSignalStates(states);
         // Record history snapshot with RTS/DTR from current config
         const cfg = configRef.current;
@@ -267,9 +275,16 @@ export function useSerialPort({
           signalHistoryRef.current =
             signalHistoryRef.current.slice(-MAX_SIGNAL_HISTORY);
         }
+      } catch {
+        // A transient read failure must not kill the polling loop or reject unhandled.
+      } finally {
+        inFlight = false;
       }
     }, 500);
-    return () => clearInterval(interval);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+    };
   }, [isConnected, config.connectionType, config.rts, config.dtr]);
 
   // ── Latency history (keep last 60 values) ──

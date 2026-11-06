@@ -270,6 +270,12 @@ SCOM-T 使用全新的 YAML 配置格式，不兼容旧版 SCOM（Python）。�
 
 ---
 
+## 开发约定
+
+外置盘 / exFAT 开发注意事项、CI 门禁、代码签名取舍与发版流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+---
+
 ## 许可证
 
 MIT License. 详见 [LICENSE](LICENSE) 文件。
