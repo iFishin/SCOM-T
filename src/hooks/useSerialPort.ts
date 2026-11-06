@@ -4,6 +4,7 @@ import {
   bytesToAscii,
   bytesToHex,
   formatTimestamp,
+  Utf8ByteDecoder,
 } from "../utils/hexConverter.ts";
 import { encodeSendPayload } from "../utils/sendPayload.ts";
 import { enderStringToBytes } from "../utils/enderOptions.ts";
@@ -382,6 +383,7 @@ export function useSerialPort({
               direction: "received",
               mode: "hex",
               payload: bytesToHex(bytes),
+              rawBytes: [...bytes],
               complete: true,
               journalSeqStart: rxEvent.seq,
               journalSeqEnd: rxEvent.seq,
@@ -413,6 +415,9 @@ export function useSerialPort({
   function getTcpClient(): ITcpClientService {
     if (!tcpClientRef.current) {
       const svc = new TauriTcpClientService();
+      // A TCP chunk may end in the middle of a UTF-8 character; the decoder
+      // keeps the dangling bytes so they are not turned into replacement chars.
+      const decoder = new Utf8ByteDecoder();
 
       svc.onData((data: Uint8Array) => {
         const bytes = Array.from(data);
@@ -420,16 +425,19 @@ export function useSerialPort({
         const formatted =
           receiveModeRef.current === "hex"
             ? bytesToHex(bytes)
-            : bytesToAscii(bytes);
+            : decoder.decode(bytes);
 
         // Try to parse the server timestamp prefix from the data
         const TS_RE = /^\[(\d{2}:\d{2}:\d{2}\.\d{3})\]\s/;
         let serverTs: string | undefined;
         let displayPayload = formatted;
+        let payloadBytes = bytes;
         const tsMatch = formatted.match(TS_RE);
         if (tsMatch) {
           serverTs = tsMatch[1];
           displayPayload = formatted.slice(tsMatch[0].length);
+          // The prefix is plain ASCII, so one character maps to one wire byte.
+          payloadBytes = bytes.slice(tsMatch[0].length);
         }
 
         appendLog({
@@ -437,6 +445,7 @@ export function useSerialPort({
           source: "tcp-client",
           mode: receiveModeRef.current,
           payload: displayPayload,
+          rawBytes: [...payloadBytes],
           serverTs,
         });
 
@@ -460,6 +469,7 @@ export function useSerialPort({
       });
 
       svc.onDisconnected((reason: string) => {
+        decoder.reset();
         setTcpConnectionStatus("disconnected");
         setIsConnected(false);
         setConnectedPort(null);
@@ -477,6 +487,7 @@ export function useSerialPort({
   function getTcpServer(): ITcpServerService {
     if (!tcpServerRef.current) {
       const svc = new TauriTcpServerService();
+      const decoder = new Utf8ByteDecoder();
 
       svc.onData((_clientId: string, data: Uint8Array) => {
         const bytes = Array.from(data);
@@ -484,7 +495,7 @@ export function useSerialPort({
         const formatted =
           receiveModeRef.current === "hex"
             ? bytesToHex(bytes)
-            : bytesToAscii(bytes);
+            : decoder.decode(bytes);
 
         // Forward data to serial port through the same FIFO lifecycle path.
         const s = serialRef.current;
@@ -1064,6 +1075,8 @@ export function useSerialPort({
               // 与 sendData 一致：日志只显示命令本身，结尾符以字节追加到线上，
               // 单独存 terminator 供显示为 [0D 0A]。
               : value,
+          // rawBytes 已包含结尾符，hex 视图据此无损还原线上字节。
+          rawBytes: [...bytes],
           ...(sendMode === "ascii" && termBytes.length > 0
             ? { terminator: bytesToHex(termBytes) }
             : {}),

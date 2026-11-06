@@ -54,8 +54,32 @@ describe("ReceiveLog rendering", () => {
   it("hex mode: renders a dump with byte count", () => {
     const logs = [entry({ id: "h", seq: 1, payload: "OK", mode: "ascii" })];
     const html = render("hex", logs);
-    expect(html).toContain("4f 4b");
+    expect(html).toContain("4F 4B");
     expect(html).toContain("(2B)");
+    expect(html).toContain("00000000");
+  });
+
+  it("hex mode: prefers rawBytes over the decoded payload (#36)", () => {
+    // QCOM reports AA 55 01 00 00 FB AC. TextDecoder used to turn every
+    // invalid byte into U+FFFD, which then re-encoded as EF BF BD.
+    const logs = [entry({
+      id: "raw", seq: 1, payload: "\uFFFD U \uFFFD", mode: "ascii",
+      rawBytes: [0xaa, 0x55, 0x01, 0x00, 0x00, 0xfb, 0xac],
+    })];
+    const html = render("hex", logs);
+    expect(html).toContain("AA 55 01 00 00 FB AC");
+    expect(html).toContain("(7B)");
+    expect(html).not.toContain("EF BF BD");
+  });
+
+  it("hex mode: rawBytes containing the terminator are not duplicated", () => {
+    const logs = [entry({
+      id: "term", seq: 1, direction: "sent", payload: "AT", mode: "ascii",
+      terminator: "0D 0A", rawBytes: [0x41, 0x54, 0x0d, 0x0a],
+    })];
+    const html = render("hex", logs);
+    expect(html).toContain("(4B)");
+    expect(html).not.toContain("(6B)");
   });
 
   it("card mode: merges adjacent RX entries sharing timestamp/source/mode", () => {

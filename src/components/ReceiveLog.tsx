@@ -142,6 +142,8 @@ const TextRow = memo(function TextRow({ log, logOffset, searchRegex, curMatch, a
   );
 });
 
+const HEX_DUMP_MAX_BYTES = 2048;
+
 type HexRowProps = {
   log: SerialLogEntry;
   noDataLabel: string;
@@ -150,11 +152,17 @@ type HexRowProps = {
 const HexRow = memo(function HexRow({ log, noDataLabel }: HexRowProps) {
   const isReceived = log.direction === "received";
   const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
-  const base = payloadToBytes(log.payload, log.mode);
-  // ASCII TX 的结尾符单独存于 terminator，这里追加进转储字节，
-  // 否则 hex 视图会丢失结尾符字节。
-  const bytes = log.terminator ? base.concat(parseHexString(log.terminator)) : base;
-  const dumpLines = formatHexDump(bytes);
+  // 真实字节优先。payload 是解码后的文本，用它反推字节会把非法字节
+  // （如 0xAA）膨胀成 EF BF BD，与设备实际发出的字节不符（#36 / #37）。
+  const hasRawBytes = Array.isArray(log.rawBytes) && log.rawBytes.length > 0;
+  const base = hasRawBytes ? [...log.rawBytes!] : payloadToBytes(log.payload, log.mode);
+  // 只有无 rawBytes 的旧日志才需要补结尾符：onDispatch 记录的 rawBytes
+  // 已经包含结尾符字节，重复追加会多出一组 CRLF。
+  const bytes = !hasRawBytes && log.terminator
+    ? base.concat(parseHexString(log.terminator))
+    : base;
+  const dumpLines = formatHexDump(bytes, HEX_DUMP_MAX_BYTES);
+  const truncated = bytes.length > HEX_DUMP_MAX_BYTES;
   const tagColor =
     log.source === "tcp-server"
       ? "text-amber-600"
@@ -179,10 +187,16 @@ const HexRow = memo(function HexRow({ log, noDataLabel }: HexRowProps) {
         <div className="px-1 pb-1">
           {dumpLines.map((line, li) => (
             <div key={li} className="flex leading-relaxed font-mono whitespace-nowrap">
-              <span className="shrink-0 text-[var(--text-primary)]">{line.hex}</span>
+              <span className="shrink-0 text-[var(--text-muted)] opacity-50">{line.offset}</span>
+              <span className="ml-3 shrink-0 text-[var(--text-primary)]">{line.hex}</span>
               <span className="ml-3 text-[var(--text-muted)] opacity-60">│{line.ascii}│</span>
             </div>
           ))}
+          {truncated && (
+            <div className="text-theme-11 text-[var(--text-muted)] opacity-60">
+              …仅显示前 {HEX_DUMP_MAX_BYTES} 字节
+            </div>
+          )}
         </div>
       )}
     </div>
