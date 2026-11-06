@@ -9,7 +9,7 @@ import {
 } from "tauri-plugin-serialplugin-api";
 import type { SerialConfig, PortSummary } from "./types.ts";
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
-import { normalizePluginPayload } from "../utils/hexConverter.ts";
+import { normalizePluginPayload, parseHexString } from "../utils/hexConverter.ts";
 import { appLogger } from "../utils/appLogger.ts";
 import type { SerialTransport } from "./FakeSerialTransport.ts";
 
@@ -455,25 +455,35 @@ export class MockSerialService implements ISerialService {
   private dataCallback: ((data: Uint8Array) => void) | null = null;
   private disconnectCallback: (() => void) | null = null;
   private responseDelay = 100;
-  private allResponses: Record<string, string> = { ...BUILTIN_MOCK_RESPONSES };
+  /** Response spec per command. `hex` responses are raw bytes, not text. */
+  private allResponses: Record<string, { text: string; hex: boolean }> = {};
 
   constructor(config?: MockSerialConfig) {
+    this.allResponses = MockSerialService.builtinResponses();
     if (config) {
       this.configure(config);
     }
+  }
+
+  private static builtinResponses(): Record<string, { text: string; hex: boolean }> {
+    const map: Record<string, { text: string; hex: boolean }> = {};
+    for (const [cmd, text] of Object.entries(BUILTIN_MOCK_RESPONSES)) {
+      map[cmd] = { text, hex: false };
+    }
+    return map;
   }
 
   configure(config: MockSerialConfig): void {
     this.responseDelay = config.responseDelay;
 
     // Start with built-in responses
-    this.allResponses = { ...BUILTIN_MOCK_RESPONSES };
+    this.allResponses = MockSerialService.builtinResponses();
 
     // Add custom responses (enabled ones override built-in)
     if (config.customResponses) {
       for (const r of config.customResponses) {
         if (r.enabled && r.command) {
-          this.allResponses[r.command.toUpperCase()] = r.response;
+          this.allResponses[r.command.toUpperCase()] = { text: r.response, hex: r.hex === true };
         }
       }
     }
@@ -518,19 +528,34 @@ export class MockSerialService implements ISerialService {
 
     // Find matching response (custom responses take priority)
     // Sort by key length descending so longer/more specific commands match first
-    let response = "OK";
+    let spec: { text: string; hex: boolean } = { text: "OK", hex: false };
     const sortedKeys = Object.keys(this.allResponses).sort((a, b) => b.length - a.length);
     for (const key of sortedKeys) {
       if (cmd.toUpperCase().startsWith(key)) {
-        response = this.allResponses[key];
+        spec = this.allResponses[key];
         break;
       }
+    }
+
+    // HEX responses go out verbatim (no CRLF appended) so a simulated firmware
+    // frame like "AA 55 01 00 00 FB AC" comes back byte-for-byte. Text responses
+    // are always valid UTF-8 — that is exactly why the mock used to be unable to
+    // reproduce binary-stream bugs.
+    let responseBytes: Uint8Array;
+    if (spec.hex) {
+      try {
+        responseBytes = Uint8Array.from(parseHexString(spec.text));
+      } catch (err) {
+        appLogger.warn("Mock", `Invalid HEX mock response for "${cmd}": ${(err as Error).message}`);
+        responseBytes = new TextEncoder().encode("ERROR");
+      }
+    } else {
+      responseBytes = new TextEncoder().encode(spec.text + "\r\n");
     }
 
     // Simulate delay and send response
     setTimeout(() => {
       if (this.dataCallback && this._isOpen) {
-        const responseBytes = new TextEncoder().encode(response + "\r\n");
         this.dataCallback(responseBytes);
       }
     }, this.responseDelay);

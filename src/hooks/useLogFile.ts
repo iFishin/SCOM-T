@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import type { SerialLogEntry } from "./useSerialPort";
+import { bytesToAscii, bytesToHex } from "../utils/hexConverter";
 
 /**
  * Upper bound on entries buffered while the log file cannot be written.
@@ -22,11 +23,15 @@ export function enqueueCapped<T>(queue: T[], entry: T, max: number): number {
   return dropped;
 }
 
-function formatLogEntry(log: SerialLogEntry): string {
+export function formatLogEntry(log: SerialLogEntry): string {
   const dir = log.direction === "received" ? "RX" : "TX";
   const ts = log.timestamp.replace(/^\[|\]$/g, "");
-  const rawPayload = log.rawBytes
-    ? new TextDecoder().decode(new Uint8Array(log.rawBytes))
+  // Same rule as the on-screen hex view: hex entries are written as hex text,
+  // ascii entries are decoded losslessly. Never TextDecoder here — invalid
+  // bytes (0xAA / 0xFB …) would become U+FFFD and the .log file would contain
+  // "?" instead of the real traffic (#36 / #37).
+  const rawPayload = log.rawBytes && log.rawBytes.length > 0
+    ? (log.mode === "hex" ? bytesToHex(log.rawBytes) : bytesToAscii(log.rawBytes))
     : log.payload;
   // Drop trailing CR/LF so the formatter's own newline doesn't produce bare
   // empty lines in the file. Whitespace/newline-only chunks are skipped entirely.

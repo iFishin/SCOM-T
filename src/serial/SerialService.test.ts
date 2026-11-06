@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TauriSerialService } from "./SerialService.ts";
+import { MockSerialService, TauriSerialService } from "./SerialService.ts";
 import { FakeSerialTransport } from "./FakeSerialTransport.ts";
 import type { SerialConfig } from "./types.ts";
 
@@ -135,5 +135,55 @@ describe("TauriSerialService", () => {
 
     expect(order).toEqual(["d1", "c1", "d2", "c2", "d3", "c3", "d4", "c4", "d5", "c5"]);
     await service.dispose();
+  });
+});
+
+describe("MockSerialService", () => {
+  function makeMock(responses: { command: string; response: string; hex?: boolean }[]) {
+    const service = new MockSerialService({
+      enabled: true,
+      responseDelay: 0,
+      customResponses: responses.map((r, i) => ({
+        id: `m${i}`,
+        enabled: true,
+        ...r,
+      })),
+    });
+    const received: number[][] = [];
+    service.onData((data) => received.push(Array.from(data)));
+    return { service, received };
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+  it("sends a HEX response verbatim, with no appended CRLF", async () => {
+    const { service, received } = makeMock([
+      { command: "AT+FWREAD", response: "AA 55 01 00 00 FB AC", hex: true },
+    ]);
+    await service.open({ path: "MOCK", baudRate: 115200 } as SerialConfig);
+    await service.sendBinary([...new TextEncoder().encode("AT+FWREAD\r\n")]);
+    await settle();
+
+    // This is the byte sequence from issue #36 — the mock could not produce it
+    // before, because text responses are always valid UTF-8.
+    expect(received).toEqual([[0xaa, 0x55, 0x01, 0x00, 0x00, 0xfb, 0xac]]);
+  });
+
+  it("still appends CRLF to text responses", async () => {
+    const { service, received } = makeMock([{ command: "AT+CSQ", response: "+CSQ: 25,0\n\nOK" }]);
+    await service.open({ path: "MOCK", baudRate: 115200 } as SerialConfig);
+    await service.sendBinary([...new TextEncoder().encode("AT+CSQ\r\n")]);
+    await settle();
+
+    expect(new TextDecoder().decode(Uint8Array.from(received[0]))).toBe("+CSQ: 25,0\n\nOK\r\n");
+  });
+
+  it("falls back to an ERROR frame when the HEX value is malformed", async () => {
+    const { service, received } = makeMock([{ command: "AT+BAD", response: "AA 5", hex: true }]);
+    await service.open({ path: "MOCK", baudRate: 115200 } as SerialConfig);
+    await service.sendBinary([...new TextEncoder().encode("AT+BAD\r\n")]);
+    await settle();
+
+    expect(new TextDecoder().decode(Uint8Array.from(received[0]))).toBe("ERROR");
   });
 });

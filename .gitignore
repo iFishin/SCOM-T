@@ -34,6 +34,9 @@ coverage/
 # Windows / macOS
 .DS_Store
 Thumbs.db
+# AppleDouble metadata emitted on non-APFS volumes (exFAT / network drives).
+# These are binary stubs, not sources — vitest would try to parse them.
+._*
 
 # Editor directories and files
 .idea/

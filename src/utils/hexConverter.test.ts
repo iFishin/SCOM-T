@@ -9,6 +9,7 @@ import {
   displayTimestamp,
   setTimestampFormat,
   payloadToBytes,
+  Utf8ByteDecoder,
 } from "./hexConverter";
 
 describe("parseHexString", () => {
@@ -50,6 +51,54 @@ describe("payloadToBytes", () => {
   });
   it("returns [] for invalid hex instead of throwing", () => {
     expect(payloadToBytes("nope", "hex")).toEqual([]);
+  });
+});
+
+describe("lossless byte/text mapping (issue #36 / #37)", () => {
+  it("never emits U+FFFD for invalid bytes", () => {
+    const text = bytesToAscii([0xaa, 0x55, 0x01, 0x00, 0x00, 0xfb, 0xac]);
+    expect(text).not.toContain("\uFFFD");
+    expect(text).toBe("\\xAAU\\x01\\x00\\x00\\xFB\\xAC");
+  });
+
+  it("decodes valid UTF-8 including Chinese", () => {
+    expect(bytesToAscii([0xe4, 0xb8, 0xad, 0x57, 0x6f, 0x6e])).toBe("中Won");
+  });
+
+  it("round-trips arbitrary bytes through payloadToBytes", () => {
+    const bytes = [0xaa, 0x55, 0x01, 0x00, 0x00, 0xfb, 0xac, 0x41, 0x0d, 0x0a];
+    expect(payloadToBytes(bytesToAscii(bytes), "ascii")).toEqual(bytes);
+  });
+
+  it("keeps a literal backslash unambiguous", () => {
+    const bytes = [0x5c, 0x78, 0x41, 0x41, 0xff];
+    expect(payloadToBytes(bytesToAscii(bytes), "ascii")).toEqual(bytes);
+  });
+
+  it("is a true inverse for every single byte value", () => {
+    const all = Array.from({ length: 256 }, (_, i) => i);
+    for (const b of all) {
+      expect(payloadToBytes(bytesToAscii([b]), "ascii"), `byte 0x${b.toString(16)}`).toEqual([b]);
+    }
+  });
+
+  it("keeps multi-byte UTF-8 intact instead of folding to Latin-1", () => {
+    // "é" comes from C3 A9; a lone 0xE9 is invalid UTF-8 and must stay escaped.
+    expect(payloadToBytes(bytesToAscii([0xc3, 0xa9]), "ascii")).toEqual([0xc3, 0xa9]);
+    expect(bytesToAscii([0xe9])).toBe("\\xE9");
+    expect(payloadToBytes("中😀", "ascii")).toEqual([0xe4, 0xb8, 0xad, 0xf0, 0x9f, 0x98, 0x80]);
+  });
+
+  it("Utf8ByteDecoder joins a character split across chunks", () => {
+    const decoder = new Utf8ByteDecoder();
+    expect(decoder.decode([0xe4, 0xb8])).toBe("");
+    expect(decoder.decode([0xad, 0x4f, 0x4b])).toBe("中OK");
+  });
+
+  it("Utf8ByteDecoder flushes dangling bytes as escapes", () => {
+    const decoder = new Utf8ByteDecoder();
+    decoder.decode([0xe4, 0xb8]);
+    expect(decoder.flush()).toBe("\\xE4\\xB8");
   });
 });
 

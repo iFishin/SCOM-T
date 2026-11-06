@@ -285,10 +285,15 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
   const [isEditing, setIsEditing] = useState(false);
   const [editCommand, setEditCommand] = useState(response.command);
   const [editResponse, setEditResponse] = useState(response.response);
+  const [editHex, setEditHex] = useState(response.hex === true);
 
   function handleSave() {
     if (editCommand.trim() && editResponse.trim()) {
-      onUpdate({ command: editCommand.trim(), response: editResponse.trim() });
+      onUpdate({
+        command: editCommand.trim(),
+        response: editResponse.trim(),
+        hex: editHex,
+      });
       setIsEditing(false);
     }
   }
@@ -296,6 +301,7 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
   function handleCancel() {
     setEditCommand(response.command);
     setEditResponse(response.response);
+    setEditHex(response.hex === true);
     setIsEditing(false);
   }
 
@@ -312,10 +318,28 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
         <textarea
           value={editResponse}
           onChange={(e) => setEditResponse(e.target.value)}
-          placeholder={lang === "zh" ? "响应内容（支持多行）" : "Response (supports multiple lines)"}
-          className="w-full text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          placeholder={
+            editHex
+              ? (lang === "zh" ? "原始字节，例如 AA 55 01 00 00 FB AC" : "Raw bytes, e.g. AA 55 01 00 00 FB AC")
+              : (lang === "zh" ? "响应内容（支持多行）" : "Response (supports multiple lines)")
+          }
+          className={`w-full text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)] ${editHex ? "font-mono" : ""}`}
           rows={3}
         />
+        <label className="flex items-center gap-1.5 text-theme-10 text-[var(--text-muted)]">
+          <input
+            type="checkbox"
+            checked={editHex}
+            onChange={(e) => setEditHex(e.target.checked)}
+            className="rounded"
+          />
+          HEX
+          <span className="opacity-60">
+            {lang === "zh"
+              ? "按原始字节发送（不追加换行），用于固件/二进制流"
+              : "Send as raw bytes (no newline appended), for firmware/binary streams"}
+          </span>
+        </label>
         <div className="flex justify-end gap-2">
           <Button
             type="button"
@@ -346,8 +370,15 @@ function EditableResponseItem({ response, lang, onUpdate, onRemove }: EditableRe
         className="rounded mt-1"
       />
       <div className="flex-1 min-w-0">
-        <div className="font-mono text-xs text-[var(--text-primary)]">{response.command}</div>
-        <div className="text-theme-10 text-[var(--text-muted)] whitespace-pre-wrap break-all max-h-16 overflow-y-auto">
+        <div className="font-mono text-xs text-[var(--text-primary)]">
+          {response.command}
+          {response.hex && (
+            <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-theme-10 font-sans font-bold text-amber-700">
+              HEX
+            </span>
+          )}
+        </div>
+        <div className={`text-theme-10 text-[var(--text-muted)] whitespace-pre-wrap break-all max-h-16 overflow-y-auto ${response.hex ? "font-mono" : ""}`}>
           {response.response}
         </div>
       </div>

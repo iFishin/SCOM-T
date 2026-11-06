@@ -21,6 +21,7 @@ import type { MatchMode } from "../serial/responseMatcher.ts";
 import { PendingResponses } from "../serial/pendingResponses.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 import { PromptRowEditor } from "./PromptRowEditor.tsx";
+import { DEFAULT_RESPONSE_TIMEOUT_MS, parseIntervalMs } from "./promptRow.ts";
 import type { PromptRow, PromptRowStatus } from "./promptRow.ts";
 
 type WaitingResponse = {
@@ -115,6 +116,8 @@ export function PromptPanel({
   });
   const [totalLoops, setTotalLoops] = useState(1);
   const batchAbortRef = useRef<boolean>(false);
+  /** Resolves the in-flight per-row delay immediately when the user stops. */
+  const batchDelayWakeRef = useRef<(() => void) | null>(null);
   const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
   const responseSetOptionsLoaded = useRef(false);
   const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "info" | "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
@@ -246,11 +249,15 @@ export function PromptPanel({
 
   /** Text of the response received after the command's most recent send. */
   function captureText(row: PromptRow): string | null {
-    const cmdUpper = row.command.trim().toUpperCase();
-    if (!cmdUpper || !logs || logs.length === 0) return null;
+    // This runs during render (canCapture), so every field must be defensive:
+    // the log buffer is flushed in batches and may briefly contain holes.
+    const cmdUpper = (row?.command ?? "").trim().toUpperCase();
+    if (!cmdUpper || !Array.isArray(logs) || logs.length === 0) return null;
     let lastSentIdx = -1;
     for (let i = logs.length - 1; i >= 0; i--) {
-      if (logs[i].direction === "sent" && logs[i].payload.trim().toUpperCase() === cmdUpper) {
+      const entry = logs[i];
+      if (!entry) continue;
+      if (entry.direction === "sent" && (entry.payload ?? "").trim().toUpperCase() === cmdUpper) {
         lastSentIdx = i;
         break;
       }
@@ -258,7 +265,8 @@ export function PromptPanel({
     if (lastSentIdx < 0) return null;
     const received: string[] = [];
     for (let i = lastSentIdx + 1; i < logs.length; i++) {
-      if (logs[i].direction === "received") received.push(logs[i].payload);
+      const entry = logs[i];
+      if (entry?.direction === "received") received.push(entry.payload ?? "");
     }
     return received.length > 0 ? received.join("\n") : null;
   }
@@ -522,7 +530,9 @@ export function PromptPanel({
   }
 
   function updatePromptRow(id: number, patch: Partial<PromptRow>) {
-    setPromptRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setPromptRows((current) => current.map((row) => (
+      row && row.id === id ? { ...row, ...patch } : row
+    )));
   }
 
   function toggleExpandRow(id: number) {
@@ -559,8 +569,11 @@ export function PromptPanel({
 
   function waitForResponse(row: PromptRow): Promise<void> {
     return new Promise((resolve) => {
-      const timeout = row.interval ? parseInt(row.interval, 10) : 5000;
-      const validTimeout = isNaN(timeout) || timeout < 100 ? 5000 : timeout;
+      const validTimeout = Math.max(
+        1,
+        parseIntervalMs(row.interval, DEFAULT_RESPONSE_TIMEOUT_MS),
+      );
+      const expectedCount = row.expectedResponses?.length ?? 0;
 
       setMatchLog((prev) => {
         const expectedList = row.expectedResponses?.map((r, i) => {
@@ -569,7 +582,7 @@ export function PromptPanel({
         }).join(" | ") || "";
         const next = [{
           rowId: row.id, command: row.command, status: "pending" as const,
-          detail: `[WAIT] 行 ${row.id}: ${row.command} → ${row.matchMode === "any" ? "任意" : "全部"}匹配 ${waiting.expected.length} 个期望结果 (${validTimeout}ms)`,
+          detail: `[WAIT] 行 ${row.id}: ${row.command} → ${row.matchMode === "any" ? "任意" : "全部"}匹配 ${expectedCount} 个期望结果 (${validTimeout}ms)`,
           received: "", expected: expectedList
         }, ...prev];
         return next.slice(0, 100);
@@ -631,6 +644,21 @@ export function PromptPanel({
     }
   }
 
+  /** Interruptible sleep for the per-row gap; stopBatchExecution wakes it. */
+  function waitForBatchDelay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        batchDelayWakeRef.current = null;
+        resolve();
+      }, ms);
+      batchDelayWakeRef.current = () => {
+        clearTimeout(timer);
+        batchDelayWakeRef.current = null;
+        resolve();
+      };
+    });
+  }
+
   async function startBatchExecution() {
     const selected = promptRows
       .filter(r => r.selected && r.command.trim())
@@ -659,15 +687,26 @@ export function PromptPanel({
         if (batchAbortRef.current) break;
 
         setBatchState(prev => ({ ...prev, currentIndex: i }));
+        const startedAt = Date.now();
         await executeSingleCommand(selected[i]);
+        if (batchAbortRef.current) break;
+
+        // `interval` is a real send gap, not merely a match timeout. Subtract
+        // time already spent waiting for a response so a matched row is not
+        // delayed twice.
+        const gapMs = parseIntervalMs(selected[i].interval);
+        const remaining = gapMs - (Date.now() - startedAt);
+        if (remaining > 0) await waitForBatchDelay(remaining);
       }
     }
 
+    batchDelayWakeRef.current = null;
     resetBatchState();
   }
 
   function stopBatchExecution() {
     batchAbortRef.current = true;
+    batchDelayWakeRef.current?.();
 
     // Settles every in-flight wait so the batch loop's `await` unblocks.
     waitingResponsesRef.current.clearAll();
