@@ -14,10 +14,14 @@ const RAW_VERSION_URL = `https://raw.githubusercontent.com/${REPO}/main/VERSION`
 
 const FETCH_TIMEOUT_MS = 5000;
 
-/** fetch() has no default timeout; an unreachable host must not hang the check. */
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+/**
+ * fetch() has no default timeout. `timeoutMs` is the *remaining* part of a
+ * shared deadline, so the API attempt and the raw fallback cannot add up to
+ * 2 x 5s when the host is unreachable.
+ */
+async function fetchWithTimeout(url: string, timeoutMs: number, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -58,9 +62,14 @@ export function compareVersion(a: string, b: string): number {
 }
 
 export async function fetchLatestVersion(): Promise<LatestVersionResult> {
+  // One 5s budget shared by both attempts: an offline "check for updates"
+  // must settle in ~5s, not 5s (API) + 5s (raw fallback).
+  const deadline = Date.now() + FETCH_TIMEOUT_MS;
+  const remaining = () => Math.max(1, deadline - Date.now());
+
   // 1) GitHub API releases/latest
   try {
-    const res = await fetchWithTimeout(API_URL, {
+    const res = await fetchWithTimeout(API_URL, remaining(), {
       headers: {
         "User-Agent": "SCOM-T",
         Accept: "application/vnd.github+json",
@@ -78,7 +87,7 @@ export async function fetchLatestVersion(): Promise<LatestVersionResult> {
 
   // 2) raw VERSION 文件（仓库根，发布时更新为 release 版本；不限 API 配额）
   try {
-    const res = await fetchWithTimeout(RAW_VERSION_URL, {
+    const res = await fetchWithTimeout(RAW_VERSION_URL, remaining(), {
       headers: { "User-Agent": "SCOM-T" },
     });
     if (res.ok) {

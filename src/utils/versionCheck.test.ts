@@ -43,18 +43,27 @@ describe("fetchLatestVersion", () => {
     vi.unstubAllGlobals();
   });
 
-  it("gives up instead of hanging when the network never responds", async () => {
+  it("gives up within ~5s instead of hanging when the network never responds", async () => {
     vi.useFakeTimers();
+    const calls: number[] = [];
     // A request that never settles until its AbortSignal fires.
-    const hangingFetch = (_url: string, init?: RequestInit) =>
-      new Promise<Response>((_resolve, reject) => {
+    const hangingFetch = (_url: string, init?: RequestInit) => {
+      calls.push(Date.now());
+      return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
       });
+    };
     vi.stubGlobal("fetch", hangingFetch);
 
     const pending = fetchLatestVersion();
-    await vi.advanceTimersByTimeAsync(11_000); // two attempts, 5s each
+    await vi.advanceTimersByTimeAsync(5_100);
     const result = await pending;
     expect("error" in result).toBe(true);
+
+    // The API attempt and the raw fallback share ONE 5s deadline: the second
+    // starts when the first budget expires, so the check settles in ~5s rather
+    // than 5s + 5s.
+    expect(calls).toHaveLength(2);
+    expect(calls[1] - calls[0]).toBeLessThanOrEqual(5_000);
   });
 });
