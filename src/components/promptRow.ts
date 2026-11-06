@@ -44,3 +44,26 @@ export function parseIntervalMs(raw: string | undefined, fallback = 0): number {
   if (!Number.isFinite(ms) || ms < 0) return fallback;
   return Math.min(Math.round(ms), MAX_INTERVAL_MS);
 }
+
+/**
+ * Inter-send gap the batch loop should actually pause *after* a row.
+ *
+ * `loopInterval` is the global loop-gap box (a default that applies to every
+ * row); `perRowInterval` is the per-row box. A row that leaves its own box
+ * blank falls back to the global/default gap; a row that fills it in overrides
+ * the default with its own value. Already-elapsed time (sending + waiting for a
+ * response) is subtracted so a matched row is never delayed twice. Never
+ * negative.
+ */
+export const DEFAULT_LOOP_INTERVAL_MS = 3000;
+
+export function resolveLoopGap(
+  perRowInterval: string | undefined,
+  loopInterval: string | undefined,
+  elapsedMs: number,
+): number {
+  const perRow = parseIntervalMs(perRowInterval);
+  const gapMs = perRow > 0 ? perRow : parseIntervalMs(loopInterval);
+  const remaining = gapMs - elapsedMs;
+  return remaining > 0 ? remaining : 0;
+}
