@@ -78,6 +78,13 @@ export type MockResponse = {
   command: string;
   response: string;
   enabled: boolean;
+  /**
+   * Treat `response` as raw HEX bytes (e.g. "AA 55 01 00") instead of UTF-8
+   * text. Needed to simulate binary/firmware streams: a text response is always
+   * valid UTF-8, so it can never produce bytes like 0xAA / 0xFB.
+   * HEX responses are sent verbatim — no trailing CRLF is appended.
+   */
+  hex?: boolean;
 };
 
 export type MockSerialConfig = {
@@ -361,6 +368,7 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             command: r.command || "",
             response: r.response || "",
             enabled: r.enabled !== false,
+            hex: r.hex === true,
           })).filter(r => r.command) : [],
     } : { enabled: false, responseDelay: 100, customResponses: [] },
     customEnders: Array.isArray(raw.customEnders)
