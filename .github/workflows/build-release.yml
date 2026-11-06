@@ -188,28 +188,30 @@ jobs:
         run: |
           set -euo pipefail
           rel="src-tauri/target/${{ matrix.target }}/release"
-          mkdir -p dist
+          # **不能用 dist/** —— 那是 vite 的前端输出目录，`dist/*` 会把
+          # index.html、assets/ 一起当成安装包传上去。独立一个暂存目录。
+          rm -rf ci-artifacts && mkdir -p ci-artifacts
           case "${{ runner.os }}" in
             macOS)
-              cp "$rel"/bundle/dmg/*.dmg dist/
+              cp "$rel"/bundle/dmg/*.dmg ci-artifacts/
               ;;
             Windows)
-              cp "$rel"/bundle/nsis/*.exe dist/
+              cp "$rel"/bundle/nsis/*.exe ci-artifacts/
               # 免安装版：解压即用，不写注册表、不建开始菜单项
-              cp "$rel/SCOM-T.exe" "dist/SCOM-T_${VERSION}_x64_portable.exe"
+              cp "$rel/SCOM-T.exe" "ci-artifacts/SCOM-T_${VERSION}_x64_portable.exe"
               ;;
             Linux)
-              cp "$rel"/bundle/deb/*.deb dist/
-              cp "$rel"/bundle/appimage/*.AppImage dist/
+              cp "$rel"/bundle/deb/*.deb ci-artifacts/
+              cp "$rel"/bundle/appimage/*.AppImage ci-artifacts/
               ;;
           esac
-          ls -lh dist
+          ls -lh ci-artifacts
 
       - name: 校验产物齐全
         shell: bash
         run: |
           set -euo pipefail
-          count=$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')
+          count=$(find ci-artifacts -maxdepth 1 -type f | wc -l | tr -d ' ')
           if [ "$count" -eq 0 ]; then
             echo "::error::没有产出任何安装包，检查 tauri.*.conf.json 的 bundle.targets"
             exit 1
@@ -219,7 +221,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: SCOM-T-${{ matrix.target }}
-          path: dist/*
+          path: ci-artifacts/*
           if-no-files-found: error
           retention-days: 14
 
@@ -228,7 +230,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/* --clobber
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" ci-artifacts/* --clobber
 
   # 收尾：全部平台成功才把草稿转正，否则保持草稿并让整条流水线红掉
   summary:
