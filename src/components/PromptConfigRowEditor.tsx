@@ -49,7 +49,7 @@ export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: Pr
 
       <div className="space-y-2">
         {rows.map((row, i) => (
-          <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-2 space-y-1.5">
+          <div key={row?.id ?? i} className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] p-2 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="text-theme-10 text-[var(--text-muted)] font-mono w-5">#{i + 1}</span>
               <Input
@@ -90,7 +90,7 @@ export function PromptConfigRowEditor({ lang, rows, customEnders, onChange }: Pr
                 </select>
               </label>
               <label className="flex items-center gap-1 text-theme-10 text-[var(--text-muted)]">
-                {lang === "zh" ? "超时(ms)" : "Timeout(ms)"}
+                {lang === "zh" ? "间隔(ms)" : "Gap (ms)"}
                 <Input
                   type="text"
                   value={row.interval}

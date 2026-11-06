@@ -28,6 +28,24 @@ describe("yamlConfig", () => {
     expect(out.isHex).toBe(false);
   });
 
+  it("normalizes duplicate or invalid orders into unique positive ids (#11)", () => {
+    const yaml = [
+      "Commands:",
+      "  - order: 1",
+      "    command: AT",
+      "  - order: 1",
+      "    command: AT+CSQ",
+      "  - order: 0",
+      "    command: ATI",
+      "  - command: AT+GMR",
+    ].join("\n");
+    const parsed = parseYamlToRows(yaml);
+    if (!parsed.valid) throw new Error(parsed.error);
+    const ids = parsed.rows.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => Number.isInteger(id) && id > 0)).toBe(true);
+  });
+
   it("round-trips expected responses and per-entry regex flags", () => {
     const [out] = roundTrip([
       row({

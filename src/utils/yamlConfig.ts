@@ -103,6 +103,7 @@ export function parseYamlToRows(
   }
 
   const rows: PromptRow[] = [];
+  const usedIds = new Set<number>();
 
   for (let i = 0; i < doc.Commands.length; i++) {
     const cmd = doc.Commands[i];
@@ -114,8 +115,21 @@ export function parseYamlToRows(
     // 自定义结尾符（非符号名）按原始字节串回退；缺省时为 CRLF。
     const ender = cmd.line_ending ? (YAML_TO_ENDER[cmd.line_ending] ?? cmd.line_ending) : "\r\n";
 
+    // React keys and updatePromptRow need unique positive ids. A malformed or
+    // duplicated `order` in YAML would make one checkbox flip several rows and
+    // could break reconciliation entirely (#11).
+    const orderId = typeof cmd.order === "number" && Number.isInteger(cmd.order) && cmd.order > 0
+      ? cmd.order
+      : 0;
+    let rowId = orderId;
+    if (!rowId || usedIds.has(rowId)) {
+      rowId = 1;
+      while (usedIds.has(rowId)) rowId++;
+    }
+    usedIds.add(rowId);
+
     rows.push({
-      id: typeof cmd.order === "number" ? cmd.order : i + 1,
+      id: rowId,
       selected: cmd.is_selected === true,
       command: String(cmd.command ?? ""),
       isHex: cmd.hex_mode === true,
