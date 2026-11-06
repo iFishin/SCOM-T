@@ -123,23 +123,50 @@ SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的
 
 ## 系统要求
 
-- **操作系统**：Windows 10 / 11
-- **运行时**：Tauri 2 内置 WebView2（Windows 10+ 自带，无需额外安装）
+- **操作系统**：Windows 10 / 11、macOS 10.15+、Linux（glibc 2.35+，即 Ubuntu 22.04+ 一类）
+- **运行时**：Windows 用 Tauri 2 内置的 WebView2（Win10+ 自带）；macOS / Linux 用系统自带的 WebView
 - **磁盘空间**：约 150 MB（打包后约 50 MB）
 
 ---
 
 ## 安装
 
-### 方法一：下载便携版（推荐）
+四个平台的安装包由同一条流水线产出，都在 [Releases](https://github.com/iFishin/SCOM-T/releases/latest) 里。
 
-1. 前往 [Releases](https://github.com/iFishin/SCOM-T/releases/latest) 下载 `SCOM-T-portable.exe`
-2. 双击运行，无需安装
+### Windows
 
-### 方法二：NSIS 安装包
+| 文件 | 说明 |
+| --- | --- |
+| `SCOM-T_<版本>_x64_portable.exe` | 便携版，推荐；双击运行，无需安装 |
+| `SCOM-T_<版本>_x64-setup.exe` | NSIS 安装包，装到当前用户目录 |
 
-1. 前往 [Releases](https://github.com/iFishin/SCOM-T/releases/latest) 下载 NSIS 安装包
-2. 运行安装程序，按照提示完成安装
+### macOS
+
+| 文件 | 说明 |
+| --- | --- |
+| `SCOM-T_<版本>_aarch64.dmg` | Apple Silicon（M 系列） |
+| `SCOM-T_<版本>_x64.dmg` | Intel |
+
+**这些包没有代码签名**，首次打开会被 Gatekeeper 拦。在「应用程序」里右键点击 →「打开」即可；若提示「已损坏」，执行一次：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/SCOM-T.app
+```
+
+### Linux
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./SCOM-T_<版本>_amd64.deb
+
+# 任意发行版（免安装）
+chmod +x SCOM-T_<版本>_amd64.AppImage
+./SCOM-T_<版本>_amd64.AppImage
+```
+
+托盘图标依赖 `libayatana-appindicator3`，精简发行版可能需要自行安装。
+
+> Windows 是主要开发平台；macOS / Linux 可以构建和运行，但还没有做长期真机验证，遇到问题欢迎提 issue。
 
 ---
 
