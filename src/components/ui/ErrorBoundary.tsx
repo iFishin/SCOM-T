@@ -34,7 +34,14 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     const stack = info.componentStack ?? "";
-    appLogger.error("React", `Render error: ${error.message}\n${stack}`);
+    // The boundary itself must never throw: appLogger writes through Tauri fs
+    // and can fail, which would unmount the whole tree into a pure white
+    // screen instead of showing this fallback (#11).
+    try {
+      appLogger.error("React", `Render error: ${error.message}\n${stack}`);
+    } catch {
+      // Logging is best-effort; the fallback UI is what matters.
+    }
     this.setState({ info: stack });
 
     // Auto-reload countdown

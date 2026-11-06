@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PromptRowEditor } from "./PromptRowEditor";
+import { parseIntervalMs, DEFAULT_RESPONSE_TIMEOUT_MS, MAX_INTERVAL_MS } from "./promptRow";
 import type { PromptRow } from "./promptRow";
 
 function row(over: Partial<PromptRow> = {}): PromptRow {
@@ -104,5 +105,27 @@ describe("PromptRowEditor", () => {
     const html = render(row());
     expect(html).toContain("添加期望结果");
     expect(html).not.toContain("任意");
+  });
+});
+
+describe("parseIntervalMs (issue #35)", () => {
+  it("treats plain numbers as milliseconds", () => {
+    expect(parseIntervalMs("5000")).toBe(5000);
+    expect(parseIntervalMs("50")).toBe(50);
+  });
+
+  it("accepts a seconds suffix", () => {
+    expect(parseIntervalMs("5S")).toBe(5000);
+    expect(parseIntervalMs("0.5s")).toBe(500);
+  });
+
+  it("uses the fallback for blank or malformed input", () => {
+    expect(parseIntervalMs("")).toBe(0);
+    expect(parseIntervalMs("abc")).toBe(0);
+    expect(parseIntervalMs(undefined, DEFAULT_RESPONSE_TIMEOUT_MS)).toBe(5000);
+  });
+
+  it("clamps absurd values", () => {
+    expect(parseIntervalMs("99999999")).toBe(MAX_INTERVAL_MS);
   });
 });
