@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PromptRowEditor } from "./PromptRowEditor";
-import { parseIntervalMs, DEFAULT_RESPONSE_TIMEOUT_MS, MAX_INTERVAL_MS } from "./promptRow";
+import { parseIntervalMs, resolveLoopGap, DEFAULT_RESPONSE_TIMEOUT_MS, MAX_INTERVAL_MS } from "./promptRow";
 import type { PromptRow } from "./promptRow";
 
 function row(over: Partial<PromptRow> = {}): PromptRow {
@@ -127,5 +127,28 @@ describe("parseIntervalMs (issue #35)", () => {
 
   it("clamps absurd values", () => {
     expect(parseIntervalMs("99999999")).toBe(MAX_INTERVAL_MS);
+  });
+});
+
+describe("resolveLoopGap (global loop interval, default 3000ms)", () => {
+  it("uses the per-row interval when it is filled in", () => {
+    expect(resolveLoopGap("1000", "3000", 0)).toBe(1000);
+    expect(resolveLoopGap("5s", "3000", 0)).toBe(5000);
+  });
+
+  it("falls back to the global/default gap when the per-row box is blank", () => {
+    // Default is 3000ms; rows without a per-row interval get it.
+    expect(resolveLoopGap("", "3000", 0)).toBe(3000);
+    expect(resolveLoopGap(undefined, "2s", 0)).toBe(2000);
+  });
+
+  it("subtracts already-elapsed time (no double delay)", () => {
+    expect(resolveLoopGap("", "3000", 200)).toBe(2800);
+    expect(resolveLoopGap("5000", "3000", 1000)).toBe(4000);
+  });
+
+  it("never goes negative when the gap was already consumed", () => {
+    expect(resolveLoopGap("", "3000", 3000)).toBe(0);
+    expect(resolveLoopGap("", "3000", 5000)).toBe(0);
   });
 });

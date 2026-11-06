@@ -21,7 +21,7 @@ import type { MatchMode } from "../serial/responseMatcher.ts";
 import { PendingResponses } from "../serial/pendingResponses.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 import { PromptRowEditor } from "./PromptRowEditor.tsx";
-import { DEFAULT_RESPONSE_TIMEOUT_MS, parseIntervalMs } from "./promptRow.ts";
+import { DEFAULT_RESPONSE_TIMEOUT_MS, DEFAULT_LOOP_INTERVAL_MS, parseIntervalMs, resolveLoopGap } from "./promptRow.ts";
 import type { PromptRow, PromptRowStatus } from "./promptRow.ts";
 
 type WaitingResponse = {
@@ -115,6 +115,8 @@ export function PromptPanel({
     selectedRows: [],
   });
   const [totalLoops, setTotalLoops] = useState(1);
+  /** Global loop gap (default 3000ms); rows without a per-row interval use it. */
+  const [loopInterval, setLoopInterval] = useState(String(DEFAULT_LOOP_INTERVAL_MS));
   const batchAbortRef = useRef<boolean>(false);
   /** Resolves the in-flight per-row delay immediately when the user stops. */
   const batchDelayWakeRef = useRef<(() => void) | null>(null);
@@ -691,12 +693,15 @@ export function PromptPanel({
         await executeSingleCommand(selected[i]);
         if (batchAbortRef.current) break;
 
-        // `interval` is a real send gap, not merely a match timeout. Subtract
-        // time already spent waiting for a response so a matched row is not
-        // delayed twice.
-        const gapMs = parseIntervalMs(selected[i].interval);
-        const remaining = gapMs - (Date.now() - startedAt);
-        if (remaining > 0) await waitForBatchDelay(remaining);
+        // `interval` (per-row) and `loopInterval` (global, default 3000ms) are
+        // real send gaps, not merely match timeouts. A row leaving its own box
+        // blank falls back to the default; a filled box overrides it. Already
+        // elapsed time is subtracted so a matched row is not delayed twice.
+        // Skip the trailing gap after the very last send so the Stop button
+        // reverts to Start right away instead of lingering for one extra gap.
+        const isLast = loop === totalLoops - 1 && i === selected.length - 1;
+        const remaining = resolveLoopGap(selected[i].interval, loopInterval, Date.now() - startedAt);
+        if (!isLast && remaining > 0) await waitForBatchDelay(remaining);
       }
     }
 
@@ -1051,6 +1056,20 @@ export function PromptPanel({
         disabled={batchState.isRunning}
       />
       <span className="text-[var(--text-muted)]">{t("batch_times", lang)}</span>
+
+      <span className="w-px h-4 bg-[var(--border)]" />
+
+      <span className="shrink-0 text-[var(--text-muted)]">{t("batch_loop_interval", lang)}</span>
+      <Input
+        type="text"
+        inputMode="numeric"
+        value={loopInterval}
+        onChange={(e) => setLoopInterval(e.currentTarget.value)}
+        placeholder={t("batch_loop_interval_ph", lang)}
+        className="w-24 text-center text-theme-11 placeholder:text-theme-11"
+        disabled={batchState.isRunning}
+      />
+      <span className="text-[var(--text-muted)]">ms</span>
 
       <span className="w-px h-4 bg-[var(--border)]" />
 

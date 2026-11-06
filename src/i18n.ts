@@ -279,6 +279,8 @@ const ZH: Dict = {
   // Batch execution
   batch_loop: "循环",
   batch_times: "次",
+  batch_loop_interval: "循环间隔",
+  batch_loop_interval_ph: "ms，如 1000 或 2s",
   batch_ready: "就绪",
   batch_start: "▶ 开始",
   batch_stop: "■ 停止",
@@ -619,6 +621,8 @@ const EN: Dict = {
   // Batch execution
   batch_loop: "Loop",
   batch_times: "times",
+  batch_loop_interval: "Loop interval",
+  batch_loop_interval_ph: "ms, e.g. 1000 or 2s",
   batch_ready: "Ready",
   batch_start: "▶ Start",
   batch_stop: "■ Stop",
