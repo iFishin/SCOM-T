@@ -362,7 +362,9 @@ export function ReceiveLog({
   }
 
   // ── Log search ──
-  const logText = useMemo(
+  // The joined text is only needed when a search actually runs. Building it on
+  // every log append was O(n) per batch and allocated one ever-growing string.
+  const buildLogText = useCallback(
     () => logs.map((l) => l.payload).join(LOG_SEPARATOR),
     [logs],
   );
@@ -372,8 +374,12 @@ export function ReceiveLog({
     [searchQuery, searchOptions],
   );
 
-  // Grouped cards for display (card view only)
-  const cardGroups = useMemo(() => groupAdjacentCards(logs), [logs]);
+  // Grouped cards are only used by the card view; text/hex views must not pay
+  // the O(n) grouping cost on every appended batch.
+  const cardGroups = useMemo(
+    () => (displayMode === "card" ? groupAdjacentCards(logs) : []),
+    [logs, displayMode],
+  );
 
   // Offset of each card group's first entry inside the full logText. Built as
   // one pass (the previous `logs.indexOf(first)` per group was O(n·groups)).
@@ -399,10 +405,10 @@ export function ReceiveLog({
   const handleLogSearch = useCallback((query: string, opts: SearchOptions) => {
     setSearchQuery(query);
     setSearchOptions(opts);
-    const results = searchInText(logText, query, opts);
+    const results = searchInText(buildLogText(), query, opts);
     setSearchMatches(results);
     setSearchIndex(results.length > 0 ? 0 : -1);
-  }, [logText]);
+  }, [buildLogText]);
 
   const handleNavigate = useCallback((idx: number) => {
     const clamped = Math.max(0, Math.min(idx, searchMatches.length - 1));
@@ -729,7 +735,8 @@ export function ReceiveLog({
             }
           }
         }}
-        className="flex-1 overflow-y-auto p-1 font-mono text-sm outline-none select-text"
+        className="log-rows flex-1 overflow-y-auto p-1 font-mono text-sm outline-none select-text"
+        data-log-searching={searchIndex >= 0 ? "1" : undefined}
         style={{ fontFamily: "var(--mono-font-family)" }}
       >
         {logs.length === 0 ? (
@@ -737,7 +744,7 @@ export function ReceiveLog({
             {t("no_data", lang)}
           </div>
         ) : displayMode === "text" ? (
-          <div className="space-y-0">
+          <div className="log-rows__list space-y-0">
             {logs.map((log, logIdx) => (
               <TextRow
                 key={log.id}
@@ -750,13 +757,13 @@ export function ReceiveLog({
             ))}
           </div>
         ) : displayMode === "hex" ? (
-          <div className="space-y-0">
+          <div className="log-rows__list space-y-0">
             {logs.map((log) => (
               <HexRow key={log.id} log={log} noDataLabel={t("no_data", lang)} />
             ))}
           </div>
         ) : (
-          <div className="space-y-0.5">
+          <div className="log-rows__list space-y-0.5">
             {cardGroups.map((group) => (
               <CardRow
                 key={group.key}

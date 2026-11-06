@@ -143,7 +143,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateLogFileState } = useSettings();
+  const { settings, loaded, flushSettings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateLogFileState } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -420,7 +420,10 @@ function App() {
       // Ctrl+W: close window (emergency exit when decorations:false)
       if (e.ctrlKey && e.key.toLowerCase() === "w") {
         e.preventDefault();
-        getCurrentWindow().close().catch(console.error);
+        // beforeunload cannot await an async write — persist first, then close.
+        void flushSettings()
+          .catch(() => false)
+          .finally(() => { getCurrentWindow().close().catch(console.error); });
         return;
       }
 
@@ -452,7 +455,7 @@ function App() {
       document.removeEventListener("dragover", onDragOver);
       document.removeEventListener("drop", onDrop);
     };
-  }, []);
+  }, [flushSettings]);
 
   // ── System tray: show-about event ──
   useEffect(() => {
@@ -742,7 +745,11 @@ function App() {
   // ── Window controls for custom title bar ──
   const winMinimize = useCallback(() => { getCurrentWindow().minimize().catch(console.error); }, []);
   const winToggleMaximize = useCallback(() => { getCurrentWindow().toggleMaximize().catch(console.error); }, []);
-  const winClose = useCallback(() => { getCurrentWindow().close().catch(console.error); }, []);
+  const winClose = useCallback(() => {
+    void flushSettings()
+      .catch(() => false)
+      .finally(() => { getCurrentWindow().close().catch(console.error); });
+  }, [flushSettings]);
 
   // ── Hotkeys — must be at App level so they work regardless of SendPanel collapse ──
   useHotkeys(settings.hotkeys, isConnected, handleHotkeySend);

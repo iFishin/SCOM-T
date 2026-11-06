@@ -9,6 +9,7 @@ import {
 import { encodeSendPayload } from "../utils/sendPayload.ts";
 import { enderStringToBytes } from "../utils/enderOptions.ts";
 import { appLogger } from "../utils/appLogger.ts";
+import { createSignalPoller } from "./signalPoller.ts";
 
 import type { ISerialService } from "../serial/SerialService.ts";
 import {
@@ -250,10 +251,13 @@ export function useSerialPort({
       setSignalStates({ cts: false, dsr: false, cd: false, ri: false });
       return;
     }
-    const interval = setInterval(async () => {
-      const svc = serialRef.current;
-      if (svc) {
-        const states = await svc.readSignals();
+    const poller = createSignalPoller({
+      read: () => {
+        const svc = serialRef.current;
+        if (!svc) throw new Error("no serial service");
+        return svc.readSignals();
+      },
+      onResult: (states) => {
         setSignalStates(states);
         // Record history snapshot with RTS/DTR from current config
         const cfg = configRef.current;
@@ -267,9 +271,13 @@ export function useSerialPort({
           signalHistoryRef.current =
             signalHistoryRef.current.slice(-MAX_SIGNAL_HISTORY);
         }
-      }
-    }, 500);
-    return () => clearInterval(interval);
+      },
+    });
+    const interval = setInterval(() => void poller.tick(), 500);
+    return () => {
+      poller.dispose();
+      clearInterval(interval);
+    };
   }, [isConnected, config.connectionType, config.rts, config.dtr]);
 
   // ── Latency history (keep last 60 values) ──

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createDebouncedSaver } from "./settingsPersistence.ts";
 import type { SendMode, ReceiveMode, LogDisplayMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
 import type { SerialSession } from "./useSessionManager.ts";
@@ -466,7 +467,11 @@ async function saveSettingsToFile(settings: AppSettings): Promise<boolean> {
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saverRef = useRef<ReturnType<typeof createDebouncedSaver<AppSettings>> | null>(null);
+  if (!saverRef.current) {
+    saverRef.current = createDebouncedSaver<AppSettings>((value) => saveSettingsToFile(value), 500);
+  }
+  const saver = saverRef.current;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
@@ -487,26 +492,32 @@ export function useSettings() {
     });
   }, [loaded]);
 
+  /**
+   * Persist the latest settings immediately. `beforeunload` cannot await an
+   * async write and Tauri may not fire it at all, so the window-close handler
+   * awaits this before calling getCurrentWindow().close().
+   */
+  const flushSettings = useCallback(async () => {
+    // Pass the render-latest value: a settings change may not have reached the
+    // debounced saver yet when the user closes the window.
+    return saver.flush(settingsRef.current);
+  }, [saver]);
+
   // Debounced save on change
   useEffect(() => {
     if (!loaded) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => saveSettingsToFile(settings), 500);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [settings, loaded]);
+    saver.schedule(settings);
+    return () => saver.cancelPending();
+  }, [settings, loaded, saver]);
 
-  // Flush pending save on beforeunload
+  // Best-effort last resort; the explicit flush before close is the reliable path.
   useEffect(() => {
     function flush() {
-      // 无条件落盘：即使防抖尚未调度，也把最新配置写入（Tauri 关窗时 beforeunload 可能不触发）。
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveSettingsToFile(settings);
+      void flushSettings();
     }
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
-  }, [settings]);
+  }, [flushSettings]);
 
   function updateHotkeys(hotkeys: HotkeyConfig[]) {
     setSettings((current) => ({ ...current, hotkeys }));
@@ -676,6 +687,7 @@ export function useSettings() {
   return {
     settings,
     loaded,
+    flushSettings,
     updateHotkeys,
     updateTheme,
     resetTheme,

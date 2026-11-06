@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { compareVersion } from "./versionCheck";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { compareVersion, fetchLatestVersion } from "./versionCheck";
 
 describe("compareVersion", () => {
   it("treats equal versions as equal", () => {
@@ -26,5 +26,44 @@ describe("compareVersion", () => {
   it("compares major/minor/patch in priority order", () => {
     expect(compareVersion("2.0.0", "1.99.99")).toBeGreaterThan(0);
     expect(compareVersion("1.5.0", "1.4.99")).toBeGreaterThan(0);
+  });
+
+  it("compares pre-release suffixes by raw text instead of NaN", () => {
+    // Number("0-beta") is NaN; the old fallback compared String(NaN) and
+    // reported every suffix as equal.
+    expect(compareVersion("0.4.0-beta", "0.4.0-alpha")).toBeGreaterThan(0);
+    expect(compareVersion("0.4.0-alpha", "0.4.0-beta")).toBeLessThan(0);
+    expect(compareVersion("0.4.0-beta", "0.4.0-beta")).toBe(0);
+  });
+});
+
+describe("fetchLatestVersion", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("gives up within ~5s instead of hanging when the network never responds", async () => {
+    vi.useFakeTimers();
+    const calls: number[] = [];
+    // A request that never settles until its AbortSignal fires.
+    const hangingFetch = (_url: string, init?: RequestInit) => {
+      calls.push(Date.now());
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    };
+    vi.stubGlobal("fetch", hangingFetch);
+
+    const pending = fetchLatestVersion();
+    await vi.advanceTimersByTimeAsync(5_100);
+    const result = await pending;
+    expect("error" in result).toBe(true);
+
+    // The API attempt and the raw fallback share ONE 5s deadline: the second
+    // starts when the first budget expires, so the check settles in ~5s rather
+    // than 5s + 5s.
+    expect(calls).toHaveLength(2);
+    expect(calls[1] - calls[0]).toBeLessThanOrEqual(5_000);
   });
 });
