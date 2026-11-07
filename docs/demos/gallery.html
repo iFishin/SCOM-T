@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SCOM-T · 操作演示</title>
+<!--
+  README 动图的本地预览页。默认显示静态首帧，点按钮才播放 —— 避免四张 GIF
+  同时循环；系统偏好减少动效时永远保持静态。配色与字体取自 src/styles.css。
+-->
+<style>
+  :root {
+    --bg:#f1f5f9; --surface:#ffffff; --input:#f8fafc;
+    --text:#1e293b; --muted:#64748b; --border:#e2e8f0;
+    --accent:#10b981; --accent-dark:#059669; --accent-light:#d1fae5;
+    --ui: system-ui, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace, "PingFang SC";
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:var(--ui); font-size:14px; line-height:1.65; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 20px 56px; }
+  header { margin-bottom:28px; max-width:70ch; }
+  .eyebrow { margin:0 0 6px; font-family:var(--mono); font-size:11px; color:var(--accent-dark); letter-spacing:.04em; }
+  h1 { margin:0 0 10px; font-size:28px; line-height:1.3; letter-spacing:-.01em; }
+  .lede { margin:0; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(400px, 1fr)); gap:20px; }
+  .card {
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04); padding:16px; min-width:0;
+  }
+  .card h2 { margin:0 0 4px; font-size:16px; font-weight:600; }
+  .card > p { margin:0 0 12px; font-size:12.5px; color:var(--muted); }
+  .frame { background:var(--bg); border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+  .frame img { display:block; width:100%; height:auto; }
+  .bar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0 4px; }
+  .bar span { font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+  button {
+    font:inherit; font-size:12px; cursor:pointer; padding:5px 12px;
+    border:1px solid var(--accent); border-radius:6px;
+    background:var(--accent-light); color:var(--accent-dark); font-weight:600;
+  }
+  button:hover { background:var(--accent); color:#fff; }
+  :focus-visible { outline:2px solid var(--accent-dark); outline-offset:2px; }
+  details { margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
+  summary { cursor:pointer; font-size:12.5px; color:var(--accent-dark); font-weight:600; }
+  details ol { margin:8px 0 0; padding-left:20px; font-size:12.5px; color:var(--muted); }
+  details li + li { margin-top:4px; }
+  code { font-family:var(--mono); font-size:.92em; background:var(--input); border:1px solid var(--border); border-radius:4px; padding:1px 4px; }
+  footer { margin-top:30px; padding-top:16px; border-top:1px solid var(--border); font-size:12.5px; color:var(--muted); }
+  footer a { color:var(--accent-dark); }
+  @media (max-width:520px) {
+    .wrap { padding:24px 14px 40px; }
+    .grid { grid-template-columns:1fr; }
+    h1 { font-size:23px; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">SCOM-T · README 素材</p>
+    <h1>四段操作演示</h1>
+    <p class="lede">按真实操作流程逐帧重绘，配色、字体和控件文案都取自应用本身。默认显示静态首帧，点「播放动图」才看 8 秒循环；系统偏好减少动效时保持静态。文字步骤始终可读。</p>
+  </header>
+
+  <section class="grid">
+    <article class="card" data-gif="01-connect.gif" data-still="01-connect-still.png">
+      <h2>连接与收发</h2>
+      <p>选 MOCK 模拟串口、打开端口，发一条 AT 指令，看 TX/RX 日志与 HEX 原始字节。</p>
+      <div class="frame"><img src="01-connect-still.png" width="880" height="540" alt="演示：端口选择 MOCK 模拟串口，点击打开端口后状态变为已连接；输入 AT+FWREAD 并发送，日志出现 TX 记录，模拟串口返回 OK；切换到 HEX 后显示 AA 55 01 00 00 FB AC 七个原始字节。" /></div>
+      <div class="bar"><button type="button">播放动图</button><span>8 秒 · 循环</span></div>
+      <details><summary>文字步骤</summary><ol>
+        <li>端口选 <code>MOCK · 模拟串口</code>，点「打开端口」，状态变成「已连接」。</li>
+        <li>输入 <code>AT+FWREAD</code>，按 Enter 或点「发送」，日志立刻出现 TX 记录。</li>
+        <li>模拟串口回 <code>OK</code>；切到 HEX 模式，<code>AA 55 01 00 00 FB AC</code> 按真实字节显示，不再变成方块问号。</li>
+      </ol></details>
+    </article>
+
+    <article class="card" data-gif="02-loop.gif" data-still="02-loop-still.png">
+      <h2>批量循环与间隔</h2>
+      <p>勾选指令、设 3000ms 全局间隔，看日志按间隔逐条出现，以及停止按钮的复位。</p>
+      <div class="frame"><img src="02-loop-still.png" width="880" height="540" alt="演示：指令组中勾选三条指令，循环间隔填 3000；点击开始后按钮变成停止，日志按 3000ms 间隔逐条出现 TX 记录，计时条推进；最后一圈结束后按钮立即复位为开始。" /></div>
+      <div class="bar"><button type="button">播放动图</button><span>8 秒 · 循环</span></div>
+      <details><summary>文字步骤</summary><ol>
+        <li>勾选要循环执行的指令行；某行间隔留空时，沿用顶部「循环间隔」（默认 <code>3000ms</code>，也支持 <code>2s</code> 这类写法）。</li>
+        <li>点「▶ 开始」，按钮变成「■ 停止」，日志按间隔逐条出现，而不是一口气发完。</li>
+        <li>跑完最后一圈，「停止」立即复位成「开始」。</li>
+      </ol></details>
+    </article>
+
+    <article class="card" data-gif="03-logs.gif" data-still="03-logs-still.png">
+      <h2>日志视图与搜索</h2>
+      <p>卡片 / 文本 / 十六进制三种视图切换，搜索高亮，以及一键跟随。</p>
+      <div class="frame"><img src="03-logs-still.png" width="880" height="540" alt="演示：日志接收面板依次切换卡片视图、文本视图、十六进制视图；十六进制视图显示偏移列、原始字节和 ASCII 列；搜索框输入 OK 后匹配项橙色高亮并显示两个匹配；最后出现一键跟随按钮。" /></div>
+      <div class="bar"><button type="button">播放动图</button><span>8 秒 · 循环</span></div>
+      <details><summary>文字步骤</summary><ol>
+        <li>卡片 / 文本 / 十六进制三种展示方式随场景切换；十六进制视图以 <code>rawBytes</code> 为准，带偏移列与 ASCII 列。</li>
+        <li>搜索 <code>OK</code>，匹配项橙色高亮，支持大小写、正则、全词。</li>
+        <li>手动往上翻页后出现「一键跟随」，点一下回到最新一条。</li>
+      </ol></details>
+    </article>
+
+    <article class="card" data-gif="04-theme.gif" data-still="04-theme-still.png">
+      <h2>主题与布局</h2>
+      <p>切暗色、开紧凑模式、拖拽面板排布，再切回亮色。</p>
+      <div class="frame"><img src="04-theme-still.png" width="880" height="540" alt="演示：打开设置浮层，点击暗色模式后整个界面由浅色渐变为深色；开启紧凑模式后面板间距收紧；拖拽日志面板调整位置并出现高亮边框；最后切回亮色，布局保持不变。" /></div>
+      <div class="bar"><button type="button">播放动图</button><span>8 秒 · 循环</span></div>
+      <details><summary>文字步骤</summary><ol>
+        <li>设置 → 主题，点「暗色模式」，背景 / 文字 / 边框 / 强调色一起切换。</li>
+        <li>打开「紧凑模式」，面板间距收紧，一屏能放更多日志。</li>
+        <li>拖拽面板自由排列，布局会保存；切回亮色后布局不变。</li>
+      </ol></details>
+    </article>
+  </section>
+
+  <footer>
+    动图由同目录的 <a href="demos.html">demos.html</a> 与 <a href="render.mjs">render.mjs</a> 生成：改文案或配色后重跑脚本即可，不需要录屏。
+  </footer>
+</main>
+<script>
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  for (const card of document.querySelectorAll('[data-gif]')) {
+    const img = card.querySelector('img');
+    const button = card.querySelector('button');
+    let playing = false;                 // 默认静态，动效只由用户触发
+    const sync = () => {
+      img.src = playing ? card.dataset.gif : card.dataset.still;
+      button.textContent = playing ? '暂停动图' : '播放动图';
+    };
+    button.addEventListener('click', () => {
+      playing = !playing;
+      sync();
+    });
+    reduce.addEventListener('change', (e) => {
+      if (e.matches) { playing = false; sync(); }   // 系统要求减少动效时立刻停下
+    });
+    sync();
+  }
+</script>
+</body>
+</html>

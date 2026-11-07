@@ -38,6 +38,13 @@ Thumbs.db
 # These are binary stubs, not sources — vitest would try to parse them.
 ._*
 
+# Demo GIF 生成器留在本地的临时浏览器 profile / 驱动 / 自查帧（不入库）
+docs/demos/.chrome-*/
+docs/demos/.frames/
+docs/demos/.tools/
+docs/demos/.probe*.png
+docs/demos/.check-*.png
+
 # Editor directories and files
 .idea/
 .vscode/*
