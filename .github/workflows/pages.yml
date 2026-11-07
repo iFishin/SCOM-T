@@ -1,0 +1,63 @@
+name: Deploy Landing Page
+
+# 介绍页位于 docs/index.html，动图沿用 docs/demos 下已入库的产物。
+# 这里只组装页面需要的那几个文件再上传，不整目录上传 docs/
+#（本地 docs/ 会因为生成器带出 .tools / .chrome-* 等临时目录，且这些都不入库）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/index.html'
+      - 'docs/demos/*.gif'
+      - 'docs/demos/*-still.png'
+      - 'docs/demos/gallery.html'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署，新的推送取消排队中的旧任务
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 组装站点
+        run: |
+          set -euo pipefail
+          mkdir -p _site/demos
+          cp docs/index.html _site/
+          cp docs/demos/*.gif docs/demos/*-still.png _site/demos/
+          cp docs/demos/gallery.html _site/demos/
+          echo "站点内容："
+          find _site -type f -printf '%p  %k KB\n' | sort
+          echo "合计：$(du -sh _site | cut -f1)"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
