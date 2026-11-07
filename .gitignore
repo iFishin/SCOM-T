@@ -42,6 +42,7 @@ Thumbs.db
 docs/demos/.chrome-*/
 docs/demos/.frames/
 docs/demos/.tools/
+docs/demos/.shots/
 docs/demos/.probe*.png
 docs/demos/.check-*.png
 

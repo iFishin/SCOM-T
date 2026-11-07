@@ -38,6 +38,8 @@
 
 SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的全面重构版本，使用 Tauri 2 + React 19 + TypeScript 重新编写。相比旧版，拥有更小的体积、更低的资源占用和现代化的界面体验。
 
+在线介绍页：[ifishin.github.io/SCOM-T](https://ifishin.github.io/SCOM-T/)
+
 > 前身：PySide 版和 QT 版均已停止热更新，SCOM-T 为当前主力版本。
 
 ---
