@@ -22,6 +22,7 @@
 ## 目录
 
 - [简介](#简介)
+- [操作演示](#操作演示)
 - [功能特性](#功能特性)
 - [系统要求](#系统要求)
 - [安装](#安装)
@@ -38,6 +39,66 @@
 SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的全面重构版本，使用 Tauri 2 + React 19 + TypeScript 重新编写。相比旧版，拥有更小的体积、更低的资源占用和现代化的界面体验。
 
 > 前身：PySide 版和 QT 版均已停止热更新，SCOM-T 为当前主力版本。
+
+---
+
+## 操作演示
+
+四段动图按真实操作流程逐帧重绘，配色、字体和控件文案都取自应用本身；每段 8 秒、循环播放。看不了动图时展开下面的文字步骤即可，静态首帧在 `docs/demos/*-still.png`。
+
+### 连接与收发
+
+![选择 MOCK 模拟串口，打开端口，发送 AT 指令，查看 TX/RX 日志并切换 HEX 模式](docs/demos/01-connect.gif)
+
+<details>
+<summary><b>文字步骤</b></summary>
+
+- 端口选 `MOCK · 模拟串口`，点「打开端口」，状态变成「已连接」。
+- 输入 `AT+FWREAD`，按 Enter 或点「发送」，日志立刻出现 TX 记录。
+- 模拟串口回 `OK`；切到 HEX 模式，`AA 55 01 00 00 FB AC` 按真实字节显示，不再变成方块问号。
+
+</details>
+
+### 批量循环与间隔
+
+![勾选三条指令，设置循环间隔 3000ms，开始循环后日志按间隔逐条出现，结束后停止按钮复位](docs/demos/02-loop.gif)
+
+<details>
+<summary><b>文字步骤</b></summary>
+
+- 勾选要循环执行的指令行；某行间隔留空时，沿用顶部「循环间隔」（默认 `3000ms`，也支持 `2s` 这类写法）。
+- 点「▶ 开始」，按钮变成「■ 停止」，日志按间隔逐条出现，而不是一口气发完。
+- 跑完最后一圈，「停止」立即复位成「开始」。
+
+</details>
+
+### 日志视图与搜索
+
+![在卡片视图、文本视图、十六进制视图之间切换，搜索 OK 并高亮匹配，使用一键跟随](docs/demos/03-logs.gif)
+
+<details>
+<summary><b>文字步骤</b></summary>
+
+- 卡片 / 文本 / 十六进制三种展示方式随场景切换；十六进制视图以 `rawBytes` 为准，带偏移列与 ASCII 列。
+- 搜索 `OK`，匹配项橙色高亮，支持大小写、正则、全词。
+- 手动往上翻页后出现「一键跟随」，点一下回到最新一条。
+
+</details>
+
+### 主题与布局
+
+![切换暗色模式，开启紧凑模式，拖拽面板调整布局，再切回亮色](docs/demos/04-theme.gif)
+
+<details>
+<summary><b>文字步骤</b></summary>
+
+- 设置 → 主题，点「暗色模式」，背景 / 文字 / 边框 / 强调色一起切换。
+- 打开「紧凑模式」，面板间距收紧，一屏能放更多日志。
+- 拖拽面板自由排列，布局会保存；切回亮色后布局不变。
+
+</details>
+
+> 动图由 [docs/demos/demos.html](docs/demos/demos.html) 与 [docs/demos/render.mjs](docs/demos/render.mjs) 生成：改文案或配色后重跑脚本即可，不需要录屏。需要本机 Chrome/Chromium 与 ffmpeg，可用 `node docs/demos/render.mjs --check` 自检环境（Chrome 不在默认位置时设 `CHROME_PATH`）。本地预览见 [docs/demos/gallery.html](docs/demos/gallery.html)。
 
 ---
 

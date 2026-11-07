@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>SCOM-T · 操作演示帧渲染源</title>
+<!--
+  自包含的逐帧渲染源。window.renderFrame(sceneId, frame) 同步把画面画到第 frame 帧，
+  不依赖 CSS transition / requestAnimationFrame，便于无头浏览器精确截图。
+  配色与字号取自 src/styles.css 的真实 token；文案取自 src/i18n.ts。
+-->
+<style>
+  :root {
+    --bg:#f1f5f9; --surface:#ffffff; --input:#f8fafc; --hover:#f0fdf4;
+    --text:#1e293b; --muted:#64748b; --border:#e2e8f0;
+    --accent:#10b981; --accent-dark:#059669; --accent-light:#d1fae5;
+    --gap:10px; --pad:10px;
+    --ui: system-ui, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace, "PingFang SC";
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; background:#dbe3ec; }
+  #stage {
+    position:relative; width:880px; height:540px; overflow:hidden;
+    background:var(--bg); color:var(--text);
+    font-family:var(--ui); font-size:13px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  #top {
+    height:36px; padding:0 20px; display:flex; align-items:center;
+    justify-content:space-between; color:var(--muted); font-size:11px;
+  }
+  #top strong { color:var(--text); font-weight:600; letter-spacing:.02em; }
+  .top-right { display:flex; align-items:center; gap:12px; }
+  .prog { width:132px; height:2px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .prog i { display:block; height:100%; width:0; background:var(--accent); }
+  #app { height:444px; padding:12px 18px 14px; display:grid; gap:var(--gap); }
+  #cap {
+    height:60px; padding:0 22px; display:flex; align-items:center; gap:12px;
+    background:var(--surface); border-top:1px solid var(--border);
+    font-size:14px; letter-spacing:.01em;
+  }
+  .cap-bar { width:2px; height:20px; background:var(--accent); border-radius:2px; flex:none; }
+  #capText { opacity:1; }
+
+  /* ── 面板 ── */
+  .pnl {
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04);
+    display:flex; flex-direction:column; overflow:hidden; min-height:0; min-width:0;
+  }
+  .pnl-h {
+    height:30px; flex:none; padding:0 var(--pad); display:flex; align-items:center;
+    justify-content:space-between; gap:8px; border-bottom:1px solid var(--border);
+    font-size:11.5px; font-weight:600;
+  }
+  .pnl-h .tools { display:flex; align-items:center; gap:6px; font-weight:400; flex:none; }
+  .pnl-h .tools > * { flex:none; }
+  .pnl.full { height:100%; }
+  .pnl-b { flex:1; min-height:0; padding:var(--pad); overflow:hidden; }
+
+  /* ── 控件 ── */
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:5px;
+    height:26px; padding:0 10px; border:1px solid var(--border); border-radius:6px;
+    background:var(--input); color:var(--text); font-size:11.5px; white-space:nowrap;
+  }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .btn.danger { background:#fef2f2; border-color:#fecaca; color:#dc2626; font-weight:600; }
+  .btn.ghost { background:transparent; border-color:transparent; color:var(--muted); }
+  .btn.mini { height:22px; padding:0 8px; font-size:11px; }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .seg span {
+    padding:3px 9px; font-size:11px; color:var(--muted); background:var(--surface);
+    border-right:1px solid var(--border); white-space:nowrap;
+  }
+  .seg span:last-child { border-right:0; }
+  .seg span.on { background:var(--accent-light); color:var(--accent-dark); font-weight:600; }
+  .inp {
+    display:inline-flex; align-items:center; height:24px; min-width:0; padding:0 8px;
+    border:1px solid var(--border); border-radius:6px; background:var(--input);
+    font-size:11.5px; color:var(--text); white-space:nowrap;
+  }
+  .inp.mono { font-family:var(--mono); }
+  .inp.focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(16,185,129,.18); }
+  .inp .caret { display:inline-block; width:1px; height:12px; background:var(--accent); margin-left:1px; }
+  .inp .ph { color:#94a3b8; }
+  .lbl { font-size:11px; color:var(--muted); white-space:nowrap; }
+  .row { display:flex; align-items:center; gap:8px; }
+  .row + .row { margin-top:8px; }
+  .row .k { width:56px; flex:none; font-size:11px; color:var(--muted); }
+  .row .v { flex:1; min-width:0; }
+  .box {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; border:1px solid var(--border); border-radius:4px;
+    background:var(--surface); flex:none; font-size:10px; line-height:1; color:#fff;
+  }
+  .box.on { background:var(--accent); border-color:var(--accent); }
+  .status { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+  .status i { width:7px; height:7px; border-radius:50%; background:#cbd5e1; }
+  .status.ok { color:var(--accent-dark); }
+  .status.ok i { background:var(--accent); }
+  .mono { font-family:var(--mono); }
+  .dim { color:var(--muted); }
+  mark { background:#fed7aa; color:#9a3412; border-radius:2px; padding:0 1px; }
+
+  /* ── 日志 ── */
+  .logline {
+    display:flex; align-items:baseline; gap:8px; padding:5px 7px; border-radius:6px;
+    font-size:11.5px; border-bottom:1px solid var(--border);
+  }
+  .logline:last-child { border-bottom:0; }
+  .logline.soft { background:var(--hover); }
+  .dir { font-size:9.5px; font-weight:700; letter-spacing:.04em; width:20px; flex:none; }
+  .dir.tx { color:#2563eb; } .dir.rx { color:var(--accent-dark); }
+  .ts { font-family:var(--mono); font-size:10px; color:var(--muted); flex:none; }
+  .payload { flex:1; min-width:0; word-break:break-all; font-size:11px; }
+  .bytes { font-family:var(--mono); font-size:10px; color:var(--muted); flex:none; }
+  .dump { font-family:var(--mono); font-size:11px; line-height:1.9; white-space:pre; color:var(--text); }
+  .dump .off { color:var(--muted); }
+  .dump .asc { color:var(--accent-dark); }
+  .textview { font-family:var(--mono); font-size:11px; line-height:1.95; white-space:pre-wrap; }
+
+  /* ── 场景 2 指令网格 ── */
+  .grid-head, .grid-row {
+    display:grid; grid-template-columns:18px 20px 1fr 56px 74px;
+    align-items:center; gap:6px; padding:0 6px;
+  }
+  .grid-head { height:24px; font-size:10px; color:var(--muted); border-bottom:1px solid var(--border); }
+  .grid-row { height:34px; font-size:11.5px; border-bottom:1px solid var(--border); }
+  .grid-row.sel { background:var(--hover); }
+  .grid-row .cmd { font-family:var(--mono); font-size:11px; }
+  .grid-row .tail { font-size:10.5px; color:var(--muted); font-family:var(--mono); }
+  .grid-row .gapinp { height:22px; border:1px solid var(--border); border-radius:5px; background:var(--input); display:flex; align-items:center; padding:0 6px; font-family:var(--mono); font-size:10.5px; }
+  .grid-row .gapinp.empty { color:#94a3b8; font-family:var(--ui); }
+  .timer { height:5px; border-radius:3px; background:var(--border); overflow:hidden; }
+  .timer i { display:block; height:100%; background:var(--accent); }
+
+  /* ── 场景 4 设置浮层 ── */
+  .settings {
+    position:absolute; right:26px; top:52px; width:236px; z-index:4;
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 10px 28px rgba(15,23,42,.16); padding:12px;
+  }
+  .settings h4 { margin:0 0 2px; font-size:12.5px; }
+  .settings p { margin:0 0 10px; font-size:10.5px; color:var(--muted); line-height:1.5; }
+  .settings .opt { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-top:1px solid var(--border); font-size:11.5px; }
+  .switch { width:30px; height:17px; border-radius:99px; background:var(--border); position:relative; flex:none; }
+  .switch i { position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+  .switch.on { background:var(--accent); }
+  .switch.on i { left:15px; }
+  .drag { outline:2px solid var(--accent); outline-offset:-2px; }
+
+  /* ── 光标与涟漪 ── */
+  #cursor { position:absolute; left:0; top:0; width:22px; height:22px; z-index:9; pointer-events:none; filter:drop-shadow(0 1px 2px rgba(15,23,42,.35)); }
+  #ripple {
+    position:absolute; width:10px; height:10px; border-radius:50%; z-index:8;
+    border:2px solid var(--accent); background:rgba(16,185,129,.18);
+    pointer-events:none; opacity:0; transform:translate(-50%,-50%) scale(1);
+  }
+  /* 片尾淡出：盖住状态复位，让 GIF 循环看起来像重新开场而不是突然清空 */
+  #fade {
+    position:absolute; inset:0; background:#f1f5f9; z-index:12;
+    pointer-events:none; opacity:0;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="top">
+    <span><strong>SCOM-T</strong> · <span id="topTitle">连接与收发</span></span>
+    <div class="top-right"><span id="topAction"></span><div class="prog"><i id="progFill"></i></div></div>
+  </div>
+  <div id="app"></div>
+  <div id="cap"><span class="cap-bar"></span><span id="capText"></span></div>
+  <div id="ripple"></div>
+  <div id="fade"></div>
+  <div id="cursor">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 2.5L3 17.5L7.2 13.8L10 19.5L12.6 18.2L9.9 12.7L15.4 12.4L3 2.5Z" fill="#ffffff" stroke="#1e293b" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+  </div>
+</div>
+
+<script>
+/* ─────────────── 基础工具 ─────────────── */
+const stage = document.getElementById('stage');
+const appEl = document.getElementById('app');
+const capEl = document.getElementById('capText');
+const cursorEl = document.getElementById('cursor');
+const rippleEl = document.getElementById('ripple');
+
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const rgb = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const mix = (a, b, t) => {
+  const A = rgb(a), B = rgb(b);
+  return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], t))).join(',')})`;
+};
+const type = (text, p) => text.slice(0, Math.max(0, Math.floor(clamp(p) * text.length)));
+const hl = (text, q) => q ? esc(text).split(q).join(`<mark>${q}</mark>`) : esc(text);
+
+/* 亮 / 暗两套 token，全部来自 src/styles.css */
+const LIGHT = {
+  bg:'#f1f5f9', surface:'#ffffff', input:'#f8fafc', hover:'#f0fdf4',
+  text:'#1e293b', muted:'#64748b', border:'#e2e8f0',
+  accent:'#10b981', 'accent-dark':'#059669', 'accent-light':'#d1fae5'
+};
+const DARK = {
+  bg:'#0f172a', surface:'#1e293b', input:'#0f172a', hover:'#052e16',
+  text:'#e2e8f0', muted:'#94a3b8', border:'#334155',
+  accent:'#10b981', 'accent-dark':'#059669', 'accent-light':'#064e3b'
+};
+function applyTheme(t, compact) {
+  for (const k of Object.keys(LIGHT)) {
+    stage.style.setProperty('--' + k, mix(LIGHT[k], DARK[k], t));
+  }
+  stage.style.setProperty('--gap', lerp(10, 5, compact).toFixed(1) + 'px');
+  stage.style.setProperty('--pad', lerp(10, 6, compact).toFixed(1) + 'px');
+}
+
+/* ─────────────── 组件片段 ─────────────── */
+const btn = (label, kind = '', id = '') =>
+  `<span class="btn ${kind}" ${id ? `id="${id}"` : ''}>${label}</span>`;
+const seg = (items, active, id = '') =>
+  `<span class="seg" ${id ? `id="${id}"` : ''}>` +
+  items.map(x => `<span class="${x === active ? 'on' : ''}">${esc(x)}</span>`).join('') + `</span>`;
+const inp = (content, cls = '', id = '') =>
+  `<span class="inp ${cls}" ${id ? `id="${id}"` : ''}>${content}</span>`;
+const status = (ok, text) =>
+  `<span class="status ${ok ? 'ok' : ''}"><i></i>${text}</span>`;
+function panel(title, tools, body, cls = '', id = '') {
+  return `<section class="pnl ${cls}" ${id ? `id="${id}"` : ''}>
+    <div class="pnl-h"><span>${title}</span><div class="tools">${tools || ''}</div></div>
+    <div class="pnl-b">${body}</div></section>`;
+}
+function logline(dir, ts, text, opt = {}) {
+  return `<div class="logline ${opt.soft ? 'soft' : ''}" style="opacity:${opt.opacity ?? 1}">
+    <span class="dir ${dir.toLowerCase()}">${dir}</span>
+    <span class="ts">${ts}</span>
+    <span class="payload mono">${opt.mark ? hl(text, opt.mark) : esc(text)}</span>
+    ${opt.bytes ? `<span class="bytes">(${opt.bytes})</span>` : ''}
+  </div>`;
+}
+const field = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+
+/* ─────────────── 场景 1 · 连接与收发 ─────────────── */
+const S_CONNECT = {
+  title: '连接与收发', N: 96,
+  steps: [
+    { from:0,  to:16, cap:'选择内置的 MOCK 模拟串口，不用接硬件', target:'#c-port' },
+    { from:16, to:31, cap:'点「打开端口」，状态变成已连接', target:'#c-open', clickAt:20 },
+    { from:31, to:49, cap:'输入 AT 指令，按 Enter 或点「发送」', target:'#c-input' },
+    { from:49, to:64, cap:'TX 记录立刻出现，附带到达时间', target:'#c-send', clickAt:53 },
+    { from:64, to:80, cap:'模拟串口回 OK，RX 记录按时间追加', target:'#c-log' },
+    { from:80, to:96, cap:'切到 HEX，原始字节按真实字节显示', target:'#c-hex', clickAt:83 },
+  ],
+  draw(f) {
+    const opened = f >= 23;
+    const typed  = type('AT+FWREAD', (f - 33) / 13);
+    const sent   = f >= 55;
+    const rx     = f >= 67;
+    const hex    = f >= 85;
+    const caret  = f >= 33 && f < 47 ? '<span class="caret"></span>' : '';
+
+    const config = panel('串口配置', btn('刷新', 'ghost mini'),
+      field('端口', inp('MOCK · 模拟串口', '', 'c-port')) +
+      field('波特率', inp('115200')) +
+      field('数据位', inp('8')) +
+      field('校验位', inp('无')) +
+      field('停止位', inp('1')) +
+      `<div class="row" style="margin-top:12px">${status(opened, opened ? '已连接' : '未连接')}</div>` +
+      `<div class="row" style="margin-top:8px">${opened ? btn('关闭端口', '', 'c-open') : btn('打开端口', 'primary', 'c-open')}</div>`
+    );
+
+    const send = panel('发送数据',
+      seg(['ASCII', 'HEX'], hex ? 'HEX' : 'ASCII', 'c-hex'),
+      `<div style="height:52px;border:1px solid var(--border);border-radius:6px;background:var(--input);padding:7px 9px;font-family:var(--mono);font-size:11.5px" id="c-input">${esc(typed)}${caret}${typed ? '' : '<span class="ph">输入指令…</span>'}</div>
+       <div class="row" style="margin-top:8px"><span class="lbl">${typed.length} 字节</span><span style="flex:1"></span>${btn('发送', 'primary', 'c-send')}</div>`
+    );
+
+    const lines = [
+      sent && logline('TX', '10:42:07.114', 'AT+FWREAD'),
+      rx   && logline('RX', '10:42:07.231', 'OK', { soft:true }),
+      hex  && logline('RX', '10:42:09.008', 'AA 55 01 00 00 FB AC', { bytes:'7B' }),
+    ].filter(Boolean).join('') || `<div class="dim" style="font-size:11.5px;padding:8px">还没有记录，打开端口并发送一条指令。</div>`;
+
+    const logs = panel('日志接收', seg(['卡片视图','文本视图','十六进制'], '卡片视图'),
+      `<div id="c-log" style="height:100%">${lines}</div>`);
+
+    appEl.style.gridTemplateColumns = '232px 1fr';
+    appEl.style.gridTemplateRows = '1fr';
+    return config + `<div style="display:grid;grid-template-rows:150px 1fr;gap:var(--gap);min-height:0">${send}${logs}</div>`;
+  }
+};
+
+/* ─────────────── 场景 2 · 批量循环 ─────────────── */
+const S_LOOP = {
+  title: '批量循环与间隔', N: 96,
+  steps: [
+    { from:0,  to:18, cap:'勾选要循环执行的指令行', target:'#l-row3' },
+    { from:18, to:35, cap:'循环间隔预设 3000ms，没填间隔的行沿用这个值', target:'#l-gap', clickAt:23 },
+    { from:35, to:48, cap:'点「开始」，按钮变成「停止」', target:'#l-start', clickAt:38 },
+    { from:48, to:72, cap:'每条之间停顿 3000ms，不是一口气发完', target:'#l-timer' },
+    { from:72, to:88, cap:'跑完最后一圈，「停止」立即复位成「开始」', target:'#l-start' },
+    { from:88, to:96, cap:'', target:'#l-start' },
+  ],
+  draw(f) {
+    const checked = [f >= 6, f >= 11, f >= 16];
+    const gapText = type('3000', (f - 21) / 8);
+    const running = f >= 40 && f < 72;
+    const shown = [f >= 48, f >= 58, f >= 68];
+    const timerP = f >= 48 && f < 58 ? clamp((f - 48) / 9)
+                 : f >= 58 && f < 68 ? clamp((f - 58) / 9) : 0;
+
+    const rows = [
+      ['AT+CSQ',    'CRLF', ''],
+      ['AT+CREG?',  'CRLF', '500'],
+      ['AT+CGATT?', 'CRLF', ''],
+    ].map(([cmd, tail, gap], i) => `
+      <div class="grid-row ${checked[i] ? 'sel' : ''}" ${i === 2 ? 'id="l-row3"' : ''}>
+        <span class="box ${checked[i] ? 'on' : ''}">${checked[i] ? '✓' : ''}</span>
+        <span class="dim mono">${i + 1}</span>
+        <span class="cmd">${cmd}</span>
+        <span class="tail">${tail}</span>
+        <span class="gapinp ${gap ? '' : 'empty'}">${gap || '沿用默认'}</span>
+      </div>`).join('');
+
+    const grid = panel('指令组',
+      `<label class="lbl" style="display:inline-flex;align-items:center;gap:5px"><span class="box on">✓</span>循环</label>
+       <span class="lbl">循环间隔</span>${inp(gapText || '<span class="ph">3000</span>', 'mono focus', 'l-gap')}<span class="lbl">ms</span>
+       ${running ? btn('■ 停止', 'danger', 'l-start') : btn('▶ 开始', 'primary', 'l-start')}`,
+      `<div class="grid-head"><span></span><span>#</span><span>指令</span><span>结尾符</span><span>间隔(ms)</span></div>${rows}
+       <div class="row" style="margin-top:12px"><span class="lbl">已选 ${checked.filter(Boolean).length} 条 · 循环 1 圈</span></div>`
+    );
+
+    const out = [
+      shown[0] && logline('TX', '10:42:07.114', 'AT+CSQ'),
+      shown[1] && logline('TX', '10:42:10.118', 'AT+CREG?'),
+      shown[2] && logline('TX', '10:42:13.121', 'AT+CGATT?'),
+    ].filter(Boolean).join('') || `<div class="dim" style="font-size:11.5px;padding:8px">等待开始循环…</div>`;
+
+    const logPanel = panel('日志接收', status(running, running ? '循环中' : '就绪'),
+      `<div style="height:100%;display:flex;flex-direction:column">
+        <div>${out}</div>
+        <div style="flex:1"></div>
+        <div id="l-timer" style="opacity:${running ? 1 : .35}">
+          <div class="row" style="margin-bottom:5px"><span class="lbl">下一次发送 · 间隔 3000ms</span><span style="flex:1"></span><span class="mono dim" style="font-size:10px">${Math.round(timerP * 3000)}ms</span></div>
+          <div class="timer"><i style="width:${(timerP * 100).toFixed(1)}%"></i></div>
+        </div>
+      </div>`);
+
+    appEl.style.gridTemplateColumns = '1fr 286px';
+    appEl.style.gridTemplateRows = '1fr';
+    return grid + logPanel;
+  }
+};
+
+/* ─────────────── 场景 3 · 日志视图 ─────────────── */
+const S_LOGS = {
+  title: '日志视图与搜索', N: 96,
+  steps: [
+    { from:0,  to:17, cap:'卡片视图：每条收发独立成行，方向一眼可辨', target:'#v-card' },
+    { from:17, to:35, cap:'文本视图适合整段复制与正则清洗', target:'#v-text', clickAt:21 },
+    { from:35, to:55, cap:'十六进制视图按真实字节显示，不再变成方块问号', target:'#v-hex', clickAt:39 },
+    { from:55, to:77, cap:'搜索 OK，匹配项橙色高亮，支持大小写、正则、全词', target:'#v-search', clickAt:58 },
+    { from:77, to:90, cap:'手动翻页后点「一键跟随」回到最新一条', target:'#v-follow', clickAt:80 },
+    { from:90, to:96, cap:'', target:'#v-card' },
+  ],
+  draw(f) {
+    const view = f >= 39 ? 'hex' : f >= 21 ? 'text' : 'card';
+    const qRaw = type('OK', (f - 56) / 7);
+    const q = qRaw;   // 边输边搜，匹配随输入实时出现
+    const follow = f >= 80;
+
+    const tabs = `<span class="seg">
+      <span class="${view === 'card' ? 'on' : ''}" id="v-card">卡片视图</span>
+      <span class="${view === 'text' ? 'on' : ''}" id="v-text">文本视图</span>
+      <span class="${view === 'hex' ? 'on' : ''}" id="v-hex">十六进制</span></span>`;
+
+    let body;
+    if (view === 'card') {
+      body = [
+        logline('RX', '10:42:07.114', '\\xFF\\x00\\r\\nOK\\r\\n', { bytes:'8B', mark:q }),
+        logline('TX', '10:42:07.202', 'AT+QRST=1', { mark:q }),
+        logline('RX', '10:42:07.311', 'OK', { soft:true, mark:q }),
+        logline('RX', '10:42:09.008', 'AA 55 01 00 00 FB AC', { bytes:'7B', mark:q }),
+      ].join('');
+    } else if (view === 'text') {
+      body = `<div class="textview">[10:42:07.114] RX  ${hl('\\xFF\\x00\\r\\nOK\\r\\n', q)}
+[10:42:07.202] TX  AT+QRST=1
+[10:42:07.311] RX  ${hl('OK', q)}
+[10:42:09.008] RX  AA 55 01 00 00 FB AC</div>`;
+    } else {
+      body = `<div class="dump"><span class="off">0000</span>  AA 55 01 00 00 FB AC 0D  <span class="asc">······¬.</span>
+<span class="off">0008</span>  0A 4F 4B 0D 0A 41 54 2B  <span class="asc">.${hl('OK', q)}..AT+</span>
+<span class="off">0010</span>  51 52 53 54 3D 31 0D 0A  <span class="asc">QRST=1..</span></div>
+      <div class="lbl" style="margin-top:14px">偏移列 · 原始字节 · ASCII 列；数据取自 rawBytes，不再从字符串反推</div>`;
+    }
+
+    const search = `<span class="inp mono focus" id="v-search" style="min-width:132px">${qRaw ? esc(qRaw) : '<span class="ph">搜索日志…</span>'}${f >= 56 && f < 64 ? '<span class="caret"></span>' : ''}</span>`;
+    const tools = tabs + search + `<span class="lbl">${q ? '2 个匹配' : '搜索'}</span>` + btn('清空', 'ghost mini');
+
+    const panelHtml = panel('日志接收', tools,
+      `<div style="position:relative;height:100%">${body}
+        <div style="position:absolute;right:4px;bottom:4px;opacity:${follow ? 1 : f >= 77 ? (f - 77) / 3 : 0}">
+          ${btn('↓ 一键跟随', 'primary mini', 'v-follow')}
+        </div>
+      </div>`);
+    appEl.style.gridTemplateColumns = '1fr';
+    appEl.style.gridTemplateRows = '1fr';
+    return panelHtml;
+  }
+};
+
+/* ─────────────── 场景 4 · 主题与布局 ─────────────── */
+const S_THEME = {
+  title: '主题与布局', N: 96,
+  steps: [
+    { from:0,  to:15, cap:'设置里可以调整主题、密度和面板排列', target:'#t-open', clickAt:7 },
+    { from:15, to:35, cap:'点「暗色模式」，配色跟随应用主题变量一起切换', target:'#t-dark', clickAt:18 },
+    { from:35, to:53, cap:'紧凑模式把面板间距收紧，一屏能看更多日志', target:'#t-compact', clickAt:38 },
+    { from:53, to:75, cap:'面板可以自由拖拽排列，位置会保存下来', target:'#t-drag', clickAt:56 },
+    { from:75, to:90, cap:'切回亮色，布局保持不变', target:'#t-light', clickAt:78 },
+    { from:90, to:96, cap:'', target:'#t-open' },
+  ],
+  theme(f) {
+    let t = f < 20 ? 0 : f < 32 ? clamp((f - 20) / 12) : 1;
+    if (f >= 80) t = 1 - clamp((f - 80) / 8);
+    return t;
+  },
+  compact(f) { return f < 40 ? 0 : clamp((f - 40) / 10); },
+  draw(f) {
+    const settingsOpen = f >= 8;
+    const dark = this.theme(f);
+    const dragP = f < 56 ? 0 : f < 70 ? clamp((f - 56) / 14) : 1;
+    const dx = lerp(0, -46, dragP), dy = lerp(0, 56, dragP);
+
+    const p1 = panel('串口配置', btn('配置', 'ghost mini'),
+      field('端口', inp('MOCK · 模拟串口')) + field('波特率', inp('115200')) +
+      `<div class="row" style="margin-top:10px">${status(true, '已连接')}</div>`, 'full');
+    // 内容收在左半：右侧留给设置浮层，避免输入框和按钮被盖住
+    const p2 = panel('发送数据', seg(['ASCII','HEX'], 'ASCII'),
+      `<div style="padding-right:42%">
+         <div style="height:44px;border:1px solid var(--border);border-radius:6px;background:var(--input);padding:7px 9px" class="mono">AT+CSQ</div>
+         <div class="row" style="margin-top:8px"><span class="lbl">8 字节</span>${btn('发送', 'primary mini')}</div>
+       </div>`, 'full');
+    const p3 = panel('日志接收', btn('清空', 'ghost mini'),
+      logline('TX', '10:42:07.114', 'AT+CSQ') +
+      logline('RX', '10:42:07.231', '+CSQ: 24,99', { soft:true }) +
+      logline('RX', '10:42:07.238', 'OK'), 'full', 't-drag');
+    const p4 = panel('指令组', btn('循环', 'ghost mini'),
+      `<div class="grid-head"><span></span><span>#</span><span>指令</span><span>结尾符</span><span>间隔</span></div>
+       <div class="grid-row sel"><span class="box on">✓</span><span class="dim mono">1</span><span class="cmd">AT+CSQ</span><span class="tail">CRLF</span><span class="tail mono">3000</span></div>
+       <div class="grid-row sel"><span class="box on">✓</span><span class="dim mono">2</span><span class="cmd">AT+CREG?</span><span class="tail">CRLF</span><span class="tail mono">3000</span></div>`, 'full');
+
+    const settings = settingsOpen ? `<div class="settings">
+      <h4>设置 · 主题</h4><p>背景、文字、边框和强调色会实时应用。</p>
+      <div class="row" style="margin-bottom:8px">
+        ${btn('亮色模式', dark > .5 ? '' : 'primary', 't-light')}
+        ${btn('暗色模式', dark > .5 ? 'primary' : '', 't-dark')}
+      </div>
+      <div class="opt"><span>紧凑模式</span><span class="switch ${this.compact(f) > .5 ? 'on' : ''}" id="t-compact"><i></i></span></div>
+      <div class="opt"><span style="color:var(--muted);font-size:10.5px">拖拽下方网格中的卡片自定义布局</span></div>
+    </div>` : '';
+
+    // 设置按钮放标题栏，浮层绝对定位，都不参与 2×2 网格
+    document.getElementById('topAction').innerHTML = btn('设置', 'primary mini', 't-open');
+
+    appEl.style.gridTemplateColumns = '1fr 1fr';
+    appEl.style.gridTemplateRows = '1fr 1fr';
+    appEl.style.position = 'relative';
+    return p1 + p2 +
+      `<div style="height:100%;min-height:0;transform:translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px);${dragP > 0 && dragP < 1 ? 'z-index:3' : ''}" class="${dragP > 0 && dragP < 1 ? 'drag' : ''}">${p3}</div>` +
+      p4 + settings;
+  }
+};
+
+/* ─────────────── 帧驱动 ─────────────── */
+const SCENES = { connect:S_CONNECT, loop:S_LOOP, logs:S_LOGS, theme:S_THEME };
+
+function centerOf(sel) {
+  const el = sel ? document.querySelector(sel) : null;   // 目标可能在标题栏，查整个 stage
+  if (!el) return null;
+  const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+  return { x: r.left - s.left + r.width / 2, y: r.top - s.top + r.height / 2 };
+}
+
+window.renderFrame = function (id, frame) {
+  const sc = SCENES[id];
+  if (!sc) throw new Error('unknown scene: ' + id);
+  const N = sc.N;
+  const f = frame >= N - 6 ? 0 : frame;           // 末尾回到初始态，GIF 循环不跳
+  document.getElementById('topTitle').textContent = sc.title;
+  document.getElementById('progFill').style.width = (frame / (N - 1) * 100).toFixed(2) + '%';
+  // 末 6 帧淡出到背景色，遮住「日志清空 / 主题复位」的硬切换
+  document.getElementById('fade').style.opacity =
+    (frame >= N - 6 ? clamp((frame - (N - 6) + 1) / 6) : 0).toFixed(3);
+
+  document.getElementById('topAction').innerHTML = '';
+  appEl.style.cssText = '';
+  appEl.innerHTML = sc.draw(f);
+  applyTheme(sc.theme ? sc.theme(f) : 0, sc.compact ? sc.compact(f) : 0);
+
+  // 字幕
+  const si = Math.max(0, sc.steps.findIndex(s => f >= s.from && f < s.to));
+  const step = sc.steps[si] || sc.steps[0];
+  capEl.textContent = step.cap || '';
+  // 字幕整步保持实色，只在换句前 2 帧与片尾淡出；可读优先于花哨的入场
+  const fade = clamp((step.to - f) / 2);
+  capEl.style.opacity = (fade * (frame >= N - 6 ? clamp((N - 1 - frame) / 6) : 1)).toFixed(3);
+
+  // 光标：从上一控件移动到当前控件；首步直接落在目标上
+  const prev = sc.steps[si - 1];
+  const to   = centerOf(step.target) || { x:440, y:240 };
+  const from = (prev && centerOf(prev.target)) || to;
+  const p = clamp((f - step.from) / 9);
+  const x = lerp(from.x, to.x, p), y = lerp(from.y, to.y, p);
+  cursorEl.style.transform = `translate(${(x - 3).toFixed(1)}px, ${(y - 3).toFixed(1)}px)`;
+
+  // 点击涟漪
+  if (step.clickAt !== undefined) {
+    const d = f - step.clickAt;
+    if (d >= 0 && d <= 9) {
+      rippleEl.style.left = to.x + 'px';
+      rippleEl.style.top = to.y + 'px';
+      rippleEl.style.opacity = (0.55 * (1 - d / 10)).toFixed(3);
+      rippleEl.style.transform = `translate(-50%,-50%) scale(${(0.5 + d * 0.32).toFixed(2)})`;
+    } else {
+      rippleEl.style.opacity = 0;
+    }
+  } else {
+    rippleEl.style.opacity = 0;
+  }
+  return true;
+};
+
+window.demoScenes = Object.keys(SCENES).map(k => ({ id:k, title:SCENES[k].title, frames:SCENES[k].N }));
+renderFrame('connect', 0);
+</script>
+</body>
+</html>
