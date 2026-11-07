@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - 'docs/index.html'
+      - 'docs/*.png'
       - 'docs/demos/*.gif'
       - 'docs/demos/*-still.png'
       - 'docs/demos/gallery.html'
@@ -37,6 +38,7 @@ jobs:
           set -euo pipefail
           mkdir -p _site/demos
           cp docs/index.html _site/
+          cp docs/favicon-32.png docs/favicon-192.png docs/apple-touch-icon.png docs/logo.png _site/
           cp docs/demos/*.gif docs/demos/*-still.png _site/demos/
           cp docs/demos/gallery.html _site/demos/
           echo "站点内容："
