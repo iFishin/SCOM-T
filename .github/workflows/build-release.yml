@@ -256,5 +256,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit "${{ needs.create-release.outputs.tag }}" --draft=false
+          # This job has no checkout, so gh cannot infer the repo from .git.
+          # Always pass --repo explicitly or this fails with
+          # "fatal: not a git repository" after all builds already succeeded.
+          gh release edit "${{ needs.create-release.outputs.tag }}" \
+            --draft=false --repo "${{ github.repository }}"
           echo "已发布：${{ needs.create-release.outputs.tag }}"
