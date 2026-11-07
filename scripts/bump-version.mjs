@@ -9,6 +9,7 @@ const tauriPath = join(root, "src-tauri", "tauri.conf.json");
 const pkgPath = join(root, "package.json");
 const cargoPath = join(root, "src-tauri", "Cargo.toml");
 const lockPath = join(root, "package-lock.json");
+const cargoLockPath = join(root, "src-tauri", "Cargo.lock");
 // Raw fallback for the in-app update check reads this file from main.
 const versionPath = join(root, "VERSION");
 
@@ -58,6 +59,16 @@ if (existsSync(lockPath)) {
 // check fall back to raw.githubusercontent.com/.../main/VERSION.
 if (existsSync(versionPath)) {
   writeFileSync(versionPath, newVersion + "\n");
+}
+
+// Cargo.lock pins the workspace crate version too; cargo would rewrite it on
+// the next build, so keep the committed lockfile consistent instead.
+if (existsSync(cargoLockPath)) {
+  const lockText = readFileSync(cargoLockPath, "utf-8");
+  const crateVersion = /(name = "scom-t"\r?\nversion = ")[^"]+(")/;
+  if (crateVersion.test(lockText)) {
+    writeFileSync(cargoLockPath, lockText.replace(crateVersion, `$1${newVersion}$2`));
+  }
 }
 
 console.log(`Version bumped → ${newVersion}`);
