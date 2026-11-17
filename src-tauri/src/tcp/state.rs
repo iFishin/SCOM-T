@@ -21,8 +21,10 @@ impl Protocol {
 pub struct TcpClientState {
     /// Watch channel sender — send true to cancel the read loop
     pub cancel_tx: Arc<Mutex<Option<watch::Sender<bool>>>>,
-    /// Channel for sending data to the read loop task (which owns the writer)
-    pub send_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>>,
+    /// Channel for sending data to the read loop task (which owns the writer).
+    /// Bounded so a stalled peer applies back-pressure instead of letting the
+    /// queue grow without limit.
+    pub send_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Vec<u8>>>>>,
     /// Active protocol mode
     pub protocol: Arc<Mutex<Protocol>>,
 }

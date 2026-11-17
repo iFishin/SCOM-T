@@ -83,6 +83,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 import {
   appendCrashLog,
   clearCrashLog,
+  encodeEntry,
   readCrashLog,
   MAX_RESTORE_ENTRIES,
 } from "./crashRecoveryLog.ts";
@@ -97,7 +98,7 @@ function entry(seq: number, payload = "AT+CSQ"): SerialLogEntry {
     direction: seq % 2 === 0 ? "received" : "sent",
     mode: "ascii",
     payload,
-    rawBytes: [0x41, 0x54],
+    rawBytes: Uint8Array.from([0x41, 0x54]),
     timestamp: "[10:42:07.114]",
     seq,
     complete: true,
@@ -109,7 +110,7 @@ function seed(id: string, text: string): void {
 }
 
 const jsonl = (entries: SerialLogEntry[]) =>
-  entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
+  entries.map(encodeEntry).join("\n") + "\n";
 
 beforeEach(() => {
   files.clear();
@@ -134,7 +135,7 @@ describe("readCrashLog", () => {
   });
 
   it("skips a torn line instead of failing the whole restore", async () => {
-    seed("s1", `${JSON.stringify(entry(1))}\n{"id":"2","payload":"hal\n${JSON.stringify(entry(3))}\n`);
+    seed("s1", `${encodeEntry(entry(1))}\n{"id":"2","payload":"hal\n${encodeEntry(entry(3))}\n`);
 
     const entries = await readCrashLog("s1");
 
@@ -142,7 +143,7 @@ describe("readCrashLog", () => {
   });
 
   it("reads only the tail of an oversized log, dropping the cut first line", async () => {
-    // ~200 bytes per record × 12000 ≈ 2.4 MB, past the 2 MB tail window.
+    // ~200 bytes per record × 12000 ≈ 2.4 MB, past the 512 KB tail window.
     const many = Array.from({ length: 12000 }, (_, i) =>
       entry(i, "A".repeat(160)),
     );
@@ -180,20 +181,20 @@ describe("appendCrashLog", () => {
 
   it("rotates to a single backup once the file passes the size limit", async () => {
     seed("s1", jsonl([entry(1)]));
-    // Pretend the live log already reached the 8 MB ceiling.
-    files.set(logPath("s1"), new Uint8Array(8 * 1024 * 1024));
+    // Pretend the live log already reached the 2 MB ceiling.
+    files.set(logPath("s1"), new Uint8Array(3 * 1024 * 1024));
 
     await appendCrashLog("s1", [entry(2)]);
 
-    expect(files.get(backupPath("s1"))?.length).toBe(8 * 1024 * 1024);
+    expect(files.get(backupPath("s1"))?.length).toBe(3 * 1024 * 1024);
     const live = new TextDecoder().decode(files.get(logPath("s1")));
     expect(live).toContain('"seq":2');
 
     // Second rotation replaces the old backup instead of stacking files.
-    files.set(logPath("s1"), new Uint8Array(8 * 1024 * 1024));
+    files.set(logPath("s1"), new Uint8Array(3 * 1024 * 1024));
     await appendCrashLog("s1", [entry(3)]);
 
-    expect(files.get(backupPath("s1"))?.length).toBe(8 * 1024 * 1024);
+    expect(files.get(backupPath("s1"))?.length).toBe(3 * 1024 * 1024);
     expect(
       [...files.keys()].filter((k) => k.startsWith(logPath("s1"))).sort(),
     ).toEqual([logPath("s1"), backupPath("s1")].sort());

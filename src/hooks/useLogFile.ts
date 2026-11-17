@@ -9,7 +9,7 @@ import { bytesToAscii, bytesToHex } from "../utils/hexConverter";
  * The queue is only drained by successful writes, so a persistently failing
  * path (disk full, deleted directory) would otherwise grow without bound.
  */
-const MAX_PENDING_ENTRIES = 20_000;
+const MAX_PENDING_ENTRIES = 5_000;
 
 /**
  * Append to a queue that is only drained by successful writes, dropping the

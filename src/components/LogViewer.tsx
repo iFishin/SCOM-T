@@ -4,6 +4,9 @@ import { SearchReplace } from "./SearchReplace.tsx";
 import { highlightText, type MatchRange } from "../hooks/useSearch.ts";
 import type { Lang } from "../i18n.ts";
 
+/** Rows the viewer mounts; the file itself may be far longer. */
+const MAX_RENDERED_LINES = 2_000;
+
 type LogViewerProps = {
   lang: Lang;
   logFiles: string[];
@@ -32,6 +35,11 @@ export function LogViewer({ lang, logFiles, selectedFile, content, onSelectFile,
     : -1;
 
   const lines = content.split("\n");
+  // Only the tail is rendered: an app log can hold tens of thousands of lines,
+  // and each one is a node with two spans. Line numbers stay absolute so the
+  // numbers shown match the file.
+  const lineOffset = Math.max(0, lines.length - MAX_RENDERED_LINES);
+  const visibleLines = lineOffset === 0 ? lines : lines.slice(lineOffset);
 
   return (
     <div className="flex h-[75vh] w-[85vw] max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
@@ -80,17 +88,25 @@ export function LogViewer({ lang, logFiles, selectedFile, content, onSelectFile,
                 />
               )}
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-[20px]">
-                {lines.map((line, i) => {
+                {lineOffset > 0 && (
+                  <div className="mb-2 text-center text-[var(--text-muted)] opacity-60">
+                    {lang === "zh"
+                      ? `前 ${lineOffset} 行未显示（仅渲染最近 ${MAX_RENDERED_LINES} 行）`
+                      : `${lineOffset} earlier lines hidden (showing last ${MAX_RENDERED_LINES})`}
+                  </div>
+                )}
+                {visibleLines.map((line, i) => {
+                  const absoluteIndex = lineOffset + i;
                   let color = "text-[var(--text-primary)]";
                   let bg = "";
                   if (line.includes("] [ERROR]")) { color = "text-red-600 dark:text-red-400"; bg = "bg-red-50 dark:bg-red-950/30"; }
                   else if (line.includes("] [WARN]")) { color = "text-amber-600 dark:text-amber-400"; bg = "bg-amber-50 dark:bg-amber-950/30"; }
                   else if (line.includes("] [INFO]")) { color = "text-sky-600 dark:text-sky-400"; }
                   else if (line.includes("] [DEBUG]")) { color = "text-[var(--text-muted)]"; }
-                  const isCurrentLine = i === currentMatchLine;
+                  const isCurrentLine = absoluteIndex === currentMatchLine;
                   return (
                     <div key={i} className={bg}>
-                      <span className={"select-none mr-3 text-right opacity-40 shrink-0 " + color}>{i + 1}</span>
+                      <span className={"select-none mr-3 text-right opacity-40 shrink-0 " + color}>{absoluteIndex + 1}</span>
                       <span className={color}>
                         {searchRegex
                           ? highlightText(line, searchRegex).map((seg, si) =>

@@ -133,6 +133,9 @@ export type AppSettings = {
   rxIdleFlushMs?: number;
   /** 日志渲染批间隔：合并 `setState` 的延迟（ms）。越大 UI 越平滑，越小日志出现越快。范围 5–1000。 */
   logBatchFlushMs?: number;
+  /** 实时视图保留的日志条数。每条日志都要占一份 DOM 和 React 状态，长跑时这项
+   *  直接决定常驻内存；超出后最早的条目被丢弃（完整记录看日志文件）。范围 500–50000。 */
+  maxLogs?: number;
   /** 上次选择的日志文件路径，用于下次启动自动恢复写入。 */
   logSavePath?: string | null;
   /** 日志实时写入开关状态，随 logSavePath 一起持久化。 */
@@ -260,6 +263,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   helpUrl: "",
   rxIdleFlushMs: 50,
   logBatchFlushMs: 50,
+  maxLogs: 3_000,
   customEnders: [],
   sessions: [],
 };
@@ -401,6 +405,8 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       ? Math.floor(raw.rxIdleFlushMs) : 50,
     logBatchFlushMs: typeof raw.logBatchFlushMs === "number" && raw.logBatchFlushMs >= 5 && raw.logBatchFlushMs <= 1000
       ? Math.floor(raw.logBatchFlushMs) : 50,
+    maxLogs: typeof raw.maxLogs === "number" && raw.maxLogs >= 500 && raw.maxLogs <= 50_000
+      ? Math.floor(raw.maxLogs) : 3_000,
     logSavePath: typeof raw.logSavePath === "string" ? raw.logSavePath : null,
     logRealTime: raw.logRealTime === true,
   };
@@ -663,6 +669,13 @@ export function useSettings() {
     }));
   }
 
+  function updateMaxLogs(count: number) {
+    setSettings((current) => ({
+      ...current,
+      maxLogs: Math.max(500, Math.min(50_000, Math.floor(count))),
+    }));
+  }
+
   function updateLogBatchFlushMs(ms: number) {
     setSettings((current) => ({
       ...current,
@@ -722,6 +735,7 @@ export function useSettings() {
     updateCloudUploaderName,
     updateRxIdleFlushMs,
     updateLogBatchFlushMs,
+    updateMaxLogs,
     updateLogFileState,
   };
 }

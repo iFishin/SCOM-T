@@ -58,7 +58,7 @@ export type ActiveSessionData = {
  * the oldest keeps the writer bounded; recovery context is the recent tail
  * anyway, same trade-off as MAX_RESTORE_ENTRIES.
  */
-const MAX_CRASH_PENDING = 10_000;
+const MAX_CRASH_PENDING = 2_000;
 
 function useCrashLogWriter(sessionId: string) {
   const pendingRef = useRef<SerialLogEntry[]>([]);
@@ -105,6 +105,7 @@ function SessionContent({
   mockSerial,
   rxIdleFlushMs,
   logBatchFlushMs,
+  maxLogs,
   onConfigChange,
   onDataRef,
   isActive,
@@ -125,6 +126,8 @@ function SessionContent({
   mockSerial?: MockSerialConfig;
   rxIdleFlushMs?: number;
   logBatchFlushMs?: number;
+  /** Live-view entry cap; drives both heap use and how many rows get mounted. */
+  maxLogs?: number;
   onConfigChange: (config: SerialConfig) => void;
   onDataRef: React.MutableRefObject<ActiveSessionData | null>;
   isActive: boolean;
@@ -135,7 +138,7 @@ function SessionContent({
   logRealTime?: boolean;
   onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
 }) {
-  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs, initialLogs });
+  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs, maxLogs, initialLogs });
   const logFile = useLogFile({ onStateChange: onLogFileStateChange });
   const enqueueCrashLog = useCrashLogWriter(sessionId);
 
@@ -227,6 +230,7 @@ function SessionContent({
       </div>
       <ReceiveLog
         logs={serial.logs}
+        mounted={isActive}
         lang={lang}
         logCapWarning={serial.logCapWarning}
         sendQueue={serial.sendQueue}
@@ -259,6 +263,7 @@ type SessionManagerProps = {
   mockSerial?: MockSerialConfig;
   rxIdleFlushMs?: number;
   logBatchFlushMs?: number;
+  maxLogs?: number;
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
   onSessionsChange?: (sessions: SerialSession[]) => void;
@@ -276,6 +281,7 @@ export function SessionManager({
   mockSerial,
   rxIdleFlushMs,
   logBatchFlushMs,
+  maxLogs,
   onActiveSessionData,
   onAddToPrompts,
   onSessionsChange,
@@ -337,6 +343,24 @@ export function SessionManager({
   const handleCloseSession = useCallback((sessionId: string) => {
     closeSession(sessionId);
     void clearCrashLog(sessionId);
+    // Drop everything still holding this session's log array. The data ref is
+    // what App.tsx reads from, and the recovered-log entry is only needed
+    // until SessionContent mounts — keeping either after the tab is gone pins
+    // thousands of entries that can never be collected.
+    delete sessionDataRefs.current[sessionId];
+    setRecoveredLogs((prev) => {
+      if (!(sessionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+    setCheckedSessions((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    recoveryStartedRef.current.delete(sessionId);
   }, [closeSession]);
 
   // Sync active session data to App.tsx
@@ -391,6 +415,7 @@ export function SessionManager({
                 mockSerial={mockSerial}
                 rxIdleFlushMs={rxIdleFlushMs}
                 logBatchFlushMs={logBatchFlushMs}
+                maxLogs={maxLogs}
                 onConfigChange={(config) => handleConfigChange(session.id, config)}
                 onDataRef={sessionDataRefs.current[session.id]}
                 isActive={session.id === activeSessionId}
