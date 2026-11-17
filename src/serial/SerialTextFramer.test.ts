@@ -578,4 +578,44 @@ describe("SerialTextFramer", () => {
       expect(framer.getPending()).toEqual([]);
     });
   });
+
+  describe("pending buffer ceiling", () => {
+    it("force-flushes an unterminated stream once it passes the limit", () => {
+      const capped = new SerialTextFramer({ maxPendingBytes: 8 });
+      const frames: Array<{ line: number[]; ending: number[]; crlf: boolean }> = [];
+      capped.onFrame((frame) => frames.push(frame));
+
+      capped.feed([0x41, 0x42, 0x43, 0x44, 0x45]); // "ABCDE", under the limit
+      expect(capped.getPending()).toHaveLength(5);
+      expect(frames).toHaveLength(0);
+
+      capped.feed([0x46, 0x47, 0x48, 0x49]); // + "FGHI" → 9 bytes, over the limit
+      expect(capped.getPending()).toEqual([]);
+      expect(frames).toHaveLength(1);
+      // Bytes are kept, not dropped — same contract as the idle flush.
+      expect(new TextDecoder().decode(new Uint8Array(frames[0].line))).toBe("ABCDEFGHI");
+      expect(frames[0].ending).toEqual([]);
+      expect(frames[0].crlf).toBe(false);
+    });
+
+    it("keeps normal newline-terminated lines on the unchanged path", () => {
+      const capped = new SerialTextFramer({ maxPendingBytes: 8 });
+      capped.feed(Array.from(new TextEncoder().encode("AT+CSQ\r\n")));
+
+      const frames = capped.takeFrames();
+      expect(frames).toHaveLength(1);
+      expect(new TextDecoder().decode(new Uint8Array(frames[0].line))).toBe("AT+CSQ");
+      expect(frames[0].crlf).toBe(true);
+      expect(capped.getPending()).toEqual([]);
+    });
+
+    it("does not split a long line that arrives with its newline in one chunk", () => {
+      const capped = new SerialTextFramer({ maxPendingBytes: 8 });
+      capped.feed(Array.from(new TextEncoder().encode("0123456789abcdef\n")));
+
+      const frames = capped.takeFrames();
+      expect(frames).toHaveLength(1);
+      expect(new TextDecoder().decode(new Uint8Array(frames[0].line))).toBe("0123456789abcdef");
+    });
+  });
 });

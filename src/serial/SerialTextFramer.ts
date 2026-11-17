@@ -28,11 +28,29 @@ export interface TextFrameEvent {
 
 export type TextFrameCallback = (frame: TextFrameEvent) => void;
 
+/**
+ * Bytes kept while waiting for a newline before the framer force-flushes them
+ * as one long line. A device that streams binary data without line endings, or
+ * sends with gaps shorter than the idle-flush timer, would otherwise grow this
+ * buffer forever — one byte array copy per chunk.
+ */
+const DEFAULT_MAX_PENDING_BYTES = 1 << 20;
+
+export interface SerialTextFramerOptions {
+  /** Override the pending-buffer ceiling (bytes). */
+  maxPendingBytes?: number;
+}
+
 export class SerialTextFramer {
   private pending: number[] = [];
   private lines: TextFrameEvent[] = [];
   private onFrameCallback: TextFrameCallback | null = null;
   private closed = false;
+  private readonly maxPendingBytes: number;
+
+  constructor(options: SerialTextFramerOptions = {}) {
+    this.maxPendingBytes = options.maxPendingBytes ?? DEFAULT_MAX_PENDING_BYTES;
+  }
 
   /**
    * Register a callback to be invoked each time a complete line is framed.
@@ -59,6 +77,28 @@ export class SerialTextFramer {
 
     this.pending.push(...arr);
     this.processPending();
+
+    if (this.pending.length > this.maxPendingBytes) {
+      this.flushOverflow();
+    }
+  }
+
+  /**
+   * Emit an over-long unterminated line as a frame instead of buffering it
+   * forever. No bytes are dropped — the same contract as the idle flush, just
+   * triggered by size rather than silence.
+   */
+  private flushOverflow(): void {
+    const frame: TextFrameEvent = {
+      line: this.pending.slice(),
+      ending: [],
+      crlf: false,
+    };
+    this.pending = [];
+    this.lines.push(frame);
+    if (this.onFrameCallback) {
+      this.onFrameCallback(frame);
+    }
   }
 
   /**

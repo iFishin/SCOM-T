@@ -2,6 +2,29 @@ import type { SerialLogEntry } from "../serial/types.ts";
 
 const CRASH_DIR = "SCOM-T/crash-recovery";
 
+/**
+ * A session log is rotated once it grows past this. One previous file is kept,
+ * so a session can hold at most ~2× this on disk no matter how long it runs.
+ * Without rotation a day-long loop could leave hundreds of MB behind, which is
+ * what made startup re-reads blow up memory.
+ */
+const MAX_LOG_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Startup only reads the tail of a large leftover log. Restoring the whole file
+ * is never worth it: recovered entries go straight into React state and are all
+ * rendered, so a 500 MB file would freeze the app before it even opens.
+ */
+const TAIL_READ_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Hard cap on how many recovered entries are handed back to the UI. The live
+ * view keeps 10k entries, but those arrive gradually; restoring thousands at
+ * once is a much heavier first paint, and the tail is what matters for
+ * diagnosing a crash anyway.
+ */
+export const MAX_RESTORE_ENTRIES = 2_000;
+
 async function crashDirPath(): Promise<string> {
   const { join, homeDir } = await import("@tauri-apps/api/path");
   return join(await homeDir(), CRASH_DIR);
@@ -17,6 +40,26 @@ async function ensureCrashDir(): Promise<void> {
   await mkdir(await crashDirPath(), { recursive: true }).catch(() => {});
 }
 
+/**
+ * Move an oversized log aside before appending. Keeps exactly one backup; the
+ * older one is dropped. If the rename is refused (permissions, missing scope),
+ * the oversized file is removed instead — losing old recovery data is far
+ * better than letting the file grow without bound.
+ */
+async function rotateIfNeeded(path: string, incomingBytes: number): Promise<void> {
+  const { stat, rename, remove } = await import("@tauri-apps/plugin-fs");
+  const size = await stat(path).then((info) => info.size).catch(() => 0);
+  if (size === 0 || size + incomingBytes <= MAX_LOG_BYTES) return;
+
+  const backup = `${path}.1`;
+  await remove(backup).catch(() => {});
+  try {
+    await rename(path, backup);
+  } catch {
+    await remove(path).catch(() => {});
+  }
+}
+
 /** Append entries as JSON Lines — machine-parseable, byte-safe for binary/multi-line payloads. */
 export async function appendCrashLog(sessionId: string, entries: SerialLogEntry[]): Promise<void> {
   if (entries.length === 0) return;
@@ -24,27 +67,58 @@ export async function appendCrashLog(sessionId: string, entries: SerialLogEntry[
   await ensureCrashDir();
   const text = entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
   const path = await crashLogPath(sessionId);
+  await rotateIfNeeded(path, new TextEncoder().encode(text).length);
   await writeTextFile(path, text, { append: true });
 }
 
-/** Read back any leftover crash-recovery log for a session, if present. */
-export async function readCrashLog(sessionId: string): Promise<SerialLogEntry[]> {
-  const { exists, readTextFile } = await import("@tauri-apps/plugin-fs");
-  const path = await crashLogPath(sessionId);
-  if (!(await exists(path).catch(() => false))) return [];
-  const text = await readTextFile(path).catch(() => "");
-  if (!text) return [];
+/** Read at most `limit` bytes from the end of a file, without loading the rest. */
+async function readTail(path: string, size: number, limit: number): Promise<string> {
+  const { open, SeekMode } = await import("@tauri-apps/plugin-fs");
+  const file = await open(path, { read: true });
+  try {
+    const start = Math.max(0, size - limit);
+    await file.seek(start, SeekMode.Start);
+    const buffer = new Uint8Array(Math.min(limit, size - start));
+    const read = await file.read(buffer);
+    const bytes = read === null ? buffer.subarray(0, 0) : buffer.subarray(0, read);
+    // The first line is very likely cut mid-record; parseEntries drops it.
+    return new TextDecoder().decode(bytes);
+  } finally {
+    await file.close().catch(() => {});
+  }
+}
+
+function parseEntries(text: string, dropFirstLine: boolean): SerialLogEntry[] {
+  const lines = text.split("\n");
+  if (dropFirstLine) lines.shift();
+
   const entries: SerialLogEntry[] = [];
-  for (const line of text.split("\n")) {
+  for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
       entries.push(JSON.parse(trimmed) as SerialLogEntry);
     } catch {
-      // skip malformed line (e.g. torn write mid-crash)
+      // skip malformed line (e.g. torn write mid-crash, or a half line at the tail cut)
     }
   }
-  return entries;
+  return entries.length > MAX_RESTORE_ENTRIES ? entries.slice(-MAX_RESTORE_ENTRIES) : entries;
+}
+
+/** Read back any leftover crash-recovery log for a session, if present. */
+export async function readCrashLog(sessionId: string): Promise<SerialLogEntry[]> {
+  const { stat, readTextFile } = await import("@tauri-apps/plugin-fs");
+  const path = await crashLogPath(sessionId);
+  const size = await stat(path).then((info) => info.size).catch(() => -1);
+  if (size < 0) return [];
+
+  if (size <= TAIL_READ_BYTES) {
+    const text = await readTextFile(path).catch(() => "");
+    return text ? parseEntries(text, false) : [];
+  }
+
+  const text = await readTail(path, size, TAIL_READ_BYTES).catch(() => "");
+  return text ? parseEntries(text, true) : [];
 }
 
 /** Remove a session's crash-recovery log, e.g. after explicit restore/discard or session close. */
@@ -52,4 +126,5 @@ export async function clearCrashLog(sessionId: string): Promise<void> {
   const { remove } = await import("@tauri-apps/plugin-fs");
   const path = await crashLogPath(sessionId);
   await remove(path).catch(() => {});
+  await remove(`${path}.1`).catch(() => {});
 }

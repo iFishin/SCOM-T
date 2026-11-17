@@ -52,6 +52,14 @@ export type ActiveSessionData = {
 // "save to file" — batches entries and flushes periodically so an unclean
 // exit (crash/reload) loses at most one flush interval's worth of data. ──
 
+/**
+ * Cap on queued-but-not-yet-written entries. The flush runs every 2s and is
+ * skipped while a write is in flight, so a fast device can outrun it. Dropping
+ * the oldest keeps the writer bounded; recovery context is the recent tail
+ * anyway, same trade-off as MAX_RESTORE_ENTRIES.
+ */
+const MAX_CRASH_PENDING = 10_000;
+
 function useCrashLogWriter(sessionId: string) {
   const pendingRef = useRef<SerialLogEntry[]>([]);
   const writingRef = useRef(false);
@@ -77,6 +85,8 @@ function useCrashLogWriter(sessionId: string) {
 
   const enqueue = useCallback((entry: SerialLogEntry) => {
     pendingRef.current.push(entry);
+    const overflow = pendingRef.current.length - MAX_CRASH_PENDING;
+    if (overflow > 0) pendingRef.current.splice(0, overflow);
   }, []);
 
   return enqueue;
@@ -300,13 +310,23 @@ export function SessionManager({
     for (const session of sessions) {
       if (recoveryStartedRef.current.has(session.id)) continue;
       recoveryStartedRef.current.add(session.id);
-      void readCrashLog(session.id).then((entries) => {
-        void clearCrashLog(session.id);
-        if (entries.length > 0) {
-          setRecoveredLogs((prev) => ({ ...prev, [session.id]: entries }));
+      void (async () => {
+        let entries: SerialLogEntry[] = [];
+        try {
+          entries = await readCrashLog(session.id);
+        } catch {
+          // Unreadable leftover log: fall through and drop it. Mounting the
+          // session matters more than whatever history we could not parse.
+        } finally {
+          // Always clear, even when the read failed. Otherwise a file that
+          // crashes the read is read again on every start, forever.
+          await clearCrashLog(session.id);
+          if (entries.length > 0) {
+            setRecoveredLogs((prev) => ({ ...prev, [session.id]: entries }));
+          }
+          setCheckedSessions((prev) => new Set(prev).add(session.id));
         }
-        setCheckedSessions((prev) => new Set(prev).add(session.id));
-      });
+      })();
     }
   }, [sessions]);
 
