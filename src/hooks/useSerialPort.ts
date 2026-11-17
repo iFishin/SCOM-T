@@ -38,6 +38,7 @@ import type {
 import type { MockSerialConfig } from "./useSettings.ts";
 import { SerialEventJournal } from "../serial/SerialEventJournal.ts";
 import { SerialTextFramer } from "../serial/SerialTextFramer.ts";
+import { commitLogBatch } from "./logCommit.ts";
 
 // ── Re-export types from the new service layers for backward compatibility ──
 
@@ -112,6 +113,7 @@ export function useSerialPort({
   mockSerial,
   rxIdleFlushMs = 50,
   logBatchFlushMs = 50,
+  maxLogs = 3_000,
   initialLogs,
 }: {
   config: SerialConfig;
@@ -120,6 +122,13 @@ export function useSerialPort({
   mockSerial?: MockSerialConfig;
   rxIdleFlushMs?: number;
   logBatchFlushMs?: number;
+  /**
+   * How many entries the live view keeps in memory. Each mounted row costs a
+   * DOM subtree plus a React fiber, so this is the main lever on resident
+   * memory during a long capture. Older entries are expected to come from the
+   * log file rather than from RAM.
+   */
+  maxLogs?: number;
   /** Seed logs recovered from a crash-recovery file, applied once at mount. */
   initialLogs?: SerialLogEntry[];
 }) {
@@ -139,8 +148,14 @@ export function useSerialPort({
   configRef.current = config;
   const seqCounter = useRef(initialLogs?.reduce((max, l) => Math.max(max, l.seq), 0) ?? 0);
   // Batch pending log entries to reduce React state updates
-  const MAX_LOGS = 10_000;
+  const MAX_LOGS = Math.max(100, Math.floor(maxLogs));
   const BATCH_MAX_SIZE = 50;
+  /**
+   * Ceiling for entries accepted from the transport but not yet in React state.
+   * The flush loop drains 200 per tick; a device that arrives faster than that
+   * would otherwise grow this array for as long as the port stays open.
+   */
+  const MAX_PENDING_LOGS = 20_000;
   const pendingLogsRef = useRef<SerialLogEntry[]>([]);
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Current write-queue contents: text of commands queued but not yet fully sent.
@@ -171,6 +186,16 @@ export function useSerialPort({
     (initialLogs ?? []).slice(-MAX_LOGS)
   );
   const logsRef = useRef<SerialLogEntry[]>(logs);
+
+  // Shrinking the cap applies immediately rather than waiting for the next
+  // append to trim the buffer.
+  useEffect(() => {
+    if (logsRef.current.length > MAX_LOGS) {
+      const trimmed = logsRef.current.slice(-MAX_LOGS);
+      logsRef.current = trimmed;
+      setLogs(trimmed);
+    }
+  }, [MAX_LOGS]);
   const [isConnected, setIsConnected] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [statusText, setStatusText] = useState("未连接");
@@ -327,7 +352,7 @@ export function useSerialPort({
                 direction: "received",
                 mode: "hex",
                 payload: bytesToHex(bytes),
-                rawBytes: [...bytes],
+                rawBytes: Uint8Array.from(bytes),
                 complete: true,
                 journalSeqStart: rxEvent.seq,
                 journalSeqEnd: rxEvent.seq,
@@ -395,7 +420,7 @@ export function useSerialPort({
               direction: "received",
               mode: "hex",
               payload: bytesToHex(bytes),
-              rawBytes: [...bytes],
+              rawBytes: Uint8Array.from(bytes),
               complete: true,
               journalSeqStart: rxEvent.seq,
               journalSeqEnd: rxEvent.seq,
@@ -457,7 +482,7 @@ export function useSerialPort({
           source: "tcp-client",
           mode: receiveModeRef.current,
           payload: displayPayload,
-          rawBytes: [...payloadBytes],
+          rawBytes: Uint8Array.from(payloadBytes),
           serverTs,
         });
 
@@ -663,35 +688,35 @@ export function useSerialPort({
     // If pending is very large (render queue backed up), coalesce into fewer entries
     // to avoid drowning React in a single setState.
     if (pending.length > 200) {
-      const truncated = pending.slice(0, 200);
-      pendingLogsRef.current = pending.slice(200);
-      scheduleBatchFlush();
-      const current = logsRef.current;
-      const next =
-        current.length === 0 ? truncated : [...current, ...truncated];
-      if (next.length > MAX_LOGS) {
+      commitEntries(pending.slice(0, 200));
+      const rest = pending.slice(200);
+      // Drain is 200 per timer tick, so a device that keeps outrunning the
+      // render loop would grow this backlog indefinitely. Keep the newest and
+      // let the oldest go — the full record is in the log file, not here.
+      if (rest.length > MAX_PENDING_LOGS) {
+        pendingLogsRef.current = rest.slice(rest.length - MAX_PENDING_LOGS);
         if (!logCapWarningRef.current) {
           logCapWarningRef.current = true;
           setTimeout(() => setLogCapWarning(true), 0);
         }
-        applyLogs(next.slice(next.length - MAX_LOGS));
       } else {
-        applyLogs(next);
+        pendingLogsRef.current = rest;
       }
+      scheduleBatchFlush();
       return;
     }
 
-    const current = logsRef.current;
-    const next = current.length === 0 ? pending : [...current, ...pending];
-    if (next.length > MAX_LOGS) {
-      if (!logCapWarningRef.current) {
-        logCapWarningRef.current = true;
-        setTimeout(() => setLogCapWarning(true), 0);
-      }
-      applyLogs(next.slice(next.length - MAX_LOGS));
-    } else {
-      applyLogs(next);
+    commitEntries(pending);
+  }
+
+  /** Append one batch to the live buffer, trimming the head at the cap. */
+  function commitEntries(batch: SerialLogEntry[]) {
+    const result = commitLogBatch(logsRef.current, batch, MAX_LOGS);
+    if (result.trimmed && !logCapWarningRef.current) {
+      logCapWarningRef.current = true;
+      setTimeout(() => setLogCapWarning(true), 0);
     }
+    applyLogs(result.logs);
   }
 
   // ── Byte-preserving ASCII framing ──
@@ -717,7 +742,7 @@ export function useSerialPort({
       direction: "received",
       mode: "ascii",
       payload,
-      rawBytes: [...pending],
+      rawBytes: Uint8Array.from(pending),
       complete: false,
     });
   }
@@ -763,7 +788,7 @@ export function useSerialPort({
         direction: "received",
         mode: "ascii",
         payload,
-        rawBytes: [...frameBytes],
+        rawBytes: Uint8Array.from(frameBytes),
         complete: true,
         journalSeqStart: journalSeq,
         journalSeqEnd: journalSeq,
@@ -989,7 +1014,7 @@ export function useSerialPort({
           appendLog(
             {
               ...txEntry,
-              rawBytes: Array.from(dispatchedBytes),
+              rawBytes: Uint8Array.from(dispatchedBytes),
               transferId,
               complete: true,
               journalSeqStart: event.seq,
@@ -1088,7 +1113,7 @@ export function useSerialPort({
               // 单独存 terminator 供显示为 [0D 0A]。
               : value,
           // rawBytes 已包含结尾符，hex 视图据此无损还原线上字节。
-          rawBytes: [...bytes],
+          rawBytes: Uint8Array.from(bytes),
           ...(sendMode === "ascii" && termBytes.length > 0
             ? { terminator: bytesToHex(termBytes) }
             : {}),

@@ -251,7 +251,7 @@ export function payloadToBytes(payload: string, mode: "ascii" | "hex"): number[]
 
 /** Format bytes as a classic hex dump (up to `maxBytes`). Returns lines of [offset, hex, ascii]. */
 export function formatHexDump(
-  bytes: number[],
+  bytes: number[] | Uint8Array,
   maxBytes = 2048,
 ): { offset: string; hex: string; ascii: string }[] {
   const slice = bytes.slice(0, maxBytes);

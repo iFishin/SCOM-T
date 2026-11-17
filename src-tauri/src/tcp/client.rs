@@ -30,7 +30,11 @@ pub async fn tcp_connect(
     let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
     *state.client.cancel_tx.lock().await = Some(cancel_tx);
 
-    let (send_tx, mut send_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    // Bounded on purpose: an unbounded queue grows without limit when the peer
+    // stops reading (or the link is slow) while the UI keeps sending, which is
+    // exactly the shape of a long-running command loop. Back-pressure is better
+    // than an out-of-memory kill.
+    let (send_tx, mut send_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(TCP_SEND_QUEUE);
     *state.client.send_tx.lock().await = Some(send_tx);
 
     // If RFC 2217, send WILL COM PORT OPTION to start negotiation
@@ -139,6 +143,10 @@ pub async fn tcp_disconnect(
     Ok(())
 }
 
+/// How many outbound chunks may queue before senders wait. Large enough for a
+/// command burst, small enough that a stalled link cannot balloon the process.
+const TCP_SEND_QUEUE: usize = 1024;
+
 #[tauri::command]
 pub async fn tcp_send(
     state: tauri::State<'_, TcpAppState>,
@@ -151,6 +159,7 @@ pub async fn tcp_send(
 
     sender
         .send(data)
+        .await
         .map_err(|_| "TCP 发送通道已关闭".to_string())?;
 
     Ok(())
@@ -189,6 +198,7 @@ pub async fn tcp_send_raw(
 
     sender
         .send(data)
+        .await
         .map_err(|_| "TCP 发送通道已关闭".to_string())?;
 
     Ok(())

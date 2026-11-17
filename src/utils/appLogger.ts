@@ -3,6 +3,13 @@ type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 const MAX_BUFFER = 1000;
 
 /**
+ * Cap on how much of an app log the viewer loads. The file is read into a
+ * single string and split into lines, so an unbounded read is a direct path to
+ * a huge heap allocation on a day-long session.
+ */
+const MAX_VIEW_BYTES = 4 * 1024 * 1024;
+
+/**
  * Global app logger.
  * Writes daily log files to `~/SCOM-T/logs/app-YYYY-MM-DD.log` and keeps
  * an in-memory ring buffer for the UI viewer.
@@ -104,16 +111,37 @@ class AppLogger {
     }
   }
 
-  /** Read the content of a log file by name */
+  /** Read the content of a log file by name, tail-only past a size cap. */
   async readFile(name: string): Promise<string> {
     if (!this._logDir) return "";
     const { join } = await import("@tauri-apps/api/path");
-    const { readTextFile } = await import("@tauri-apps/plugin-fs");
+    const { stat, readTextFile } = await import("@tauri-apps/plugin-fs");
     const path = await join(this._logDir, name);
     try {
-      return await readTextFile(path);
+      const size = await stat(path).then((info) => info.size).catch(() => 0);
+      if (size <= MAX_VIEW_BYTES) return await readTextFile(path);
+      // A day-long session can leave a very large app log. Reading it whole
+      // means a multi-MB string plus every line split out of it, so the viewer
+      // gets the tail — which is what diagnostics actually need.
+      return (await this.readTail(path, size)) ?? "";
     } catch {
       return "";
+    }
+  }
+
+  private async readTail(path: string, size: number): Promise<string | null> {
+    const { open, SeekMode } = await import("@tauri-apps/plugin-fs");
+    const file = await open(path, { read: true });
+    try {
+      await file.seek(size - MAX_VIEW_BYTES, SeekMode.Start);
+      const buffer = new Uint8Array(MAX_VIEW_BYTES);
+      const read = await file.read(buffer);
+      const text = new TextDecoder().decode(buffer.subarray(0, read ?? 0));
+      // The window almost certainly starts mid-line; drop that fragment.
+      const newline = text.indexOf("\n");
+      return newline >= 0 ? text.slice(newline + 1) : text;
+    } finally {
+      await file.close().catch(() => {});
     }
   }
 

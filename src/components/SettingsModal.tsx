@@ -55,8 +55,10 @@ type SettingsModalProps = {
   onCustomEndersChange?: (config: CustomEnder[]) => void;
   rxIdleFlushMs?: number;
   logBatchFlushMs?: number;
+  maxLogs?: number;
   onRxIdleFlushMsChange?: (ms: number) => void;
   onLogBatchFlushMsChange?: (ms: number) => void;
+  onMaxLogsChange?: (count: number) => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -99,8 +101,10 @@ export function SettingsModal({
   onCustomEndersChange,
   rxIdleFlushMs,
   logBatchFlushMs,
+  maxLogs,
   onRxIdleFlushMsChange,
   onLogBatchFlushMsChange,
+  onMaxLogsChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -243,6 +247,31 @@ export function SettingsModal({
                         className="w-20 text-center"
                       />
                       <span className="text-xs text-[var(--text-muted)]">ms</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-48 shrink-0">
+                        <div className="text-xs">{lang === "zh" ? "视图日志上限" : "Log Buffer Size"}</div>
+                        <div className="text-theme-10 text-[var(--text-muted)]">
+                          {lang === "zh"
+                            ? "实时视图保留的条数，越小越省内存"
+                            : "Entries kept in the live view; lower uses less memory"}
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={500}
+                        max={50000}
+                        step={500}
+                        value={String(maxLogs ?? 3000)}
+                        onChange={(e) => {
+                          const v = parseInt(e.currentTarget.value, 10);
+                          if (!Number.isNaN(v)) onMaxLogsChange?.(v);
+                        }}
+                        className="w-24 text-center"
+                      />
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {lang === "zh" ? "条" : "entries"}
+                      </span>
                     </div>
                   </div>
                 </div>

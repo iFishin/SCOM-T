@@ -143,7 +143,7 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, flushSettings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateLogFileState } = useSettings();
+  const { settings, loaded, flushSettings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateMaxLogs, updateLogFileState } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
@@ -810,6 +810,7 @@ function App() {
                 mockSerial={settings.mockSerial}
                 rxIdleFlushMs={settings.rxIdleFlushMs ?? 50}
                 logBatchFlushMs={settings.logBatchFlushMs ?? 50}
+                maxLogs={settings.maxLogs ?? 3_000}
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
                 onSessionsChange={handleSessionsChange}
@@ -1287,6 +1288,7 @@ function App() {
                     mockSerial={settings.mockSerial}
                     rxIdleFlushMs={settings.rxIdleFlushMs ?? 50}
                     logBatchFlushMs={settings.logBatchFlushMs ?? 50}
+                    maxLogs={settings.maxLogs ?? 3_000}
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
                     onSessionsChange={handleSessionsChange}
@@ -1414,6 +1416,7 @@ function App() {
         customEnders={customEnders}
         rxIdleFlushMs={settings.rxIdleFlushMs}
         logBatchFlushMs={settings.logBatchFlushMs}
+        maxLogs={settings.maxLogs}
         onClose={() => setSettingsOpen(false)}
         onHotkeysChange={updateHotkeys}
         onThemeChange={updateTheme}
@@ -1434,6 +1437,7 @@ function App() {
         onCustomEndersChange={updateCustomEnders}
         onRxIdleFlushMsChange={updateRxIdleFlushMs}
         onLogBatchFlushMsChange={updateLogBatchFlushMs}
+        onMaxLogsChange={updateMaxLogs}
       />
       {/* ── Notification card modal ── */}
       {cardNotifications.length > 0 && (

@@ -20,6 +20,13 @@ import { LogEditor } from "./LogEditor";
 
 type ReceiveLogProps = {
   logs: SerialLogEntry[];
+  /**
+   * False while the session sits in a background tab. The log rows are the
+   * heaviest part of a session view, and keeping them mounted for every open
+   * tab multiplied the cost by the tab count — the DOM is dropped and rebuilt
+   * when the tab becomes active again.
+   */
+  mounted?: boolean;
   lang: Lang;
   logCapWarning?: boolean;
   sendQueue?: string[];
@@ -43,15 +50,31 @@ type ReceiveLogProps = {
 const SCROLL_THRESHOLD = 32;
 const LOG_SEPARATOR = "\n";
 
-/** Group adjacent log entries with the same timestamp + direction + source + mode into one block (card view only, RX direction). Leaves TX entries and text-mode rendering alone. */
-function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
+/** Rows mounted on first paint, and how many older rows each scroll-up adds. */
+export const WINDOW_INITIAL = 600;
+const WINDOW_STEP = 600;
+/** Pull in older rows once the scroll position is this close to the top. */
+const LOAD_OLDER_THRESHOLD = 48;
+
+type LogGroup = {
   entries: SerialLogEntry[];
   key: string;
   mergedPayload: string;
-}> {
-  const groups: Array<{ entries: SerialLogEntry[]; key: string; mergedPayload: string }> = [];
-  for (const log of logs) {
-    const last = groups[groups.length - 1];
+  /** Index of the first entry inside the full log array (stable, see below). */
+  startIndex: number;
+};
+
+/** Group adjacent log entries with the same timestamp + direction + source + mode into one block (card view only, RX direction). Leaves TX entries and text-mode rendering alone. */
+function groupAdjacentCards(logs: SerialLogEntry[], from = 0, seed?: LogGroup[]): LogGroup[] {
+  // `seed` is always a fresh array (the caller slices before passing it), so it
+  // is appended to directly instead of being copied a second time.
+  const groups: LogGroup[] = seed ?? [];
+  // When resuming from a seed, the boundary at `from` was already decided by a
+  // previous pass; re-testing it would merge across the seam.
+  let allowMerge = !seed;
+  for (let i = from; i < logs.length; i++) {
+    const log = logs[i];
+    const last = allowMerge ? groups[groups.length - 1] : undefined;
     // Merge into previous group if adjacent, same timestamp, same direction, same source, same mode — for RX only
     if (
       last &&
@@ -68,10 +91,50 @@ function groupAdjacentCards(logs: SerialLogEntry[]): Array<{
         entries: [log],
         key: log.id,
         mergedPayload: log.payload,
+        startIndex: i,
       });
+      allowMerge = true;
     }
   }
   return groups;
+}
+
+/**
+ * Extend a previous grouping instead of rebuilding it.
+ *
+ * On append only the last group can grow, so every closed group keeps its
+ * identity — which is what lets CardRow's memo do its job. Rebuilding all
+ * groups on each 50 ms batch re-rendered all 10k rows, allocating a fresh
+ * element tree every time; that is what made long captures progressively
+ * heavier while memory crept up.
+ */
+export function extendCardGroups(
+  logs: SerialLogEntry[],
+  previous: { groups: LogGroup[]; consumed: number } | null,
+): { groups: LogGroup[]; consumed: number } {
+  if (!previous || previous.groups.length === 0) {
+    return { groups: groupAdjacentCards(logs), consumed: logs.length };
+  }
+  if (logs.length < previous.consumed) {
+    return { groups: groupAdjacentCards(logs), consumed: logs.length };
+  }
+
+  const lastGroup = previous.groups[previous.groups.length - 1];
+  const lastEntry = lastGroup.entries[lastGroup.entries.length - 1];
+  // Not the same sequence we grouped last time (clear / trim / reload): rebuild.
+  if (previous.consumed > 0 && logs[previous.consumed - 1] !== lastEntry) {
+    return { groups: groupAdjacentCards(logs), consumed: logs.length };
+  }
+  if (logs.length === previous.consumed) {
+    return previous;
+  }
+
+  // Re-open the final group from its own start index. Its first entry already
+  // failed to merge into the group before it, so the boundary must not be
+  // re-tested — and the closed groups above are never mutated.
+  const closed = previous.groups.slice(0, -1);
+  const groups = groupAdjacentCards(logs, lastGroup.startIndex, closed);
+  return { groups, consumed: logs.length };
 }
 
 // ── Memoized row renderers ──
@@ -142,9 +205,32 @@ const TextRow = memo(function TextRow({ log, logOffset, searchRegex, curMatch, a
   );
 });
 
-const HEX_DUMP_MAX_BYTES = 2048;
+/** Affordance at the top of a windowed log: pull in the entries above. */
+const LoadOlderRow = memo(function LoadOlderRow({
+  remaining,
+  lang,
+  onLoad,
+}: {
+  remaining: number;
+  lang: Lang;
+  onLoad: () => void;
+}) {
+  return (
+    <div className="flex justify-center pb-1">
+      <button
+        type="button"
+        onClick={onLoad}
+        className="rounded-full border border-[var(--border)] bg-[var(--bg-input)] px-3 py-0.5 text-theme-10 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+      >
+        {lang === "zh"
+          ? `上方还有 ${remaining} 条 · 点击加载`
+          : `${remaining} older entries · load`}
+      </button>
+    </div>
+  );
+});
 
-type HexRowProps = {
+const HEX_DUMP_MAX_BYTES = 2048;type HexRowProps = {
   log: SerialLogEntry;
   noDataLabel: string;
 };
@@ -154,12 +240,16 @@ const HexRow = memo(function HexRow({ log, noDataLabel }: HexRowProps) {
   const ts = displayTimestamp(log.timestamp).replace(/^\[|\]$/g, "");
   // 真实字节优先。payload 是解码后的文本，用它反推字节会把非法字节
   // （如 0xAA）膨胀成 EF BF BD，与设备实际发出的字节不符（#36 / #37）。
-  const hasRawBytes = Array.isArray(log.rawBytes) && log.rawBytes.length > 0;
-  const base = hasRawBytes ? [...log.rawBytes!] : payloadToBytes(log.payload, log.mode);
+  // rawBytes 是 Uint8Array，直接引用而不复制：hex dump 只读，且这条路径
+  // 在 1 万条日志上每条都要跑一次。
+  const hasRawBytes = log.rawBytes !== undefined && log.rawBytes.length > 0;
+  const base: number[] | Uint8Array = hasRawBytes
+    ? log.rawBytes!
+    : payloadToBytes(log.payload, log.mode);
   // 只有无 rawBytes 的旧日志才需要补结尾符：onDispatch 记录的 rawBytes
   // 已经包含结尾符字节，重复追加会多出一组 CRLF。
   const bytes = !hasRawBytes && log.terminator
-    ? base.concat(parseHexString(log.terminator))
+    ? [...base, ...parseHexString(log.terminator)]
     : base;
   const dumpLines = formatHexDump(bytes, HEX_DUMP_MAX_BYTES);
   const truncated = bytes.length > HEX_DUMP_MAX_BYTES;
@@ -280,6 +370,7 @@ export function formatLogsAsText(logs: SerialLogEntry[]): string {
 
 export function ReceiveLog({
   logs,
+  mounted = true,
   lang,
   logCapWarning = false,
   sendQueue = [],
@@ -299,6 +390,20 @@ export function ReceiveLog({
 }: ReceiveLogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
+  /**
+   * Only the tail of the log is mounted. Rows are the heaviest thing this view
+   * owns — one node subtree plus a React fiber each — and a day-long capture
+   * fills the 10k buffer, so keeping every row in the DOM was most of the
+   * resident memory. Older entries are pulled in on demand when the user
+   * scrolls up.
+   */
+  const [windowSize, setWindowSize] = useState(WINDOW_INITIAL);
+  /**
+   * Index one past the last visible entry, frozen while the user is reading
+   * scrollback. Without it a live append would push the window forward and
+   * yank the rows they are looking at upward. `null` means "follow the tail".
+   */
+  const [frozenEnd, setFrozenEnd] = useState<number | null>(null);
   const displayMode = displayModeProp ?? "card";
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -326,6 +431,55 @@ export function ReceiveLog({
     return arr;
   }, [logs]);
 
+  // ── Mounted window ──
+  const windowEnd = frozenEnd === null ? logs.length : Math.min(frozenEnd, logs.length);
+  const windowStart = Math.max(0, windowEnd - windowSize);
+  const windowStartRef = useRef(windowStart);
+  windowStartRef.current = windowStart;
+  const logsLengthRef = useRef(logs.length);
+  logsLengthRef.current = logs.length;
+
+  const visibleLogs = useMemo(
+    () => (windowStart === 0 ? logs : logs.slice(windowStart)),
+    [logs, windowStart],
+  );
+
+  // Reset the window when the buffer is cleared or trimmed below it.
+  const prevLogsLengthRef = useRef(logs.length);
+  useLayoutEffect(() => {
+    const prev = prevLogsLengthRef.current;
+    prevLogsLengthRef.current = logs.length;
+    if (logs.length === 0) {
+      setFrozenEnd(null);
+      setWindowSize(WINDOW_INITIAL);
+      return;
+    }
+    if (logs.length < prev) {
+      // Trimmed by the live cap. The frozen index no longer points at the row
+      // the user was reading, so resume following the tail instead of jumping
+      // to an arbitrary position.
+      setFrozenEnd(null);
+    }
+  }, [logs.length]);
+
+  // Loading older rows prepends content, so compensate scrollTop or the text
+  // the user was reading jumps down.
+  const scrollAnchorRef = useRef<number | null>(null);
+  const loadOlder = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    scrollAnchorRef.current = el.scrollHeight - el.scrollTop;
+    setWindowSize((size) => size + WINDOW_STEP);
+  }, []);
+
+  useLayoutEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    const el = containerRef.current;
+    if (anchor === null || !el) return;
+    scrollAnchorRef.current = null;
+    el.scrollTop = el.scrollHeight - anchor;
+  }, [windowSize]);
+
   useLayoutEffect(() => {
     if (pinned && containerRef.current) {
       requestAnimationFrame(() => {
@@ -340,6 +494,10 @@ export function ReceiveLog({
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
     setPinned(atBottom);
+    // Reading scrollback freezes the window end so live appends do not push
+    // the rows being read upward; returning to the bottom resumes following.
+    setFrozenEnd((end) => (atBottom ? null : (end ?? logsLengthRef.current)));
+    if (el.scrollTop <= LOAD_OLDER_THRESHOLD && windowStartRef.current > 0) loadOlder();
   }
 
   // Close clear dropdown on outside click
@@ -359,6 +517,7 @@ export function ReceiveLog({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
     setPinned(true);
+    setFrozenEnd(null);
   }
 
   // ── Log search ──
@@ -375,25 +534,32 @@ export function ReceiveLog({
   );
 
   // Grouped cards are only used by the card view; text/hex views must not pay
-  // the O(n) grouping cost on every appended batch.
-  const cardGroups = useMemo(
-    () => (displayMode === "card" ? groupAdjacentCards(logs) : []),
-    [logs, displayMode],
-  );
+  // the O(n) grouping cost on every appended batch. The cache lets an append
+  // reuse every closed group, so only the row that actually grew re-renders.
+  const groupCacheRef = useRef<{ groups: LogGroup[]; consumed: number } | null>(null);
+  const cardGroups = useMemo(() => {
+    if (displayMode !== "card") return [];
+    const next = extendCardGroups(logs, groupCacheRef.current);
+    groupCacheRef.current = next;
+    return next.groups;
+  }, [logs, displayMode]);
 
-  // Offset of each card group's first entry inside the full logText. Built as
-  // one pass (the previous `logs.indexOf(first)` per group was O(n·groups)).
-  const cardGroupOffsets = useMemo(() => {
-    const offsets = new Map<(typeof cardGroups)[number], number>();
-    if (cardGroups.length === 0) return offsets;
-    const indexOfLog = new Map<SerialLogEntry, number>();
-    logs.forEach((entry, i) => indexOfLog.set(entry, i));
-    for (const group of cardGroups) {
-      const idx = indexOfLog.get(group.entries[0]);
-      offsets.set(group, idx === undefined ? 0 : idx * LOG_SEPARATOR.length + payloadPrefix[idx]);
+  // Groups are built over the whole array (their startIndex is absolute), but
+  // only the ones inside the mounted window are rendered. One group before the
+  // boundary is kept: a group can straddle windowStart, and dropping it would
+  // hide the entries past the seam.
+  const visibleGroups = useMemo(() => {
+    if (cardGroups.length === 0 || windowStart === 0) return cardGroups;
+    let lo = 0;
+    let hi = cardGroups.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cardGroups[mid].startIndex < windowStart) lo = mid + 1;
+      else hi = mid;
     }
-    return offsets;
-  }, [cardGroups, logs, payloadPrefix]);
+    const from = lo > 0 ? lo - 1 : 0;
+    return from === 0 ? cardGroups : cardGroups.slice(from);
+  }, [cardGroups, windowStart]);
 
   // Current search hit range, or null. Kept as a stable reference between log
   // appends so memoized rows are not re-rendered by an unrelated keystroke.
@@ -402,18 +568,48 @@ export function ReceiveLog({
     [searchIndex, searchMatches],
   );
 
+  const pendingMatchScrollRef = useRef(false);
+
+  /**
+   * Pull the matching entry into the mounted window before scrolling to it.
+   * A match outside the window has no DOM node, so the highlight ref would stay
+   * null and the view would never move — the old behaviour when the hit lived
+   * in the part of the buffer that is no longer mounted.
+   */
+  const revealMatch = useCallback((match: MatchRange) => {
+    pendingMatchScrollRef.current = true;
+    let lo = 0;
+    let hi = logs.length - 1;
+    let index = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const entryStart = payloadPrefix[mid] + mid * LOG_SEPARATOR.length;
+      if (entryStart <= match.start) {
+        index = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    const needed = logs.length - index;
+    setFrozenEnd(null);
+    setWindowSize((size) => (needed > size ? needed : size));
+  }, [logs.length, payloadPrefix]);
+
   const handleLogSearch = useCallback((query: string, opts: SearchOptions) => {
     setSearchQuery(query);
     setSearchOptions(opts);
     const results = searchInText(buildLogText(), query, opts);
     setSearchMatches(results);
     setSearchIndex(results.length > 0 ? 0 : -1);
-  }, [buildLogText]);
+    if (results.length > 0) revealMatch(results[0]);
+  }, [buildLogText, revealMatch]);
 
   const handleNavigate = useCallback((idx: number) => {
     const clamped = Math.max(0, Math.min(idx, searchMatches.length - 1));
     setSearchIndex(clamped);
-  }, [searchMatches]);
+    if (searchMatches[clamped]) revealMatch(searchMatches[clamped]);
+  }, [searchMatches, revealMatch]);
 
   // Scroll the actual current-match element into view once it (re)renders,
   // rather than estimating scrollTop from newline counts — payload wrapping,
@@ -423,7 +619,7 @@ export function ReceiveLog({
   // which was dragging the whole page layout around.
   const activeMatchRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    if (searchIndex < 0) return;
+    if (searchIndex < 0 || !pendingMatchScrollRef.current) return;
     const container = containerRef.current;
     const el = activeMatchRef.current;
     if (!container || !el) return;
@@ -431,7 +627,8 @@ export function ReceiveLog({
     const elRect = el.getBoundingClientRect();
     const delta = (elRect.top + elRect.height / 2) - (containerRect.top + containerRect.height / 2);
     container.scrollTop += delta;
-  }, [searchIndex, searchMatches, displayMode]);
+    pendingMatchScrollRef.current = false;
+  }, [searchIndex, searchMatches, displayMode, windowSize]);
 
   // ── Copy log ──
   const handleCopyLog = useCallback(async () => {
@@ -743,32 +940,60 @@ export function ReceiveLog({
           <div className="flex h-full min-h-16 items-center justify-center text-[var(--text-muted)] opacity-60">
             {t("no_data", lang)}
           </div>
+        ) : !mounted ? (
+          <div className="flex h-full min-h-16 items-center justify-center text-theme-10 text-[var(--text-muted)] opacity-50">
+            {lang === "zh" ? "切回该标签页以显示日志" : "Switch to this tab to show logs"}
+          </div>
         ) : displayMode === "text" ? (
           <div className="log-rows__list space-y-0">
-            {logs.map((log, logIdx) => (
-              <TextRow
-                key={log.id}
-                log={log}
-                logOffset={logIdx * LOG_SEPARATOR.length + payloadPrefix[logIdx]}
-                searchRegex={searchRegex}
-                curMatch={curMatch}
-                activeMatchRef={activeMatchRef}
+            {windowStart > 0 && (
+              <LoadOlderRow
+                remaining={windowStart}
+                lang={lang}
+                onLoad={loadOlder}
               />
-            ))}
+            )}
+            {visibleLogs.map((log, i) => {
+              const absolute = windowStart + i;
+              return (
+                <TextRow
+                  key={log.id}
+                  log={log}
+                  logOffset={absolute * LOG_SEPARATOR.length + payloadPrefix[absolute]}
+                  searchRegex={searchRegex}
+                  curMatch={curMatch}
+                  activeMatchRef={activeMatchRef}
+                />
+              );
+            })}
           </div>
         ) : displayMode === "hex" ? (
           <div className="log-rows__list space-y-0">
-            {logs.map((log) => (
+            {windowStart > 0 && (
+              <LoadOlderRow
+                remaining={windowStart}
+                lang={lang}
+                onLoad={loadOlder}
+              />
+            )}
+            {visibleLogs.map((log) => (
               <HexRow key={log.id} log={log} noDataLabel={t("no_data", lang)} />
             ))}
           </div>
         ) : (
           <div className="log-rows__list space-y-0.5">
-            {cardGroups.map((group) => (
+            {windowStart > 0 && (
+              <LoadOlderRow
+                remaining={windowStart}
+                lang={lang}
+                onLoad={loadOlder}
+              />
+            )}
+            {visibleGroups.map((group) => (
               <CardRow
                 key={group.key}
                 group={group}
-                groupOffset={cardGroupOffsets.get(group) ?? 0}
+                groupOffset={group.startIndex * LOG_SEPARATOR.length + payloadPrefix[group.startIndex]}
                 searchRegex={searchRegex}
                 curMatch={curMatch}
                 activeMatchRef={activeMatchRef}

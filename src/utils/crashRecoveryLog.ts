@@ -7,23 +7,34 @@ const CRASH_DIR = "SCOM-T/crash-recovery";
  * so a session can hold at most ~2× this on disk no matter how long it runs.
  * Without rotation a day-long loop could leave hundreds of MB behind, which is
  * what made startup re-reads blow up memory.
+ *
+ * 2 MB is deliberately small: recovery only ever hands back MAX_RESTORE_ENTRIES
+ * entries, and a typical line is a few hundred bytes, so the useful tail fits
+ * well under this. Anything beyond it is bytes we would read and throw away.
  */
-const MAX_LOG_BYTES = 8 * 1024 * 1024;
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
 
 /**
  * Startup only reads the tail of a large leftover log. Restoring the whole file
  * is never worth it: recovered entries go straight into React state and are all
  * rendered, so a 500 MB file would freeze the app before it even opens.
+ *
+ * Sized to cover the restore cap with room for long entries: 512 KB still holds
+ * a thousand-plus typical lines, and it is a single allocation at startup
+ * instead of a multi-hundred-MB string.
  */
-const TAIL_READ_BYTES = 2 * 1024 * 1024;
+const TAIL_READ_BYTES = 512 * 1024;
 
 /**
  * Hard cap on how many recovered entries are handed back to the UI. The live
  * view keeps 10k entries, but those arrive gradually; restoring thousands at
  * once is a much heavier first paint, and the tail is what matters for
  * diagnosing a crash anyway.
+ *
+ * 1000 is the tail that actually helps: enough context around the crash, small
+ * enough that the first paint after a bad shutdown is not itself the freeze.
  */
-export const MAX_RESTORE_ENTRIES = 2_000;
+export const MAX_RESTORE_ENTRIES = 1_000;
 
 async function crashDirPath(): Promise<string> {
   const { join, homeDir } = await import("@tauri-apps/api/path");
@@ -60,12 +71,39 @@ async function rotateIfNeeded(path: string, incomingBytes: number): Promise<void
   }
 }
 
+/**
+ * Serialize one entry for the on-disk log. `rawBytes` is written as a plain
+ * number array so existing files stay readable, but the in-memory form is a
+ * Uint8Array (see types.ts) — a JS number array costs roughly ten times the
+ * bytes it carries, and at 10k live entries that adds up.
+ */
+export function encodeEntry(entry: SerialLogEntry): string {
+  const { rawBytes, ...rest } = entry;
+  if (!rawBytes || rawBytes.length === 0) return JSON.stringify(rest);
+  return JSON.stringify({ ...rest, rawBytes: Array.from(rawBytes) });
+}
+
+function decodeEntry(line: string): SerialLogEntry | null {
+  try {
+    const parsed = JSON.parse(line) as Omit<SerialLogEntry, "rawBytes"> & {
+      rawBytes?: number[] | null;
+    };
+    if (Array.isArray(parsed.rawBytes) && parsed.rawBytes.length > 0) {
+      return { ...parsed, rawBytes: Uint8Array.from(parsed.rawBytes) };
+    }
+    const { rawBytes: _ignored, ...rest } = parsed;
+    return rest;
+  } catch {
+    return null;
+  }
+}
+
 /** Append entries as JSON Lines — machine-parseable, byte-safe for binary/multi-line payloads. */
 export async function appendCrashLog(sessionId: string, entries: SerialLogEntry[]): Promise<void> {
   if (entries.length === 0) return;
   const { writeTextFile } = await import("@tauri-apps/plugin-fs");
   await ensureCrashDir();
-  const text = entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
+  const text = entries.map(encodeEntry).join("\n") + "\n";
   const path = await crashLogPath(sessionId);
   await rotateIfNeeded(path, new TextEncoder().encode(text).length);
   await writeTextFile(path, text, { append: true });
@@ -96,11 +134,9 @@ function parseEntries(text: string, dropFirstLine: boolean): SerialLogEntry[] {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    try {
-      entries.push(JSON.parse(trimmed) as SerialLogEntry);
-    } catch {
-      // skip malformed line (e.g. torn write mid-crash, or a half line at the tail cut)
-    }
+    // Skip malformed lines (torn write mid-crash, or a half line at the tail cut).
+    const entry = decodeEntry(trimmed);
+    if (entry) entries.push(entry);
   }
   return entries.length > MAX_RESTORE_ENTRIES ? entries.slice(-MAX_RESTORE_ENTRIES) : entries;
 }

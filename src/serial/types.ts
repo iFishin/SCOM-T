@@ -17,8 +17,14 @@ export type SerialLogEntry = {
   source?: LogSource;
   mode: SendMode | ReceiveMode;
   payload: string;
-  /** Exact transport bytes for lossless persistence/diagnostics. */
-  rawBytes?: number[];
+  /**
+   * Exact transport bytes for lossless persistence/diagnostics.
+   *
+   * Uint8Array rather than number[]: a JS number array costs ~10x the bytes it
+   * describes, and the live view can hold thousands of entries. Persistence
+   * still writes a plain array so older crash logs stay readable.
+   */
+  rawBytes?: Uint8Array;
   /** 结尾符字节的 hex 表示（如 "0D 0A"）。仅 TX 且带结尾符时设置。 */
   terminator?: string;
   timestamp: string;

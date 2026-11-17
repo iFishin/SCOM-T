@@ -19,6 +19,9 @@ import type { CustomEnder } from "../hooks/useSettings.ts";
 import { feedMatcher } from "../serial/responseMatcher.ts";
 import type { MatchMode } from "../serial/responseMatcher.ts";
 import { PendingResponses } from "../serial/pendingResponses.ts";
+import { findFirstEntryAfterSeq } from "../serial/logCursor.ts";
+import { MatchLogBuffer, EMPTY_MATCH_LOG_STATS, sameMatchLogStats } from "./matchLogBuffer.ts";
+import type { MatchLogEntry, MatchLogStats } from "./matchLogBuffer.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
 import { PromptRowEditor } from "./PromptRowEditor.tsx";
 import { DEFAULT_RESPONSE_TIMEOUT_MS, DEFAULT_LOOP_INTERVAL_MS, parseIntervalMs } from "./promptRow.ts";
@@ -45,6 +48,11 @@ type BatchExecutionState = {
   currentIndex: number;
   selectedRows: PromptRow[];
 };
+
+/** Truncate for display without touching short strings. */
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
 
 type PromptPanelProps = {
   variant: "grid" | "panel";
@@ -106,7 +114,7 @@ export function PromptPanel({
   const presetsLoaded = useRef(false);
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   const waitingResponsesRef = useRef(new PendingResponses<WaitingResponse>());
-  const lastProcessedLogRef = useRef<number>(-1);
+  const lastProcessedSeqRef = useRef<number>(0);
   const sendingRowRef = useRef(false);
   const [batchState, setBatchState] = useState<BatchExecutionState>({
     isRunning: false,
@@ -123,8 +131,39 @@ export function PromptPanel({
   const batchDelayWakeRef = useRef<(() => void) | null>(null);
   const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
   const responseSetOptionsLoaded = useRef(false);
-  const [matchLog, setMatchLog] = useState<{ rowId: number; command: string; status: "info" | "pending" | "success" | "error"; detail: string; received?: string; expected?: string }[]>([]);
+  /**
+   * Match trace lives outside React state. The old code called `setMatchLog`
+   * once per received line, so a 50 ms log batch could fire dozens of state
+   * updates and re-render every prompt row each time. Entries accumulate here
+   * and are published once per batch, and only while the dialog is open.
+   */
+  const matchLogBufferRef = useRef<MatchLogBuffer | null>(null);
+  if (!matchLogBufferRef.current) matchLogBufferRef.current = new MatchLogBuffer();
+  const [matchLog, setMatchLog] = useState<MatchLogEntry[]>([]);
+  /** Header badge only needs the rollup, so it can stay cheap while closed. */
+  const [matchStats, setMatchStats] = useState<MatchLogStats>(EMPTY_MATCH_LOG_STATS);
+  const matchStatsRef = useRef<MatchLogStats>(EMPTY_MATCH_LOG_STATS);
   const [matchLogOpen, setMatchLogOpen] = useState(false);
+  const matchLogOpenRef = useRef(false);
+  matchLogOpenRef.current = matchLogOpen;
+
+  /** Append a batch (chronological order) and publish only when visible. */
+  const pushMatchLog = useCallback((entries: MatchLogEntry[]) => {
+    const buffer = matchLogBufferRef.current!;
+    buffer.push(entries);
+    const stats = buffer.stats();
+    if (!sameMatchLogStats(stats, matchStatsRef.current)) {
+      matchStatsRef.current = stats;
+      setMatchStats(stats);
+    }
+    // Closed dialog: skip the array update entirely, the buffer already has it.
+    if (matchLogOpenRef.current) setMatchLog(buffer.snapshot());
+  }, []);
+
+  const openMatchLog = useCallback(() => {
+    setMatchLog(matchLogBufferRef.current!.snapshot());
+    setMatchLogOpen(true);
+  }, []);
   const [placeholderModal, setPlaceholderModal] = useState<{
     vars: Record<string, string>;
     onConfirm: (values: Record<string, string>) => void;
@@ -467,22 +506,38 @@ export function PromptPanel({
 
   // ── Response matching: monitor logs for expected responses ──
   useEffect(() => {
-    if (waitingResponsesRef.current.size === 0) return;
-    if (!logs || logs.length === 0) return;
+    if (!logs || logs.length === 0) {
+      lastProcessedSeqRef.current = 0;
+      return;
+    }
 
-    // Process all new log entries, not just the latest one
-    for (let i = lastProcessedLogRef.current + 1; i < logs.length; i++) {
+    // Cursor is a sequence number rather than an index. The live buffer drops
+    // its head once it hits the configured cap, so an index would drift and
+    // either replay old lines or skip new ones.
+    const cursor = lastProcessedSeqRef.current;
+    const lastSeq = logs[logs.length - 1].seq;
+    const start = findFirstEntryAfterSeq(logs, cursor);
+    // Advance even when nothing is waiting: otherwise the first wait after a
+    // long idle stretch would replay every buffered line into the trace.
+    lastProcessedSeqRef.current = Math.max(cursor, lastSeq);
+
+    if (start >= logs.length) return;
+    if (waitingResponsesRef.current.size === 0) return;
+
+    const trace: MatchLogEntry[] = [];
+    for (let i = start; i < logs.length; i++) {
       const log = logs[i];
       if (log?.direction !== "received") continue;
 
       const receivedText = log.payload;
-
-      // Log received data
-      setMatchLog((prev) => {
-        const next = [{ rowId: 0, command: "", status: "info" as const, detail: `[RECV] ${receivedText.length > 80 ? receivedText.slice(0, 80) + "..." : receivedText}`, received: "", expected: "" }, ...prev];
-        return next.slice(0, 100);
+      trace.push({
+        rowId: 0,
+        command: "",
+        status: "info",
+        detail: `[RECV] ${clip(receivedText, 80)}`,
       });
 
+      const settled: number[] = [];
       waitingResponsesRef.current.forEach((waiting, rowId) => {
         const result = feedMatcher(
           { buffer: waiting.receivedBuffer, matchIndex: waiting.matchIndex, satisfied: false },
@@ -495,25 +550,36 @@ export function PromptPanel({
         for (const idx of result.matched) {
           const expected = waiting.expected[idx];
           const matchedIndex = idx + 1;
-          setMatchLog((prev) => {
-            const next = [{ rowId, command: "", status: "info" as const, detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${expected.length > 40 ? expected.slice(0, 40) + "..." : expected}`, received: receivedText.length > 60 ? receivedText.slice(0, 60) + "..." : receivedText, expected: expected.length > 60 ? expected.slice(0, 60) + "..." : expected }, ...prev];
-            return next.slice(0, 100);
+          trace.push({
+            rowId,
+            command: "",
+            status: "info",
+            detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${clip(expected, 40)}`,
+            received: clip(receivedText, 60),
+            expected: clip(expected, 60),
           });
         }
 
-        // All expected responses matched
         if (result.done) {
           updatePromptRow(rowId, { status: "success" });
-          waitingResponsesRef.current.clear(rowId);
-          setMatchLog((prev) => {
-            const next = [{ rowId, command: "", status: "success" as const, detail: `[SUCCESS] 行 ${rowId}: ${waiting.matchMode === "any" ? "任意期望结果已匹配" : `${waiting.expected.length} 个期望结果全部匹配成功`}`, received: "", expected: "" }, ...prev];
-            return next.slice(0, 100);
+          settled.push(rowId);
+          trace.push({
+            rowId,
+            command: "",
+            status: "success",
+            detail: `[SUCCESS] 行 ${rowId}: ${waiting.matchMode === "any" ? "任意期望结果已匹配" : `${waiting.expected.length} 个期望结果全部匹配成功`}`,
           });
         }
       });
+      for (const rowId of settled) waitingResponsesRef.current.clear(rowId);
     }
-    lastProcessedLogRef.current = logs.length - 1;
-  }, [logs]);
+    pushMatchLog(trace);
+  }, [logs, pushMatchLog]);
+
+  // Unmounting with waits still in flight would keep their timers (and each
+  // entry's upstream buffer) alive until the timeout fires, and leave the
+  // awaiting command loop hanging.
+  useEffect(() => () => waitingResponsesRef.current.clearAll(), []);
 
   function handleRowCountApply(newCount: number) {
     const clamped = Math.max(1, Math.min(500, Math.floor(newCount)));
@@ -578,18 +644,15 @@ export function PromptPanel({
       );
       const expectedCount = row.expectedResponses?.length ?? 0;
 
-      setMatchLog((prev) => {
-        const expectedList = row.expectedResponses?.map((r, i) => {
-          const isRegex = row.expectedResponseRegex?.[i] ?? false;
-          return `${isRegex ? ".*" : "Abc"} ${r.length > 30 ? r.slice(0, 30) + "..." : r}`;
-        }).join(" | ") || "";
-        const next = [{
-          rowId: row.id, command: row.command, status: "pending" as const,
-          detail: `[WAIT] 行 ${row.id}: ${row.command} → ${row.matchMode === "any" ? "任意" : "全部"}匹配 ${expectedCount} 个期望结果 (${validTimeout}ms)`,
-          received: "", expected: expectedList
-        }, ...prev];
-        return next.slice(0, 100);
-      });
+      const expectedList = row.expectedResponses?.map((r, i) => {
+        const isRegex = row.expectedResponseRegex?.[i] ?? false;
+        return `${isRegex ? ".*" : "Abc"} ${clip(r, 30)}`;
+      }).join(" | ") || "";
+      pushMatchLog([{
+        rowId: row.id, command: row.command, status: "pending",
+        detail: `[WAIT] 行 ${row.id}: ${row.command} → ${row.matchMode === "any" ? "任意" : "全部"}匹配 ${expectedCount} 个期望结果 (${validTimeout}ms)`,
+        received: "", expected: expectedList
+      }]);
 
       const waiting: WaitingResponse = {
         rowId: row.id,
@@ -603,16 +666,13 @@ export function PromptPanel({
         timer: setTimeout(() => {
           // Timeout — mark as error, then drop + settle this wait.
           updatePromptRow(row.id, { status: "error" });
-          setMatchLog((prev) => {
-            const buffer = waiting.receivedBuffer;
-            const next = [{
-              rowId: row.id, command: row.command, status: "error" as const,
-              detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
-              received: buffer.length > 200 ? buffer.slice(0, 200) + "..." : buffer || "(空)",
-              expected: ""
-            }, ...prev];
-            return next.slice(0, 100);
-          });
+          const buffer = waiting.receivedBuffer;
+          pushMatchLog([{
+            rowId: row.id, command: row.command, status: "error",
+            detail: `[ERROR] 行 ${row.id}: 匹配超时 (${validTimeout}ms) — 已匹配 ${waiting.matchIndex}/${waiting.expected.length} 个`,
+            received: buffer ? clip(buffer, 200) : "(空)",
+            expected: ""
+          }]);
           waitingResponsesRef.current.clear(row.id);
         }, validTimeout),
         onComplete: resolve,
@@ -1129,23 +1189,23 @@ export function PromptPanel({
             <span className="w-px h-3 bg-[var(--border)] mx-2" />
             <button
               type="button"
-              onClick={() => setMatchLogOpen(true)}
+              onClick={openMatchLog}
               className="flex items-center gap-1 text-theme-10 font-normal normal-case text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
               {waitingResponsesRef.current.size > 0 ? (
                 <span className="flex items-center gap-1 text-amber-500">
                   <Loader2 size={10} className="animate-spin" />
                 </span>
-              ) : matchLog.some(e => e.status === "error") ? (
+              ) : matchStats.hasError ? (
                 <span className="flex items-center gap-1 text-rose-500">
                   <X size={10} />
                 </span>
-              ) : matchLog.some(e => e.status === "success") ? (
+              ) : matchStats.hasSuccess ? (
                 <span className="flex items-center gap-1 text-emerald-500">
                   <Check size={10} />
                 </span>
               ) : null}
-              <span>{matchLog.length > 0 ? `${lang === "zh" ? "匹配日志" : "Match Log"} (${matchLog.length})` : (lang === "zh" ? "匹配日志" : "Match Log")}</span>
+              <span>{matchStats.count > 0 ? `${lang === "zh" ? "匹配日志" : "Match Log"} (${matchStats.count})` : (lang === "zh" ? "匹配日志" : "Match Log")}</span>
             </button>
           </div>
         )}
@@ -1276,7 +1336,12 @@ export function PromptPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMatchLog([])}
+                  onClick={() => {
+                    matchLogBufferRef.current!.clear();
+                    matchStatsRef.current = EMPTY_MATCH_LOG_STATS;
+                    setMatchStats(EMPTY_MATCH_LOG_STATS);
+                    setMatchLog([]);
+                  }}
                   className="text-theme-10 px-2 py-1 rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   {lang === "zh" ? "清空" : "Clear"}

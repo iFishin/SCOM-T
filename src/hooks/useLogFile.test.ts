@@ -26,7 +26,7 @@ describe("formatLogEntry", () => {
       entry({
         mode: "hex",
         payload: "AA 55 01 00 00 FB AC",
-        rawBytes: [0xaa, 0x55, 0x01, 0x00, 0x00, 0xfb, 0xac],
+        rawBytes: Uint8Array.from([0xaa, 0x55, 0x01, 0x00, 0x00, 0xfb, 0xac]),
       }),
     );
     expect(line).toBe("[2026-11-06 20:00:00.000] [RX] [HEX] AA 55 01 00 00 FB AC\n");
@@ -35,7 +35,7 @@ describe("formatLogEntry", () => {
 
   it("decodes rawBytes losslessly for ascii entries", () => {
     const line = formatLogEntry(
-      entry({ mode: "ascii", payload: "ignored", rawBytes: [0xff, 0x4f, 0x4b] }),
+      entry({ mode: "ascii", payload: "ignored", rawBytes: Uint8Array.from([0xff, 0x4f, 0x4b]) }),
     );
     expect(line).toContain("\\xFFOK");
     expect(line).not.toContain("\ufffd");
