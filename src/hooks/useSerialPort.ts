@@ -165,7 +165,11 @@ export function useSerialPort({
   const [logCapWarning, setLogCapWarning] = useState(false);
   const logCapWarningRef = useRef(false);
   const [ports, setPorts] = useState<PortSummary[]>([]);
-  const [logs, setLogs] = useState<SerialLogEntry[]>(() => initialLogs ?? []);
+  // Recovered logs are already tail-limited in crashRecoveryLog; clamp again
+  // here so the state seeded at mount can never exceed the live-view cap.
+  const [logs, setLogs] = useState<SerialLogEntry[]>(() =>
+    (initialLogs ?? []).slice(-MAX_LOGS)
+  );
   const logsRef = useRef<SerialLogEntry[]>(logs);
   const [isConnected, setIsConnected] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
