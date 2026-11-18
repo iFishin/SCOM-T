@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Replace, ListFilter, Slice, Save } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Replace, ListFilter, Slice, Save, File } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { FileSidebar } from "./config/FileSidebar.tsx";
@@ -55,6 +55,19 @@ function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
+/** A fresh, empty grid — also what a tab with no config file yet starts from. */
+function blankPromptRows(count: number): PromptRow[] {
+  return Array.from({ length: Math.max(1, count) }, (_, i) => ({
+    id: i + 1,
+    selected: false,
+    command: "",
+    isHex: false,
+    ender: "\r\n" as const,
+    interval: "",
+    status: "idle" as PromptRowStatus,
+  }));
+}
+
 type PromptPanelProps = {
   variant: "grid" | "panel";
   isConnected: boolean;
@@ -69,6 +82,8 @@ type PromptPanelProps = {
   onClearPendingApply?: () => void;
   activeConfigFile?: string;
   onActiveConfigFileChange?: (fileName: string) => void;
+  /** Tab this panel currently edits. Used to stop cross-tab sends. */
+  sessionId?: string;
   logs?: SerialLogEntry[];
   /** Live log subscription; when present it wins over `logs`. */
   logSource?: LogSource;
@@ -91,6 +106,7 @@ export function PromptPanel({
   onClearPendingApply,
   activeConfigFile = "prompts.yaml",
   onActiveConfigFileChange,
+  sessionId,
   logs: logsProp = [],
   logSource,
   tcpServerBroadcast,
@@ -109,17 +125,7 @@ export function PromptPanel({
   const logsSource = logSource ?? propLogSource;
   // ── State ──
 
-  const [promptRows, setPromptRows] = useState<PromptRow[]>(() =>
-    Array.from({ length: promptRowCount }, (_, i) => ({
-      id: i + 1,
-      selected: false,
-      command: "",
-      isHex: false,
-      ender: "\r\n" as const,
-      interval: "",
-      status: "idle" as PromptRowStatus,
-    })),
-  );
+  const [promptRows, setPromptRows] = useState<PromptRow[]>(() => blankPromptRows(promptRowCount));
   const commandRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [rowCountInput, setRowCountInput] = useState(String(promptRowCount));
   const [activePromptTab, setActivePromptTab] = useState<"grid" | "batch">("grid");
@@ -142,6 +148,12 @@ export function PromptPanel({
   /** Global loop gap (default 3000ms); rows without a per-row interval use it. */
   const [loopInterval, setLoopInterval] = useState(String(DEFAULT_LOOP_INTERVAL_MS));
   const batchAbortRef = useRef<boolean>(false);
+  /** Tab the running loop was started from; a switch aborts the remaining sends. */
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
+  /** Latest batch state, read by the tab-switch effect without re-subscribing. */
+  const batchStateRef = useRef(batchState);
+  batchStateRef.current = batchState;
   /** Resolves the in-flight per-row delay immediately when the user stops. */
   const batchDelayWakeRef = useRef<(() => void) | null>(null);
   const [responseSetOptions, setResponseSetOptions] = useState<{ id: string; name: string }[]>([]);
@@ -396,8 +408,20 @@ export function PromptPanel({
 
   // ── Load config file on startup ──
 
+  /// Latest row count, read inside the load effect without making the row
+  /// count a dependency (it is itself updated from the loaded file, which
+  /// would loop straight back into a reload).
+  const promptRowCountRef = useRef(promptRowCount);
+  promptRowCountRef.current = promptRowCount;
+
   useEffect(() => {
     let cancelled = false;
+    // A pending YAML re-parse belongs to the file we just left; letting it fire
+    // would write the previous tab's editing session into this tab's rows.
+    if (yamlDebounceRef.current) {
+      clearTimeout(yamlDebounceRef.current);
+      yamlDebounceRef.current = null;
+    }
     async function load() {
       try {
         const { join, homeDir } = await import("@tauri-apps/api/path");
@@ -417,18 +441,31 @@ export function PromptPanel({
           setPromptRows(result.rows);
           // Update promptRowCount to match the loaded config
           updatePromptRowCount(result.rows.length);
-        }
-        setConfigYamlText(text);
-        setConfigCurrentFile(activeConfigFile);
 
-        // Keep batch text view in sync when switching config files
-        if (result.valid && result.rows.length > 0) {
+          // Keep batch text view in sync when switching config files
           let lastIdx = result.rows.length - 1;
           while (lastIdx >= 0 && !result.rows[lastIdx].command.trim()) lastIdx--;
           setBatchText(result.rows.slice(0, lastIdx + 1).map((r) => r.command).join("\n"));
+        } else {
+          // File exists but holds no commands: show a blank grid rather than
+          // the previous tab's rows, which the auto-save would otherwise write
+          // straight into this file.
+          setPromptRows(blankPromptRows(promptRowCountRef.current));
+          setBatchText("");
         }
+        setConfigYamlText(text);
+        setConfigCurrentFile(activeConfigFile);
       } catch {
-        // File may not exist yet — still mark hydrated so edits get saved.
+        if (cancelled) return;
+        // No such file yet (a fresh tab, or one whose file was removed). Start
+        // from a blank sheet instead of leaving the previous tab's commands on
+        // screen — they would otherwise be auto-saved into THIS tab's file on
+        // the first keystroke, which is exactly the cross-tab bleed to avoid.
+        const blank = blankPromptRows(promptRowCountRef.current);
+        setPromptRows(blank);
+        setConfigYamlText(serializeToYaml(blank));
+        setConfigCurrentFile(activeConfigFile);
+        setBatchText("");
       } finally {
         if (!cancelled) hydratedFileRef.current = activeConfigFile;
       }
@@ -519,6 +556,40 @@ export function PromptPanel({
   useEffect(() => {
     setRowCountInput(String(promptRowCount));
   }, [promptRowCount]);
+
+  // ── Tab switch safety ──
+  // `sendData`, the log source and the seq counter all follow the active tab.
+  // A loop still running from the previous tab would otherwise keep firing its
+  // remaining commands at the newly focused device.
+  const prevSessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    if (prevSessionIdRef.current === sessionId) return;
+    prevSessionIdRef.current = sessionId;
+
+    if (batchStateRef.current.isRunning) {
+      stopBatchExecution();
+      pushToast(
+        lang === "zh" ? "已切换标签页，正在运行的循环已停止" : "Tab switched — the running loop was stopped",
+        "warn",
+      );
+    }
+
+    // Cursors and pending waits belong to the tab we just left.
+    lastProcessedSeqRef.current = 0;
+    waitingResponsesRef.current.clearAll();
+    // The match trace is per tab as well — mixing two devices' lines in one
+    // trace makes it read like a response came from the wrong port.
+    matchLogBufferRef.current?.clear();
+    matchStatsRef.current = EMPTY_MATCH_LOG_STATS;
+    setMatchStats(EMPTY_MATCH_LOG_STATS);
+    setMatchLog([]);
+    setPromptRows((rows) =>
+      rows.some((r) => r.status === "pending")
+        ? rows.map((r) => (r.status === "pending" ? { ...r, status: "idle" as PromptRowStatus } : r))
+        : rows,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   // ── Response matching: monitor logs for expected responses ──
   useEffect(() => {
@@ -755,6 +826,7 @@ export function PromptPanel({
     }
 
     batchAbortRef.current = false;
+    const batchSessionId = sessionIdRef.current;
     setBatchState({
       isRunning: true,
       currentLoop: 0,
@@ -768,7 +840,15 @@ export function PromptPanel({
       totalLoops,
       loopInterval,
       now: () => Date.now(),
-      send: (i) => executeSingleCommand(selected[i]),
+      send: (i) => {
+        // The tab switched mid-loop: stop instead of sending the rest of this
+        // device's command list to whatever port is active now.
+        if (sessionIdRef.current !== batchSessionId) {
+          batchAbortRef.current = true;
+          return Promise.resolve();
+        }
+        return executeSingleCommand(selected[i]);
+      },
       delay: (ms) => waitForBatchDelay(ms),
       isAborted: () => batchAbortRef.current,
       onStep: (loop, i) => {
@@ -1195,6 +1275,16 @@ export function PromptPanel({
     const tabBarWithCount = (
     <div className="mb-1.5 flex items-center text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)]">
       {tabBar}
+      {/* Which config this tab edits — tabs created from another tab own a copy. */}
+      <span
+        className="ml-2 hidden max-w-[190px] items-center gap-1 text-theme-10 font-normal normal-case text-[var(--text-muted)] sm:flex"
+        title={lang === "zh"
+          ? `本标签页的指令配置：${activeConfigFile}\n新建标签页会自动复制一份独立配置；也可在「配置」里改成共用同一个文件。`
+          : `Prompt config for this tab: ${activeConfigFile}\nNew tabs get an independent copy; pick the same file in Config to share one.`}
+      >
+        <File size={11} className="shrink-0 opacity-70" />
+        <span className="truncate">{activeConfigFile.replace(/\.yaml$/, "")}</span>
+      </span>
       <span className="w-px h-4 bg-[var(--border)] mx-2" />
         {activePromptTab === "grid" && (
           <label className="flex items-center gap-1 text-theme-10 font-normal normal-case">
