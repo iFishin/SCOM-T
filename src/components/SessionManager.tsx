@@ -277,6 +277,8 @@ function SessionContent({
 /** Imperative surface App uses to change the active tab's prompt config. */
 export type SessionManagerApi = {
   setConfigFile: (sessionId: string, fileName: string) => void;
+  /** One-time migration of bindings that only existed in the settings mirror. */
+  hydrateConfigFiles: (byId: Record<string, string>) => void;
 };
 
 type SessionManagerProps = {
@@ -333,6 +335,7 @@ export function SessionManager({
     renameSession,
     updateSessionConfig,
     setSessionConfigFile,
+    hydrateConfigFiles,
     setActive,
     reorderSession,
     maxSessions,
@@ -343,10 +346,13 @@ export function SessionManager({
   // re-render cannot leave App holding a stale closure or a null ref.
   const setConfigFileRef = useRef(setSessionConfigFile);
   setConfigFileRef.current = setSessionConfigFile;
+  const hydrateConfigFilesRef = useRef(hydrateConfigFiles);
+  hydrateConfigFilesRef.current = hydrateConfigFiles;
   useEffect(() => {
     if (!apiRef) return;
     const api: SessionManagerApi = {
       setConfigFile: (id, fileName) => setConfigFileRef.current(id, fileName),
+      hydrateConfigFiles: (byId) => hydrateConfigFilesRef.current(byId),
     };
     apiRef.current = api;
     return () => {

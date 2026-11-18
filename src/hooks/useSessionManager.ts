@@ -44,6 +44,26 @@ export function nextSessionName(existingNames: string[]): string {
   return `串口${existingNames.length + 1}`;
 }
 
+/**
+ * Fill in bindings that only exist in the settings mirror (written by a version
+ * that kept `activeConfigFile` outside this hook). Missing entries only — a
+ * live selection is never overwritten.
+ */
+export function fillMissingConfigFiles(
+  sessions: SerialSession[],
+  byId: Record<string, string>,
+): { sessions: SerialSession[]; changed: boolean } {
+  let changed = false;
+  const next = sessions.map((s) => {
+    if (s.activeConfigFile) return s;
+    const fileName = byId[s.id];
+    if (!fileName) return s;
+    changed = true;
+    return { ...s, activeConfigFile: fileName };
+  });
+  return { sessions: changed ? next : sessions, changed };
+}
+
 function loadSessions(): SerialSession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -116,6 +136,16 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
     persist(next);
   }, [sessions, persist]);
 
+  /**
+   * Fill in bindings that only exist in the mirrored settings (written by an
+   * older version, before this hook owned `activeConfigFile`). Only missing
+   * entries are touched, so a live selection is never overwritten.
+   */
+  const hydrateConfigFiles = useCallback((byId: Record<string, string>) => {
+    const result = fillMissingConfigFiles(sessions, byId);
+    if (result.changed) persist(result.sessions);
+  }, [sessions, persist]);
+
   function closeSession(id: string) {
     if (sessions.length <= 1) return;
     const next = sessions.filter((s) => s.id !== id);
@@ -169,6 +199,7 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
     renameSession,
     updateSessionConfig,
     setSessionConfigFile,
+    hydrateConfigFiles,
     setActive,
     reorderSession,
     maxSessions: MAX_SESSIONS,
