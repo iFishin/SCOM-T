@@ -14,12 +14,21 @@ import {
 import type { LogDisplayMode, SerialLogEntry } from "../hooks/useSerialPort.ts";
 import { payloadToBytes, parseHexString, formatHexDump, displayTimestamp } from "../utils/hexConverter.ts";
 import { t } from "../i18n.ts";
+import { useLogStream } from "../hooks/logSource.ts";
+import type { LogSource } from "../hooks/logSource.ts";
 import type { Lang } from "../i18n.ts";
 import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
 import { LogEditor } from "./LogEditor";
 
 type ReceiveLogProps = {
-  logs: SerialLogEntry[];
+  /** Buffer snapshot. Ignored when `logSource` is provided. */
+  logs?: SerialLogEntry[];
+  /**
+   * Live buffer subscription. When present it wins over `logs`: the panel then
+   * re-renders from the source instead of being pushed a new array by the app
+   * shell on every batch.
+   */
+  logSource?: LogSource;
   /**
    * False while the session sits in a background tab. The log rows are the
    * heaviest part of a session view, and keeping them mounted for every open
@@ -369,7 +378,8 @@ export function formatLogsAsText(logs: SerialLogEntry[]): string {
 }
 
 export function ReceiveLog({
-  logs,
+  logs: logsProp = [],
+  logSource,
   mounted = true,
   lang,
   logCapWarning = false,
@@ -388,6 +398,9 @@ export function ReceiveLog({
   onCloseLogFile,
   onAddToPrompts,
 }: ReceiveLogProps) {
+  // A hidden tab keeps its buffer but stops re-rendering: nothing is visible,
+  // and with four sessions open this was four subscriptions firing at 20 Hz.
+  const logs = useLogStream(mounted ? logSource : undefined, logsProp);
   const containerRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
   /**
@@ -936,13 +949,13 @@ export function ReceiveLog({
         data-log-searching={searchIndex >= 0 ? "1" : undefined}
         style={{ fontFamily: "var(--mono-font-family)" }}
       >
-        {logs.length === 0 ? (
-          <div className="flex h-full min-h-16 items-center justify-center text-[var(--text-muted)] opacity-60">
-            {t("no_data", lang)}
-          </div>
-        ) : !mounted ? (
+        {!mounted ? (
           <div className="flex h-full min-h-16 items-center justify-center text-theme-10 text-[var(--text-muted)] opacity-50">
             {lang === "zh" ? "切回该标签页以显示日志" : "Switch to this tab to show logs"}
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="flex h-full min-h-16 items-center justify-center text-[var(--text-muted)] opacity-60">
+            {t("no_data", lang)}
           </div>
         ) : displayMode === "text" ? (
           <div className="log-rows__list space-y-0">
