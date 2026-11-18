@@ -17,7 +17,12 @@ import type { SerialLogEntry } from "../serial/types.ts";
 export type ActiveSessionData = {
   sessionId: string;
   config: SerialConfig;
-  logs: import("../hooks/useSerialPort.ts").SerialLogEntry[];
+  /**
+   * Live log buffer as a subscription. Carrying the array itself here made the
+   * app shell re-render on every 20 Hz log batch; consumers that paint logs
+   * subscribe directly instead.
+   */
+  logSource: import("../hooks/logSource.ts").LogSource;
   isConnected: boolean;
   isBusy: boolean;
   statusText: string;
@@ -115,6 +120,7 @@ function SessionContent({
   logSavePath,
   logRealTime,
   onLogFileStateChange,
+  showLogPanel = true,
 }: {
   sessionId: string;
   config: SerialConfig;
@@ -137,6 +143,12 @@ function SessionContent({
   logSavePath?: string | null;
   logRealTime?: boolean;
   onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
+  /**
+   * False in the grid layout, where the log panel is its own card rendered by
+   * App. Rendering a second copy here only produced a few hundred clipped rows
+   * per session, all of which still cost DOM and a 20 Hz subscription.
+   */
+  showLogPanel?: boolean;
 }) {
   const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs, maxLogs, initialLogs });
   const logFile = useLogFile({ onStateChange: onLogFileStateChange });
@@ -158,7 +170,7 @@ function SessionContent({
     const data: ActiveSessionData = {
       sessionId,
       config,
-      logs: serial.logs,
+      logSource: serial.logSource,
       isConnected: serial.isConnected,
       isBusy: serial.isBusy,
       statusText: serial.statusText,
@@ -191,7 +203,7 @@ function SessionContent({
     onDataRef.current = data;
     if (isActive) onActiveData?.(data);
   }, [
-    config, serial.logs, serial.isConnected, serial.isBusy, serial.statusText,
+    config, serial.logSource, serial.isConnected, serial.isBusy, serial.statusText,
     serial.connectedPort, serial.error, serial.fileSendProgress,
     serial.logCapWarning, serial.ports, serial.tcpConnectionStatus,
     serial.tcpServerStatus, serial.tcpServerClients, serial.latencyMs,
@@ -228,8 +240,9 @@ function SessionContent({
           onSetSignals={serial.setSignals}
         />
       </div>
+      {showLogPanel && (
       <ReceiveLog
-        logs={serial.logs}
+        logSource={serial.logSource}
         mounted={isActive}
         lang={lang}
         logCapWarning={serial.logCapWarning}
@@ -243,11 +256,12 @@ function SessionContent({
         realTimeLog={logFile.realTime}
         onSelectLogFile={logFile.selectLogFile}
         onToggleRealTime={() => logFile.setRealTime((v) => !v)}
-        onFlushLogs={() => logFile.flushAll(serial.logs)}
-        onDumpLogs={() => { void logFile.dumpLogs(serial.logs); }}
+        onFlushLogs={() => logFile.flushAll(serial.getLogs())}
+        onDumpLogs={() => { void logFile.dumpLogs(serial.getLogs()); }}
         onCloseLogFile={logFile.closeLogFile}
         onAddToPrompts={onAddToPrompts}
       />
+      )}
     </div>
   );
 }
@@ -270,6 +284,12 @@ type SessionManagerProps = {
   logSavePath?: string | null;
   logRealTime?: boolean;
   onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
+  /**
+   * False in the grid layout, where the log panel is its own card rendered by
+   * App. Rendering a second copy here only produced a few hundred clipped rows
+   * per session, all of which still cost DOM and a 20 Hz subscription.
+   */
+  showLogPanel?: boolean;
 };
 
 export function SessionManager({
@@ -288,6 +308,7 @@ export function SessionManager({
   logSavePath,
   logRealTime,
   onLogFileStateChange,
+  showLogPanel = true,
 }: SessionManagerProps) {
   const {
     sessions,
@@ -425,6 +446,7 @@ export function SessionManager({
                 logSavePath={logSavePath}
                 logRealTime={logRealTime}
                 onLogFileStateChange={onLogFileStateChange}
+                showLogPanel={showLogPanel}
               />
             </div>
           );

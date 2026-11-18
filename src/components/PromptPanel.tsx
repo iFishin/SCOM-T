@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Replace, ListFilter, Slice, Save } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
@@ -20,6 +20,7 @@ import { feedMatcher } from "../serial/responseMatcher.ts";
 import type { MatchMode } from "../serial/responseMatcher.ts";
 import { PendingResponses } from "../serial/pendingResponses.ts";
 import { findFirstEntryAfterSeq } from "../serial/logCursor.ts";
+import type { LogSource } from "../hooks/logSource.ts";
 import { MatchLogBuffer, EMPTY_MATCH_LOG_STATS, sameMatchLogStats } from "./matchLogBuffer.ts";
 import type { MatchLogEntry, MatchLogStats } from "./matchLogBuffer.ts";
 import { collectPlaceholders, planResponseImport } from "../utils/responseImport.ts";
@@ -69,6 +70,8 @@ type PromptPanelProps = {
   activeConfigFile?: string;
   onActiveConfigFileChange?: (fileName: string) => void;
   logs?: SerialLogEntry[];
+  /** Live log subscription; when present it wins over `logs`. */
+  logSource?: LogSource;
   /** TCP Server broadcast — sends data to all connected TCP clients */
   tcpServerBroadcast?: (data: number[]) => Promise<void>;
   tcpClientCount?: number;
@@ -88,10 +91,22 @@ export function PromptPanel({
   onClearPendingApply,
   activeConfigFile = "prompts.yaml",
   onActiveConfigFileChange,
-  logs = [],
+  logs: logsProp = [],
+  logSource,
   tcpServerBroadcast,
   tcpClientCount,
 }: PromptPanelProps) {
+  /**
+   * Matching runs off a subscription rather than off a render. The panel has to
+   * see every batch, but it has no reason to re-render while nothing is being
+   * matched — and at 20 Hz that repaint was the most expensive thing left.
+   * Without a source (tests, standalone use) the prop still drives it.
+   */
+  const propLogSource = useMemo<LogSource>(
+    () => ({ get: () => logsProp, subscribe: () => () => {} }),
+    [logsProp],
+  );
+  const logsSource = logSource ?? propLogSource;
   // ── State ──
 
   const [promptRows, setPromptRows] = useState<PromptRow[]>(() =>
@@ -294,6 +309,7 @@ export function PromptPanel({
     // This runs during render (canCapture), so every field must be defensive:
     // the log buffer is flushed in batches and may briefly contain holes.
     const cmdUpper = (row?.command ?? "").trim().toUpperCase();
+    const logs = logsSource.get();
     if (!cmdUpper || !Array.isArray(logs) || logs.length === 0) return null;
     let lastSentIdx = -1;
     for (let i = logs.length - 1; i >= 0; i--) {
@@ -506,75 +522,81 @@ export function PromptPanel({
 
   // ── Response matching: monitor logs for expected responses ──
   useEffect(() => {
-    if (!logs || logs.length === 0) {
-      lastProcessedSeqRef.current = 0;
-      return;
-    }
+    const processNewLogs = () => {
+      const logs = logsSource.get();
+      if (!logs || logs.length === 0) {
+        lastProcessedSeqRef.current = 0;
+        return;
+      }
 
-    // Cursor is a sequence number rather than an index. The live buffer drops
-    // its head once it hits the configured cap, so an index would drift and
-    // either replay old lines or skip new ones.
-    const cursor = lastProcessedSeqRef.current;
-    const lastSeq = logs[logs.length - 1].seq;
-    const start = findFirstEntryAfterSeq(logs, cursor);
-    // Advance even when nothing is waiting: otherwise the first wait after a
-    // long idle stretch would replay every buffered line into the trace.
-    lastProcessedSeqRef.current = Math.max(cursor, lastSeq);
+      // Cursor is a sequence number rather than an index. The live buffer drops
+      // its head once it hits the configured cap, so an index would drift and
+      // either replay old lines or skip new ones.
+      const cursor = lastProcessedSeqRef.current;
+      const lastSeq = logs[logs.length - 1].seq;
+      const start = findFirstEntryAfterSeq(logs, cursor);
+      // Advance even when nothing is waiting: otherwise the first wait after a
+      // long idle stretch would replay every buffered line into the trace.
+      lastProcessedSeqRef.current = Math.max(cursor, lastSeq);
 
-    if (start >= logs.length) return;
-    if (waitingResponsesRef.current.size === 0) return;
+      if (start >= logs.length) return;
+      if (waitingResponsesRef.current.size === 0) return;
 
-    const trace: MatchLogEntry[] = [];
-    for (let i = start; i < logs.length; i++) {
-      const log = logs[i];
-      if (log?.direction !== "received") continue;
+      const trace: MatchLogEntry[] = [];
+      for (let i = start; i < logs.length; i++) {
+        const log = logs[i];
+        if (log?.direction !== "received") continue;
 
-      const receivedText = log.payload;
-      trace.push({
-        rowId: 0,
-        command: "",
-        status: "info",
-        detail: `[RECV] ${clip(receivedText, 80)}`,
-      });
+        const receivedText = log.payload;
+        trace.push({
+          rowId: 0,
+          command: "",
+          status: "info",
+          detail: `[RECV] ${clip(receivedText, 80)}`,
+        });
 
-      const settled: number[] = [];
-      waitingResponsesRef.current.forEach((waiting, rowId) => {
-        const result = feedMatcher(
-          { buffer: waiting.receivedBuffer, matchIndex: waiting.matchIndex, satisfied: false },
-          { expected: waiting.expected, isRegex: waiting.isRegex, matchMode: waiting.matchMode },
-          receivedText,
-        );
-        waiting.receivedBuffer = result.state.buffer;
-        waiting.matchIndex = result.state.matchIndex;
+        const settled: number[] = [];
+        waitingResponsesRef.current.forEach((waiting, rowId) => {
+          const result = feedMatcher(
+            { buffer: waiting.receivedBuffer, matchIndex: waiting.matchIndex, satisfied: false },
+            { expected: waiting.expected, isRegex: waiting.isRegex, matchMode: waiting.matchMode },
+            receivedText,
+          );
+          waiting.receivedBuffer = result.state.buffer;
+          waiting.matchIndex = result.state.matchIndex;
 
-        for (const idx of result.matched) {
-          const expected = waiting.expected[idx];
-          const matchedIndex = idx + 1;
-          trace.push({
-            rowId,
-            command: "",
-            status: "info",
-            detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${clip(expected, 40)}`,
-            received: clip(receivedText, 60),
-            expected: clip(expected, 60),
-          });
-        }
+          for (const idx of result.matched) {
+            const expected = waiting.expected[idx];
+            const matchedIndex = idx + 1;
+            trace.push({
+              rowId,
+              command: "",
+              status: "info",
+              detail: `[MATCH] #${matchedIndex}/${waiting.expected.length}: ${clip(expected, 40)}`,
+              received: clip(receivedText, 60),
+              expected: clip(expected, 60),
+            });
+          }
 
-        if (result.done) {
-          updatePromptRow(rowId, { status: "success" });
-          settled.push(rowId);
-          trace.push({
-            rowId,
-            command: "",
-            status: "success",
-            detail: `[SUCCESS] 行 ${rowId}: ${waiting.matchMode === "any" ? "任意期望结果已匹配" : `${waiting.expected.length} 个期望结果全部匹配成功`}`,
-          });
-        }
-      });
-      for (const rowId of settled) waitingResponsesRef.current.clear(rowId);
-    }
-    pushMatchLog(trace);
-  }, [logs, pushMatchLog]);
+          if (result.done) {
+            updatePromptRow(rowId, { status: "success" });
+            settled.push(rowId);
+            trace.push({
+              rowId,
+              command: "",
+              status: "success",
+              detail: `[SUCCESS] 行 ${rowId}: ${waiting.matchMode === "any" ? "任意期望结果已匹配" : `${waiting.expected.length} 个期望结果全部匹配成功`}`,
+            });
+          }
+        });
+        for (const rowId of settled) waitingResponsesRef.current.clear(rowId);
+      }
+      pushMatchLog(trace);
+    };
+
+    processNewLogs();
+    return logsSource.subscribe(processNewLogs);
+  }, [logsSource, pushMatchLog]);
 
   // Unmounting with waits still in flight would keep their timers (and each
   // entry's upstream buffer) alive until the timeout fires, and leave the

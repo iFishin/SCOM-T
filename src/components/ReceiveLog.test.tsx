@@ -236,3 +236,49 @@ describe("background tab", () => {
     expect(html).toContain("切回该标签页");
   });
 });
+
+describe("log source", () => {
+  const source = (logs: SerialLogEntry[]) => ({
+    get: () => logs,
+    subscribe: () => () => {},
+  });
+
+  it("renders the source buffer instead of the logs prop", () => {
+    const live = [entry({ id: "live", seq: 7, payload: "FROM-SOURCE" })];
+    const html = renderToStaticMarkup(
+      <ReceiveLog
+        logs={[entry({ id: "stale", seq: 1, payload: "FROM-PROP" })]}
+        logSource={source(live)}
+        lang="zh"
+        displayMode="text"
+        onClearAll={noop}
+        onClearReceived={noop}
+        onClearSent={noop}
+      />,
+    );
+    expect(html).toContain("FROM-SOURCE");
+    expect(html).not.toContain("FROM-PROP");
+  });
+
+  it("falls back to the logs prop when no source is given", () => {
+    const html = render("text", [entry({ id: "p", seq: 1, payload: "FROM-PROP" })]);
+    expect(html).toContain("FROM-PROP");
+  });
+});
+
+describe("hidden tab without a subscription", () => {
+  it("keeps the switch-back hint instead of the empty state", () => {
+    const html = renderToStaticMarkup(
+      <ReceiveLog
+        mounted={false}
+        lang="zh"
+        displayMode="card"
+        onClearAll={noop}
+        onClearReceived={noop}
+        onClearSent={noop}
+      />,
+    );
+    expect(html).toContain("切回该标签页");
+    expect(html).not.toContain("暂无串口数据");
+  });
+});

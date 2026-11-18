@@ -159,7 +159,9 @@ function App() {
     flowControl: "none", rts: false, dtr: false, connectionType: "serial",
     tcpHost: "", tcpPort: 23, tcpProtocol: "rfc2217",
   };
-  const logs = sessionData?.logs ?? [];
+  // Logs reach the panels through a subscription, not through this state
+  // object: see `logSource`. Everything below changes at human speed.
+  const logSource = sessionData?.logSource;
   const isConnected = sessionData?.isConnected ?? false;
   const isBusy = sessionData?.isBusy ?? false;
   const statusText = sessionData?.statusText ?? "未连接";
@@ -186,7 +188,6 @@ function App() {
   const getSignalHistory = sessionData?.getSignalHistory ?? noopSignalHistory;
   const clearSerialBuffer = sessionData?.clearSerialBuffer ?? noopAsync;
 
-  const activeLogs = logs;
   const activeIsConnected = isConnected;
   const activeConnectedPort = connectedPort;
   const activeSendData = sendData;
@@ -200,7 +201,6 @@ function App() {
   const logFile = useLogFile({
     onStateChange: (savePath, realTime) => updateLogFileState(savePath, realTime),
   });
-  useEffect(() => { logFile.syncLogs(activeLogs); }, [activeLogs]);
 
   // Restore persisted log file selection once settings have loaded (if it still exists).
   const logRestoredRef = useRef(false);
@@ -360,14 +360,15 @@ function App() {
           : `New TCP client connected (${tcpServerClients[count - 1]?.address ?? "unknown"}). Send current logs to all clients?`
       );
       if (ok && tcpServerBroadcast) {
-        const text = formatLogsAsText(logs);
+        const current = logSource?.get() ?? [];
+        const text = formatLogsAsText(current);
         const bytes = Array.from(new TextEncoder().encode(text));
         tcpServerBroadcast(bytes);
-        pushToast(lang === "zh" ? `已同步 ${logs.length} 条日志` : `Synced ${logs.length} logs`, "success");
+        pushToast(lang === "zh" ? `已同步 ${current.length} 条日志` : `Synced ${current.length} logs`, "success");
       }
     }
     prevClientCountRef.current = count;
-  }, [tcpServerClients, tcpServerBroadcast, logs, lang, pushToast]);
+  }, [tcpServerClients, tcpServerBroadcast, logSource, lang, pushToast]);
 
   const topCollapsed = settings.topCollapsed ?? false;
   const rightCollapsed = settings.rightCollapsed ?? false;
@@ -811,6 +812,7 @@ function App() {
                 rxIdleFlushMs={settings.rxIdleFlushMs ?? 50}
                 logBatchFlushMs={settings.logBatchFlushMs ?? 50}
                 maxLogs={settings.maxLogs ?? 3_000}
+                showLogPanel={false}
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
                 onSessionsChange={handleSessionsChange}
@@ -854,7 +856,7 @@ function App() {
 
             <div key="receive" id="tour-receive" className="overflow-hidden flex flex-col rounded-lg">
               <ReceiveLog
-                logs={activeLogs}
+                logSource={logSource}
                 lang={lang}
                 savePath={logFile.savePath}
                 realTimeLog={logFile.realTime}
@@ -866,12 +868,13 @@ function App() {
                 onDisplayModeChange={updateDisplayMode}
                 onSelectLogFile={logFile.selectLogFile}
                 onToggleRealTime={() => logFile.setRealTime((v) => !v)}
-                onFlushLogs={() => logFile.flushAll(logs)}
+                onFlushLogs={() => logFile.flushAll(logSource?.get() ?? [])}
                 onDumpLogs={async () => {
-                  const ok = await logFile.dumpLogs(logs);
+                  const current = logSource?.get() ?? [];
+                  const ok = await logFile.dumpLogs(current);
                   pushToast(
                     ok
-                      ? (lang === "zh" ? `已追加 ${logs.length} 条日志到文件` : `Appended ${logs.length} logs to file`)
+                      ? (lang === "zh" ? `已追加 ${current.length} 条日志到文件` : `Appended ${current.length} logs to file`)
                       : (lang === "zh" ? "追加失败：请先选择日志文件" : "Append failed: select a log file first"),
                     ok ? "success" : "error",
                   );
@@ -882,7 +885,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -1376,7 +1379,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logs={activeLogs} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}

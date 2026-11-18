@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import {
   bytesToAscii,
@@ -39,6 +39,7 @@ import type { MockSerialConfig } from "./useSettings.ts";
 import { SerialEventJournal } from "../serial/SerialEventJournal.ts";
 import { SerialTextFramer } from "../serial/SerialTextFramer.ts";
 import { commitLogBatch } from "./logCommit.ts";
+import type { LogSource } from "./logSource.ts";
 
 // ── Re-export types from the new service layers for backward compatibility ──
 
@@ -180,20 +181,39 @@ export function useSerialPort({
   const [logCapWarning, setLogCapWarning] = useState(false);
   const logCapWarningRef = useRef(false);
   const [ports, setPorts] = useState<PortSummary[]>([]);
+  // The buffer is deliberately NOT React state. Holding it in state made every
+  // component that calls this hook re-render on each 20 Hz batch, including the
+  // whole session shell; consumers subscribe through `logSource` instead.
   // Recovered logs are already tail-limited in crashRecoveryLog; clamp again
-  // here so the state seeded at mount can never exceed the live-view cap.
-  const [logs, setLogs] = useState<SerialLogEntry[]>(() =>
-    (initialLogs ?? []).slice(-MAX_LOGS)
+  // here so the buffer seeded at mount can never exceed the live-view cap.
+  // Seeded once: `initialLogs` is the crash-recovered tail, only meaningful at mount.
+  const seededLogs = useMemo(() => (initialLogs ?? []).slice(-MAX_LOGS), []);
+  const logsRef = useRef<SerialLogEntry[]>(seededLogs);
+  /**
+   * Subscribers notified after every buffer change. Components that paint logs
+   * consume the buffer through this source instead of a prop, so a 20 Hz batch
+   * no longer re-renders the app shell.
+   */
+  const logListenersRef = useRef<Set<() => void>>(new Set());
+  const logSource = useMemo<LogSource>(
+    () => ({
+      get: () => logsRef.current,
+      subscribe: (listener) => {
+        logListenersRef.current.add(listener);
+        return () => {
+          logListenersRef.current.delete(listener);
+        };
+      },
+    }),
+    [],
   );
-  const logsRef = useRef<SerialLogEntry[]>(logs);
 
   // Shrinking the cap applies immediately rather than waiting for the next
   // append to trim the buffer.
   useEffect(() => {
     if (logsRef.current.length > MAX_LOGS) {
-      const trimmed = logsRef.current.slice(-MAX_LOGS);
-      logsRef.current = trimmed;
-      setLogs(trimmed);
+      logsRef.current = logsRef.current.slice(-MAX_LOGS);
+      notifyLogListeners();
     }
   }, [MAX_LOGS]);
   const [isConnected, setIsConnected] = useState(false);
@@ -640,7 +660,11 @@ export function useSerialPort({
 
   function applyLogs(nextLogs: SerialLogEntry[]) {
     logsRef.current = nextLogs;
-    setLogs(nextLogs);
+    notifyLogListeners();
+  }
+
+  function notifyLogListeners() {
+    for (const listener of logListenersRef.current) listener();
   }
 
   function appendLog(
@@ -1275,7 +1299,8 @@ export function useSerialPort({
 
   return {
     ports,
-    logs,
+    logSource,
+    getLogs: () => logsRef.current,
     isConnected,
     isBusy,
     statusText,
