@@ -33,7 +33,7 @@ import { t } from "./i18n.ts";
 import type { SerialConfig } from "./hooks/useSerialPort.ts";
 import { SessionManager } from "./components/SessionManager.tsx";
 import type { SerialSession } from "./hooks/useSessionManager.ts";
-import type { ActiveSessionData } from "./components/SessionManager.tsx";
+import type { ActiveSessionData, SessionManagerApi } from "./components/SessionManager.tsx";
 
 // Code-split heavy, on-demand UI: these only load the first time they are
 // shown, keeping react-markdown / marketplace / log-viewer code out of the
@@ -231,28 +231,29 @@ function App() {
 
   // ── Per-session config file management ──
 
+  const sessionApiRef = useRef<SessionManagerApi | null>(null);
+
   const handleSessionsChange = useCallback((incoming: SerialSession[]) => {
-    // useSessionManager 内部状态不携带 activeConfigFile，合并保留
+    // useSessionManager 是会话（含各自的指令配置文件）的唯一真源，这里只是镜像到
+    // settings 以便重启后恢复；缺字段时保留旧值，避免旧版本数据把绑定抹掉。
     const prevById = new Map((settings.sessions ?? []).map((s) => [s.id, s]));
     const merged = incoming.map((s) => ({
       ...s,
-      activeConfigFile: prevById.get(s.id)?.activeConfigFile ?? "prompts.yaml",
+      activeConfigFile:
+        s.activeConfigFile ?? prevById.get(s.id)?.activeConfigFile ?? "prompts.yaml",
     }));
     updateSessions(merged);
   }, [settings.sessions, updateSessions]);
 
-  const updateSessionConfigFile = useCallback((sessionId: string, fileName: string) => {
-    const next = (settings.sessions ?? []).map((s) =>
-      s.id === sessionId ? { ...s, activeConfigFile: fileName } : s
-    );
-    updateSessions(next);
-  }, [settings.sessions, updateSessions]);
+  // Get the current session's activeConfigFile — 随 ActiveSessionData 一起下发，
+  // 单一来源，不会和 settings.sessions 出现两套值。
+  const currentSessionConfigFile = sessionData?.activeConfigFile ?? "prompts.yaml";
 
-  // Get the current session's activeConfigFile
-  const currentSessionConfigFile = useMemo(() => {
-    const session = (settings.sessions ?? []).find((s) => s.id === sessionData?.sessionId);
-    return session?.activeConfigFile ?? "prompts.yaml";
-  }, [settings.sessions, sessionData?.sessionId]);
+  const handleActiveConfigFileChange = useCallback((fileName: string) => {
+    const id = sessionData?.sessionId;
+    if (!id) return;
+    sessionApiRef.current?.setConfigFile(id, fileName);
+  }, [sessionData?.sessionId]);
 
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
@@ -816,6 +817,7 @@ function App() {
                 onActiveSessionData={handleActiveSessionData}
                 onAddToPrompts={handleAddToPrompts}
                 onSessionsChange={handleSessionsChange}
+                apiRef={sessionApiRef}
                 logSavePath={settings.logSavePath}
                 logRealTime={settings.logRealTime}
                 onLogFileStateChange={updateLogFileState}
@@ -885,7 +887,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} sessionId={sessionData?.sessionId} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={handleActiveConfigFileChange} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -1120,7 +1122,7 @@ function App() {
           onClose={() => setPage("main")}
           onApply={(id) => setPendingApplyResponseSet(id)}
           onApplyPromptConfig={(name) => {
-            updateSessionConfigFile(sessionData?.sessionId ?? "", `${name}.yaml`);
+            handleActiveConfigFileChange(`${name}.yaml`);
             setPage("main");
             pushToast(lang === "zh" ? `已应用指令配置: ${name}` : `Applied prompt config: ${name}`, "success");
           }}
@@ -1295,6 +1297,7 @@ function App() {
                     onActiveSessionData={handleActiveSessionData}
                     onAddToPrompts={handleAddToPrompts}
                     onSessionsChange={handleSessionsChange}
+                    apiRef={sessionApiRef}
                     logSavePath={settings.logSavePath}
                     logRealTime={settings.logRealTime}
                     onLogFileStateChange={updateLogFileState}
@@ -1379,7 +1382,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={(fileName) => updateSessionConfigFile(sessionData?.sessionId ?? "", fileName)} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} sessionId={sessionData?.sessionId} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={handleActiveConfigFileChange} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { SerialConfig } from "./useSerialPort.ts";
+import { DEFAULT_CONFIG_FILE } from "../utils/sessionConfigFile.ts";
 
 const MAX_SESSIONS = 4;
 const STORAGE_KEY = "scom_t_sessions";
@@ -49,7 +50,15 @@ function loadSessions(): SerialSession[] {
     if (raw) {
       const parsed = JSON.parse(raw) as SerialSession[];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.slice(0, MAX_SESSIONS);
+        return parsed.slice(0, MAX_SESSIONS).map((s) => ({
+          ...s,
+          // Corrupt/hand-edited storage must not put a non-string where the
+          // config file name is expected.
+          activeConfigFile:
+            typeof s.activeConfigFile === "string" && s.activeConfigFile
+              ? s.activeConfigFile
+              : undefined,
+        }));
       }
     }
   } catch {
@@ -82,17 +91,30 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
     onSessionsChange?.(next);
   }, [onSessionsChange]);
 
-  function createSession() {
+  /**
+   * @param activeConfigFile 新标签页绑定的指令配置文件；缺省沿用全局默认，
+   *   SessionManager 新建标签页时会先派生一份独立配置再传进来。
+   */
+  function createSession(activeConfigFile?: string) {
     if (sessions.length >= MAX_SESSIONS) return;
     const newSession: SerialSession = {
       id: generateId(),
       name: nextSessionName(sessions.map((s) => s.name)),
       config: defaultConfig(),
+      activeConfigFile: activeConfigFile || DEFAULT_CONFIG_FILE,
     };
     const next = [...sessions, newSession];
     persist(next);
     setActiveSessionId(newSession.id);
   }
+
+  /** Bind a tab to another prompt config file. */
+  const setSessionConfigFile = useCallback((id: string, fileName: string) => {
+    const next = sessions.map((s) =>
+      s.id === id ? { ...s, activeConfigFile: fileName } : s
+    );
+    persist(next);
+  }, [sessions, persist]);
 
   function closeSession(id: string) {
     if (sessions.length <= 1) return;
@@ -146,6 +168,7 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
     closeSession,
     renameSession,
     updateSessionConfig,
+    setSessionConfigFile,
     setActive,
     reorderSession,
     maxSessions: MAX_SESSIONS,

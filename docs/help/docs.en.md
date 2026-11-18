@@ -90,6 +90,8 @@ In **Settings → Command Line**, define custom terminators as hex byte sequence
 
 Use the top tabs to create multiple sessions, each with its own serial connection and logs.
 
+A new tab automatically gets its **own prompt config** (`prompts-<tab name>.yaml`). The command grid on the right belongs to the active tab only: editing commands in tab A never rewrites tab B. Re-opening a tab with the same name reuses its previous file instead of creating duplicates. To share one command list between tabs, pick the same file in the **Config** tab's file list. The active config name is shown above the command grid.
+
 ---
 
 ## Receive Log
@@ -156,7 +158,7 @@ The **Batch** tab provides a line-numbered editor:
 
 ### YAML Config
 
-The **Config** tab edits `prompts.yaml` directly (command, HEX mode, terminator, timeout, etc.), with save/load named configs and open-config-dir. Grid changes auto-sync back to the file.
+The **Config** tab edits the active tab's prompt config (command, HEX mode, terminator, timeout, etc.), with save/load named configs and open-config-dir. Grid changes auto-sync back to the file. The first tab uses `prompts.yaml`; every other tab uses its own file under `prompts/`.
 
 ### Response Sets
 

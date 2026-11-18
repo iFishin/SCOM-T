@@ -5,17 +5,20 @@ import { useSerialPort, BAUD_RATES, DATA_BITS_OPTIONS, PARITY_OPTIONS, STOP_BITS
 import type { LogDisplayMode, ReceiveMode, SendMode, SerialConfig } from "../hooks/useSerialPort.ts";
 import type { MockSerialConfig } from "../hooks/useSettings.ts";
 import type { Lang } from "../i18n.ts";
-import { useSessionManager } from "../hooks/useSessionManager.ts";
+import { useSessionManager, nextSessionName } from "../hooks/useSessionManager.ts";
 import type { SerialSession } from "../hooks/useSessionManager.ts";
 import { useLogFile } from "../hooks/useLogFile.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { appendCrashLog, readCrashLog, clearCrashLog } from "../utils/crashRecoveryLog.ts";
+import { DEFAULT_CONFIG_FILE, forkConfigForSession } from "../utils/sessionConfigFile.ts";
 import type { SerialLogEntry } from "../serial/types.ts";
 
 // ── Types ──
 
 export type ActiveSessionData = {
   sessionId: string;
+  /** Prompt config file this tab edits (per-tab independence, issue #19). */
+  activeConfigFile: string;
   config: SerialConfig;
   /**
    * Live log buffer as a subscription. Carrying the array itself here made the
@@ -101,6 +104,7 @@ function useCrashLogWriter(sessionId: string) {
 
 function SessionContent({
   sessionId,
+  activeConfigFile,
   config,
   lang,
   receiveMode,
@@ -123,6 +127,7 @@ function SessionContent({
   showLogPanel = true,
 }: {
   sessionId: string;
+  activeConfigFile: string;
   config: SerialConfig;
   lang: Lang;
   receiveMode: ReceiveMode;
@@ -169,6 +174,7 @@ function SessionContent({
   useEffect(() => {
     const data: ActiveSessionData = {
       sessionId,
+      activeConfigFile,
       config,
       logSource: serial.logSource,
       isConnected: serial.isConnected,
@@ -203,7 +209,7 @@ function SessionContent({
     onDataRef.current = data;
     if (isActive) onActiveData?.(data);
   }, [
-    config, serial.logSource, serial.isConnected, serial.isBusy, serial.statusText,
+    sessionId, activeConfigFile, config, serial.logSource, serial.isConnected, serial.isBusy, serial.statusText,
     serial.connectedPort, serial.error, serial.fileSendProgress,
     serial.logCapWarning, serial.ports, serial.tcpConnectionStatus,
     serial.tcpServerStatus, serial.tcpServerClients, serial.latencyMs,
@@ -268,6 +274,11 @@ function SessionContent({
 
 // ── SessionManager ──
 
+/** Imperative surface App uses to change the active tab's prompt config. */
+export type SessionManagerApi = {
+  setConfigFile: (sessionId: string, fileName: string) => void;
+};
+
 type SessionManagerProps = {
   lang: Lang;
   receiveMode: ReceiveMode;
@@ -281,6 +292,8 @@ type SessionManagerProps = {
   onActiveSessionData?: (data: ActiveSessionData) => void;
   onAddToPrompts?: (payload: string) => void;
   onSessionsChange?: (sessions: SerialSession[]) => void;
+  /** Lets App bind the active tab to another prompt config file. */
+  apiRef?: React.MutableRefObject<SessionManagerApi | null>;
   logSavePath?: string | null;
   logRealTime?: boolean;
   onLogFileStateChange?: (savePath: string | null, realTime: boolean) => void;
@@ -305,6 +318,7 @@ export function SessionManager({
   onActiveSessionData,
   onAddToPrompts,
   onSessionsChange,
+  apiRef,
   logSavePath,
   logRealTime,
   onLogFileStateChange,
@@ -313,14 +327,46 @@ export function SessionManager({
   const {
     sessions,
     activeSessionId,
+    activeSession,
     createSession,
     closeSession,
     renameSession,
     updateSessionConfig,
+    setSessionConfigFile,
     setActive,
     reorderSession,
     maxSessions,
   } = useSessionManager(onSessionsChange);
+
+  // Expose the binding setter so App can switch the active tab's config file.
+  // The handed-out object is stable; it forwards to the latest setter so a
+  // re-render cannot leave App holding a stale closure or a null ref.
+  const setConfigFileRef = useRef(setSessionConfigFile);
+  setConfigFileRef.current = setSessionConfigFile;
+  useEffect(() => {
+    if (!apiRef) return;
+    const api: SessionManagerApi = {
+      setConfigFile: (id, fileName) => setConfigFileRef.current(id, fileName),
+    };
+    apiRef.current = api;
+    return () => {
+      if (apiRef.current === api) apiRef.current = null;
+    };
+  }, [apiRef]);
+
+  // Push the initial session list up once. Without this the mirrored
+  // settings.sessions stays empty until the first tab mutation, so a tab's
+  // config binding had no slot to live in.
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const sessionsChangeRef = useRef(onSessionsChange);
+  sessionsChangeRef.current = onSessionsChange;
+  const notifiedInitialSessionsRef = useRef(false);
+  useEffect(() => {
+    if (notifiedInitialSessionsRef.current) return;
+    notifiedInitialSessionsRef.current = true;
+    sessionsChangeRef.current?.(sessionsRef.current);
+  }, []);
 
   // Store per-session data refs, only the active one is synced to App.tsx
   const sessionDataRefs = useRef<Record<string, { current: ActiveSessionData | null }>>({});
@@ -360,6 +406,31 @@ export function SessionManager({
   const handleConfigChange = useCallback((sessionId: string, newConfig: SerialConfig) => {
     updateSessionConfig(sessionId, newConfig);
   }, [updateSessionConfig]);
+
+  /**
+   * New tabs get their own prompt config file, seeded from the tab they were
+   * opened from (a re-opened tab name reuses its previous file). Sharing one
+   * `prompts.yaml` across every tab was exactly the behaviour issue #19 asked
+   * to get rid of: editing commands in one tab silently rewrote another's.
+   */
+  const creatingSessionRef = useRef(false);
+  const handleCreateSession = useCallback(async () => {
+    if (creatingSessionRef.current || sessions.length >= maxSessions) return;
+    creatingSessionRef.current = true;
+    try {
+      const name = nextSessionName(sessions.map((s) => s.name));
+      const sourceFile = activeSession?.activeConfigFile ?? DEFAULT_CONFIG_FILE;
+      let configFile = DEFAULT_CONFIG_FILE;
+      try {
+        configFile = await forkConfigForSession(name, sourceFile);
+      } catch {
+        // Filesystem unavailable — still let the tab open on the shared default.
+      }
+      createSession(configFile);
+    } finally {
+      creatingSessionRef.current = false;
+    }
+  }, [sessions, activeSession, createSession, maxSessions]);
 
   const handleCloseSession = useCallback((sessionId: string) => {
     closeSession(sessionId);
@@ -404,7 +475,7 @@ export function SessionManager({
         lang={lang}
         onSelect={setActive}
         onClose={handleCloseSession}
-        onCreate={createSession}
+        onCreate={handleCreateSession}
         onRename={renameSession}
         onReorder={reorderSession}
       />
@@ -427,6 +498,7 @@ export function SessionManager({
             >
               <SessionContent
                 sessionId={session.id}
+                activeConfigFile={session.activeConfigFile ?? DEFAULT_CONFIG_FILE}
                 config={session.config}
                 lang={lang}
                 receiveMode={receiveMode}
