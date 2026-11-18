@@ -255,6 +255,21 @@ function App() {
     sessionApiRef.current?.setConfigFile(id, fileName);
   }, [sessionData?.sessionId]);
 
+  // One-time migration: older versions kept a tab's config-file binding only
+  // in settings.sessions (useSessionManager did not carry it). Seed those into
+  // the session manager once settings finish loading, touching only tabs that
+  // have no binding yet.
+  const configHydratedRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || configHydratedRef.current) return;
+    configHydratedRef.current = true;
+    const byId: Record<string, string> = {};
+    for (const s of settings.sessions ?? []) {
+      if (s.activeConfigFile) byId[s.id] = s.activeConfigFile;
+    }
+    sessionApiRef.current?.hydrateConfigFiles(byId);
+  }, [loaded, settings.sessions]);
+
   // ── Log viewer ──
   const handleOpenLogViewer = useCallback(async () => {
     if (!appLogger.ready) {

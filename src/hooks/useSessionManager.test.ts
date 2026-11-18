@@ -1,5 +1,41 @@
 import { describe, it, expect } from "vitest";
-import { nextSessionName } from "./useSessionManager";
+import { nextSessionName, fillMissingConfigFiles } from "./useSessionManager";
+import type { SerialSession } from "./useSessionManager";
+
+function session(id: string, activeConfigFile?: string): SerialSession {
+  return {
+    id,
+    name: id,
+    config: {
+      path: "", baudRate: 115200, dataBits: "8", parity: "none", stopBits: "1",
+      flowControl: "none", rts: false, dtr: false, connectionType: "serial",
+      tcpHost: "", tcpPort: 23, tcpProtocol: "rfc2217",
+    },
+    activeConfigFile,
+  };
+}
+
+describe("fillMissingConfigFiles", () => {
+  it("seeds a binding that only exists in the settings mirror", () => {
+    const result = fillMissingConfigFiles([session("a"), session("b")], { b: "prompts-b.yaml" });
+    expect(result.changed).toBe(true);
+    expect(result.sessions[0].activeConfigFile).toBeUndefined();
+    expect(result.sessions[1].activeConfigFile).toBe("prompts-b.yaml");
+  });
+
+  it("never overwrites a live binding", () => {
+    const result = fillMissingConfigFiles([session("a", "prompts-live.yaml")], { a: "prompts-old.yaml" });
+    expect(result.changed).toBe(false);
+    expect(result.sessions[0].activeConfigFile).toBe("prompts-live.yaml");
+  });
+
+  it("returns the original array when nothing changes", () => {
+    const sessions = [session("a", "prompts-a.yaml")];
+    const result = fillMissingConfigFiles(sessions, { zzz: "prompts-z.yaml" });
+    expect(result.changed).toBe(false);
+    expect(result.sessions).toBe(sessions);
+  });
+});
 
 describe("nextSessionName", () => {
   it("starts at 串口1", () => {
