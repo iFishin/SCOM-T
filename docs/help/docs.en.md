@@ -69,6 +69,26 @@ If a device splits one line into several USB packets and logs get truncated (hal
 - **HEX**: hex bytes, e.g. `41 54` (= `AT`), separated by spaces.
 - Quick **ASCII→HEX** / **HEX→ASCII** conversion buttons are provided.
 
+### Text Encoding
+
+Pick the charset your device uses, separately for **receive** and **send**, in
+**Settings → General → Text Encoding**:
+
+| Device | Suggested |
+|---|---|
+| Most modules, plain AT commands | UTF-8 (default) |
+| Chinese replies from older modules | GB18030 (covers GBK / GB2312) |
+| Traditional Chinese | Big5 |
+| Japanese / Korean / Western European | Shift_JIS / EUC-KR / Windows-1252 |
+
+Notes:
+
+- The setting only decides how bytes map to text. The HEX view and the `.log` file keep the raw bytes, so **picking the wrong charset never loses data**.
+- You will not see replacement squares: bytes that cannot be decoded show up as reversible `\xD6` escapes, and the HEX view still shows the real traffic.
+- If a character cannot be represented in the selected charset (e.g. Chinese in Windows-1252), sending fails with an error naming that character instead of silently substituting it.
+- HEX mode and the terminator are always byte-oriented and ignore the encoding.
+- UTF-16 / UTF-32 are not offered: their two-byte line endings clash with the `0A`-based receive framing.
+
 ### Terminator
 
 A terminator can be appended to the command bytes, chosen from the dropdown:
@@ -218,7 +238,7 @@ Open **Settings** from the top toolbar:
 
 | Tab | Description |
 |---|---|
-| General | Light/dark mode, language, compact mode, close behavior (tray/exit), log retention, port filter, multi-instance |
+| General | Light/dark mode, language, compact mode, close behavior (tray/exit), log retention, port filter, multi-instance, text encoding (receive / send) |
 | Log | Timestamp format, serial data timing (idle flush / render batch) |
 | Hotkeys | Command hotkeys |
 | Theme | Theme personalization (above) |

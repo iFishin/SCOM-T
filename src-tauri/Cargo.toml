@@ -27,6 +27,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tokio = { version = "1.52.3", features = ["net", "sync", "io-util", "time", "macros"] }
 bytes = "1"
+# 非 UTF-8 的发送编码（GBK / Big5 / Shift_JIS …）。浏览器只有 UTF-8 的
+# TextEncoder，编码必须落在 Rust 侧；它和 TextDecoder 同为 WHATWG 实现。
+encoding_rs = "0.8"
 
 # 单实例互斥体是 Windows 专有实现（CreateMutexA），所以依赖也要挂在
 # cfg(windows) 下 —— 早先无条件声明，macOS / Linux 上会白拉一个用不到的 crate，

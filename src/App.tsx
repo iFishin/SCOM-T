@@ -143,10 +143,12 @@ function App() {
     }
     rawPushToast(msg, type);
   }, [rawPushToast]);
-  const { settings, loaded, flushSettings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateMaxLogs, updateLogFileState } = useSettings();
+  const { settings, loaded, flushSettings, updateHotkeys, updateTheme, resetTheme, updatePromptRowCount, updateLang, updateCompactMode, updateCloseBehavior, updateAllowMultiInstance, updateLayoutMode, updateGridLayout, updateTimestampFormat, updateSendMode, updateReceiveMode, updateDisplayMode, updateAppendNewline, updateLogRetentionDays, updatePortFilterMode, updateTopCollapsed, updateRightCollapsed, updateMockSerial, updateCustomEnders, updateSessions, updateCloudServerUrl, updateCloudAuthToken, updateCloudUploaderName, updateRxIdleFlushMs, updateLogBatchFlushMs, updateMaxLogs, updateReceiveEncoding, updateSendEncoding, updateLogFileState } = useSettings();
   const lang = settings.lang ?? "zh";
   const sendMode = settings.sendMode ?? "ascii";
   const receiveMode = settings.receiveMode ?? "ascii";
+  const receiveEncoding = settings.receiveEncoding ?? "utf-8";
+  const sendEncoding = settings.sendEncoding ?? "utf-8";
   const appendNewline = settings.appendNewline ?? "\r\n";
   const customEnders = settings.customEnders ?? [];
 
@@ -200,6 +202,8 @@ function App() {
 
   const logFile = useLogFile({
     onStateChange: (savePath, realTime) => updateLogFileState(savePath, realTime),
+    // 手动导出/整批落盘时也要和屏幕上的文本一致。
+    encoding: receiveEncoding,
   });
 
   // Restore persisted log file selection once settings have loaded (if it still exists).
@@ -821,6 +825,8 @@ function App() {
               <SessionManager
                 lang={lang}
                 receiveMode={receiveMode}
+                receiveEncoding={receiveEncoding}
+                sendEncoding={sendEncoding}
                 displayMode={settings.displayMode ?? "card"}
                 onDisplayModeChange={updateDisplayMode}
                 portFilterMode={settings.portFilterMode ?? "default"}
@@ -846,6 +852,7 @@ function App() {
                 appendNewline={appendNewline}
                 customEnders={customEnders}
                 receiveMode={receiveMode}
+                encoding={sendEncoding}
                 isConnected={activeIsConnected}
                 isBusy={isBusy}
                 hotkeys={settings.hotkeys}
@@ -1302,6 +1309,8 @@ function App() {
                   <SessionManager
                     lang={lang}
                     receiveMode={receiveMode}
+                    receiveEncoding={receiveEncoding}
+                    sendEncoding={sendEncoding}
                     displayMode={settings.displayMode ?? "card"}
                     onDisplayModeChange={updateDisplayMode}
                     portFilterMode={settings.portFilterMode ?? "default"}
@@ -1370,6 +1379,7 @@ function App() {
                     appendNewline={appendNewline}
                     customEnders={customEnders}
                     receiveMode={receiveMode}
+                    encoding={sendEncoding}
                     isConnected={activeIsConnected}
                     isBusy={isBusy}
                     hotkeys={settings.hotkeys}
@@ -1459,6 +1469,10 @@ function App() {
         onRxIdleFlushMsChange={updateRxIdleFlushMs}
         onLogBatchFlushMsChange={updateLogBatchFlushMs}
         onMaxLogsChange={updateMaxLogs}
+        receiveEncoding={receiveEncoding}
+        sendEncoding={sendEncoding}
+        onReceiveEncodingChange={updateReceiveEncoding}
+        onSendEncodingChange={updateSendEncoding}
       />
       {/* ── Notification card modal ── */}
       {cardNotifications.length > 0 && (

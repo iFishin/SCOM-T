@@ -115,6 +115,7 @@ SCOM-T 是原 [SCOM](https://github.com/iFishin/scom)（Python/PySide6 版）的
 | TCP 客户端 / 服务器 | 通过 TCP 客户端与远端收发，或开启 TCP 服务器广播数据 |
 | Mock 串口 | 内置模拟串口，无需硬件即可测试指令收发 |
 | ASCII / HEX 双模式 | 实时切换文本和十六进制收发 |
+| 字符编码 | 收发可分别指定 UTF-8 / GB18030(GBK) / Big5 / Shift_JIS / EUC-KR / Windows-1252；解不出的字节显示为可逆 `\xHH`，不丢数据 |
 | 自动补全 | 常用波特率、数据位、校验位等参数快速选择 |
 | 端口独占保护 | 同一串口不可被两个标签重复打开 |
 

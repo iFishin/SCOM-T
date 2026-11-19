@@ -12,6 +12,7 @@ import { SessionTabBar } from "./SessionTabBar.tsx";
 import { appendCrashLog, readCrashLog, clearCrashLog } from "../utils/crashRecoveryLog.ts";
 import { DEFAULT_CONFIG_FILE, forkConfigForSession } from "../utils/sessionConfigFile.ts";
 import type { SerialLogEntry } from "../serial/types.ts";
+import type { TextEncoding } from "../utils/encoding.ts";
 
 // ── Types ──
 
@@ -108,6 +109,8 @@ function SessionContent({
   config,
   lang,
   receiveMode,
+  receiveEncoding,
+  sendEncoding,
   displayMode,
   onDisplayModeChange,
   portFilterMode,
@@ -131,6 +134,8 @@ function SessionContent({
   config: SerialConfig;
   lang: Lang;
   receiveMode: ReceiveMode;
+  receiveEncoding: TextEncoding;
+  sendEncoding: TextEncoding;
   displayMode: LogDisplayMode;
   onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
@@ -155,8 +160,20 @@ function SessionContent({
    */
   showLogPanel?: boolean;
 }) {
-  const serial = useSerialPort({ config, receiveMode, portFilterMode, mockSerial, rxIdleFlushMs, logBatchFlushMs, maxLogs, initialLogs });
-  const logFile = useLogFile({ onStateChange: onLogFileStateChange });
+  const serial = useSerialPort({
+    config,
+    receiveMode,
+    receiveEncoding,
+    sendEncoding,
+    portFilterMode,
+    mockSerial,
+    rxIdleFlushMs,
+    logBatchFlushMs,
+    maxLogs,
+    initialLogs,
+  });
+  // .log 文件与屏幕用同一套解码，否则文件里会出现屏幕上没有的转义。
+  const logFile = useLogFile({ onStateChange: onLogFileStateChange, encoding: receiveEncoding });
   const enqueueCrashLog = useCrashLogWriter(sessionId);
 
   // Restore persisted log-file selection on startup (only if the file still exists).
@@ -284,6 +301,8 @@ export type SessionManagerApi = {
 type SessionManagerProps = {
   lang: Lang;
   receiveMode: ReceiveMode;
+  receiveEncoding: TextEncoding;
+  sendEncoding: TextEncoding;
   displayMode: LogDisplayMode;
   onDisplayModeChange: (mode: LogDisplayMode) => void;
   portFilterMode: "default" | "all";
@@ -310,6 +329,8 @@ type SessionManagerProps = {
 export function SessionManager({
   lang,
   receiveMode,
+  receiveEncoding,
+  sendEncoding,
   displayMode,
   onDisplayModeChange,
   portFilterMode,
@@ -508,6 +529,8 @@ export function SessionManager({
                 config={session.config}
                 lang={lang}
                 receiveMode={receiveMode}
+                receiveEncoding={receiveEncoding}
+                sendEncoding={sendEncoding}
                 displayMode={displayMode}
                 onDisplayModeChange={onDisplayModeChange}
                 portFilterMode={portFilterMode}

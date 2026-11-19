@@ -3,6 +3,7 @@ import { createDebouncedSaver } from "./settingsPersistence.ts";
 import type { SendMode, ReceiveMode, LogDisplayMode } from "./useSerialPort.ts";
 import type { Lang } from "../i18n.ts";
 import type { SerialSession } from "./useSessionManager.ts";
+import { normalizeEncoding, type TextEncoding } from "../utils/encoding.ts";
 
 /**
  * 结尾符值。内置为 "" / "\r\n" / "\r" / "\n"，自定义结尾符是「字节串」
@@ -110,6 +111,10 @@ export type AppSettings = {
   timestampFormat?: "time" | "datetime" | "none";
   sendMode?: SendMode;
   receiveMode?: ReceiveMode;
+  /** 接收方向的字符集。只影响 ASCII 视图的文本；HEX 视图与 .log 里的原始字节照旧。 */
+  receiveEncoding?: TextEncoding;
+  /** 发送方向的字符集。HEX 模式与结尾符不受影响。 */
+  sendEncoding?: TextEncoding;
   displayMode?: LogDisplayMode;
   appendNewline?: string;
   logRetentionDays?: number;
@@ -248,6 +253,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   timestampFormat: "datetime",
   sendMode: "ascii",
   receiveMode: "ascii",
+  receiveEncoding: "utf-8",
+  sendEncoding: "utf-8",
   appendNewline: "\r\n",
   logRetentionDays: 30,
   topCollapsed: false,
@@ -351,6 +358,8 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
       ? raw.timestampFormat : "datetime",
     sendMode: raw.sendMode === "hex" ? "hex" : "ascii",
     receiveMode: raw.receiveMode === "hex" ? "hex" : "ascii",
+    receiveEncoding: normalizeEncoding(raw.receiveEncoding),
+    sendEncoding: normalizeEncoding(raw.sendEncoding),
     displayMode: raw.displayMode === "text" || raw.displayMode === "hex"
       ? raw.displayMode : "card",
     appendNewline: typeof raw.appendNewline === "string" ? raw.appendNewline : "\r\n",
@@ -676,6 +685,14 @@ export function useSettings() {
     }));
   }
 
+  function updateReceiveEncoding(encoding: TextEncoding) {
+    setSettings((current) => ({ ...current, receiveEncoding: encoding }));
+  }
+
+  function updateSendEncoding(encoding: TextEncoding) {
+    setSettings((current) => ({ ...current, sendEncoding: encoding }));
+  }
+
   function updateLogBatchFlushMs(ms: number) {
     setSettings((current) => ({
       ...current,
@@ -736,6 +753,8 @@ export function useSettings() {
     updateRxIdleFlushMs,
     updateLogBatchFlushMs,
     updateMaxLogs,
+    updateReceiveEncoding,
+    updateSendEncoding,
     updateLogFileState,
   };
 }
