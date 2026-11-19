@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
-import {
-  bytesToAscii,
-  bytesToHex,
-  formatTimestamp,
-  Utf8ByteDecoder,
-} from "../utils/hexConverter.ts";
+import { bytesToHex, formatTimestamp } from "../utils/hexConverter.ts";
+import { LosslessTextDecoder, decodeBytes } from "../utils/textDecoding.ts";
+import { DEFAULT_ENCODING, type TextEncoding } from "../utils/encoding.ts";
 import { encodeSendPayload } from "../utils/sendPayload.ts";
 import { enderStringToBytes } from "../utils/enderOptions.ts";
 import { appLogger } from "../utils/appLogger.ts";
@@ -110,6 +107,8 @@ function releaseSerialPort(path: string | null, owner: symbol): void {
 export function useSerialPort({
   config,
   receiveMode,
+  receiveEncoding = DEFAULT_ENCODING,
+  sendEncoding = DEFAULT_ENCODING,
   portFilterMode = "default",
   mockSerial,
   rxIdleFlushMs = 50,
@@ -119,6 +118,10 @@ export function useSerialPort({
 }: {
   config: SerialConfig;
   receiveMode: ReceiveMode;
+  /** 接收方向解码用的字符集；HEX 视图与日志文件里的原始字节不受影响。 */
+  receiveEncoding?: TextEncoding;
+  /** 发送方向编码用的字符集；HEX 模式与结尾符不受影响。 */
+  sendEncoding?: TextEncoding;
   portFilterMode?: "default" | "all";
   mockSerial?: MockSerialConfig;
   rxIdleFlushMs?: number;
@@ -139,6 +142,22 @@ export function useSerialPort({
   const tcpClientRef = useRef<ITcpClientService | null>(null);
   const tcpServerRef = useRef<ITcpServerService | null>(null);
   const receiveModeRef = useRef(receiveMode);
+  const receiveEncodingRef = useRef(receiveEncoding);
+  const sendEncodingRef = useRef(sendEncoding);
+  // TCP 的一整块数据可能把一个多字节字符劈成两半，两个方向各留一个流式解码器。
+  // 用懒初始化：`useRef(new …)` 每次渲染都会先 new 一个再丢掉，20 Hz 的
+  // 接收渲染下纯属白烧。
+  const decodersRef = useRef<{
+    client: LosslessTextDecoder;
+    server: LosslessTextDecoder;
+  } | null>(null);
+  if (!decodersRef.current) {
+    decodersRef.current = {
+      client: new LosslessTextDecoder(receiveEncoding),
+      server: new LosslessTextDecoder(receiveEncoding),
+    };
+  }
+  const decoders = decodersRef.current;
   const configRef = useRef(config);
   const mockSerialRef = useRef(mockSerial);
   const rxIdleFlushMsRef = useRef(50);
@@ -268,6 +287,17 @@ export function useSerialPort({
   useEffect(() => {
     receiveModeRef.current = receiveMode;
   }, [receiveMode]);
+
+  useEffect(() => {
+    receiveEncodingRef.current = receiveEncoding;
+    // 换字符集后旧的半截字节已经没有意义，setEncoding 会一并清空 carry。
+    decoders.client.setEncoding(receiveEncoding);
+    decoders.server.setEncoding(receiveEncoding);
+  }, [receiveEncoding]);
+
+  useEffect(() => {
+    sendEncodingRef.current = sendEncoding;
+  }, [sendEncoding]);
 
   useEffect(() => {
     mockSerialRef.current = mockSerial;
@@ -472,9 +502,9 @@ export function useSerialPort({
   function getTcpClient(): ITcpClientService {
     if (!tcpClientRef.current) {
       const svc = new TauriTcpClientService();
-      // A TCP chunk may end in the middle of a UTF-8 character; the decoder
-      // keeps the dangling bytes so they are not turned into replacement chars.
-      const decoder = new Utf8ByteDecoder();
+      // A TCP chunk may end in the middle of a multi-byte character; the shared
+      // decoder keeps the dangling bytes so they are not turned into U+FFFD.
+      const decoder = decoders.client;
 
       svc.onData((data: Uint8Array) => {
         const bytes = Array.from(data);
@@ -544,7 +574,7 @@ export function useSerialPort({
   function getTcpServer(): ITcpServerService {
     if (!tcpServerRef.current) {
       const svc = new TauriTcpServerService();
-      const decoder = new Utf8ByteDecoder();
+      const decoder = decoders.server;
 
       svc.onData((_clientId: string, data: Uint8Array) => {
         const bytes = Array.from(data);
@@ -760,7 +790,7 @@ export function useSerialPort({
     const pending = textFramerRef.current.drain().pending;
     if (pending.length === 0) return;
 
-    const payload = bytesToAscii(pending);
+    const payload = decodeBytes(pending, receiveEncodingRef.current);
     if (!payload) return;
     appendLog({
       direction: "received",
@@ -807,7 +837,7 @@ export function useSerialPort({
 
     for (const frame of frames) {
       const frameBytes = [...frame.line, ...frame.ending];
-      const payload = bytesToAscii(frameBytes);
+      const payload = decodeBytes(frameBytes, receiveEncodingRef.current);
       appendLog({
         direction: "received",
         mode: "ascii",
@@ -1083,7 +1113,12 @@ export function useSerialPort({
     setError(null);
 
     try {
-      const bytes = encodeSendPayload(value, sendMode, appendNewline);
+      const bytes = await encodeSendPayload(
+        value,
+        sendMode,
+        appendNewline,
+        sendEncodingRef.current,
+      );
       const termBytes = enderStringToBytes(appendNewline || "");
       const txEntry: Omit<SerialLogEntry, "id" | "timestamp" | "seq"> = {
         direction: "sent",
@@ -1116,7 +1151,12 @@ export function useSerialPort({
   ) {
     setError(null);
     try {
-      const bytes = encodeSendPayload(value, sendMode, appendNewline);
+      const bytes = await encodeSendPayload(
+        value,
+        sendMode,
+        appendNewline,
+        sendEncodingRef.current,
+      );
       const termBytes = enderStringToBytes(appendNewline || "");
 
       if (!tcpClientRef.current) {

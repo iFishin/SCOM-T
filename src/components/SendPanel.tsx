@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 // Hotkeys/Files refactor applied: layout extracted to separate components
 import { Send, Globe, ChevronDown, ChevronUp, File, Keyboard, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Select } from "./ui/Select";
-import { parseHexString, bytesToHex, bytesToAscii } from "../utils/hexConverter.ts";
+import { parseHexString, bytesToHex } from "../utils/hexConverter.ts";
+import { decodeBytes } from "../utils/textDecoding.ts";
+import { encodeTextToBytes } from "../utils/textEncoding.ts";
+import type { TextEncoding } from "../utils/encoding.ts";
 import type { ToastType } from "./ui/Toast.tsx";
 import type { ReceiveMode, SendMode } from "../hooks/useSerialPort.ts";
 import type { HotkeyConfig, CustomEnder } from "../hooks/useSettings.ts";
@@ -16,10 +19,59 @@ import type { Lang } from "../i18n.ts";
 
 type AppendNewline = string;
 
+/**
+ * 正文将会占用的字节数。
+ *
+ * 非 UTF-8 编码浏览器没有编码器可用，得问一次 Rust，所以做成小状态：
+ * 默认 UTF-8 同步算，其它编码 debounce 后再更新。HEX 模式直接数解析结果。
+ */
+function usePayloadByteCount(
+  value: string,
+  sendMode: SendMode,
+  encoding: TextEncoding,
+): number {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (sendMode === "hex") {
+      try {
+        setCount(parseHexString(value || "").length);
+      } catch {
+        setCount(0);
+      }
+      return;
+    }
+
+    if (encoding === "utf-8") {
+      setCount(new TextEncoder().encode(value || "").length);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void encodeTextToBytes(value || "", encoding)
+        .then((bytes) => {
+          if (!cancelled) setCount(bytes.length);
+        })
+        .catch(() => {
+          if (!cancelled) setCount(0);
+        });
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [value, sendMode, encoding]);
+
+  return count;
+}
+
 type SendPanelProps = {
   value: string;
   sendMode: SendMode;
   receiveMode: ReceiveMode;
+  /** 发送编码：HEX→ASCII 转换按钮按这套字符集解码，和真正发出去的字节保持一致。 */
+  encoding?: TextEncoding;
   appendNewline: AppendNewline;
   customEnders?: CustomEnder[];
   isConnected: boolean;
@@ -55,6 +107,7 @@ export function SendPanel({
   value,
   sendMode,
   receiveMode,
+  encoding = "utf-8",
   appendNewline,
   customEnders,
   isConnected,
@@ -89,6 +142,7 @@ export function SendPanel({
   const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const sendingRef = React.useRef(false);
   const [tabbedActiveTab, setTabbedActiveTab] = React.useState<"send" | "file" | "hotkeys">("send");
+  const payloadBytes = usePayloadByteCount(value, sendMode, encoding);
 
   function toggleExpanded() {
     onSendPanelExpandedChange?.(!expanded);
@@ -218,7 +272,7 @@ export function SendPanel({
                       onClick={() => {
                         try {
                           const bytes = parseHexString(value || "");
-                          onChange(bytesToAscii(bytes));
+                          onChange(decodeBytes(bytes, encoding));
                         } catch (err: any) {
                           onPushToast?.(err?.message || String(err), "warn");
                         }
@@ -229,14 +283,7 @@ export function SendPanel({
                     </Button>
                   </div>
                   <div className="text-theme-11 text-[var(--text-muted)]">
-                    {(() => {
-                      try {
-                        const count = sendMode === "hex" ? parseHexString(value || "").length : new TextEncoder().encode(value || "").length;
-                        return lang === "zh" ? `${count} 字节` : `${count} bytes`;
-                      } catch {
-                        return lang === "zh" ? `0 字节` : `0 bytes`;
-                      }
-                    })()}
+                    {lang === "zh" ? `${payloadBytes} 字节` : `${payloadBytes} bytes`}
                   </div>
                 </div>
               </div>
@@ -364,7 +411,7 @@ export function SendPanel({
                         onClick={() => {
                           try {
                             const bytes = parseHexString(value || "");
-                            onChange(bytesToAscii(bytes));
+                            onChange(decodeBytes(bytes, encoding));
                           } catch (err: any) {
                             onPushToast?.(err?.message || String(err), "warn");
                           }
@@ -375,14 +422,7 @@ export function SendPanel({
                       </Button>
                     </div>
                     <div className="text-theme-11 text-[var(--text-muted)]">
-                      {(() => {
-                        try {
-                          const count = sendMode === "hex" ? parseHexString(value || "").length : new TextEncoder().encode(value || "").length;
-                          return lang === "zh" ? `${count} 字节` : `${count} bytes`;
-                        } catch {
-                          return lang === "zh" ? `0 字节` : `0 bytes`;
-                        }
-                      })()}
+                      {lang === "zh" ? `${payloadBytes} 字节` : `${payloadBytes} bytes`}
                     </div>
                   </div>
                 </div>

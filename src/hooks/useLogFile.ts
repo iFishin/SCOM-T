@@ -2,7 +2,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import type { SerialLogEntry } from "./useSerialPort";
-import { bytesToAscii, bytesToHex } from "../utils/hexConverter";
+import { bytesToHex } from "../utils/hexConverter";
+import { decodeBytes } from "../utils/textDecoding";
+import { DEFAULT_ENCODING, type TextEncoding } from "../utils/encoding";
 
 /**
  * Upper bound on entries buffered while the log file cannot be written.
@@ -23,15 +25,17 @@ export function enqueueCapped<T>(queue: T[], entry: T, max: number): number {
   return dropped;
 }
 
-export function formatLogEntry(log: SerialLogEntry): string {
+export function formatLogEntry(
+  log: SerialLogEntry,
+  encoding: TextEncoding = DEFAULT_ENCODING,
+): string {
   const dir = log.direction === "received" ? "RX" : "TX";
   const ts = log.timestamp.replace(/^\[|\]$/g, "");
-  // Same rule as the on-screen hex view: hex entries are written as hex text,
-  // ascii entries are decoded losslessly. Never TextDecoder here — invalid
-  // bytes (0xAA / 0xFB …) would become U+FFFD and the .log file would contain
-  // "?" instead of the real traffic (#36 / #37).
+  // 与屏幕上完全同一套解码：HEX 条目写成十六进制文本，ASCII 条目按当前
+  // 字符集无损解码。绝不用 TextDecoder 的默认替换行为 —— 非法字节会变成
+  // U+FFFD，.log 文件里就成了 "?" 而不是真实流量（#36 / #37）。
   const rawPayload = log.rawBytes && log.rawBytes.length > 0
-    ? (log.mode === "hex" ? bytesToHex(log.rawBytes) : bytesToAscii(log.rawBytes))
+    ? (log.mode === "hex" ? bytesToHex(log.rawBytes) : decodeBytes(log.rawBytes, encoding))
     : log.payload;
   // Drop trailing CR/LF so the formatter's own newline doesn't produce bare
   // empty lines in the file. Whitespace/newline-only chunks are skipped entirely.
@@ -43,6 +47,8 @@ export function formatLogEntry(log: SerialLogEntry): string {
 export function useLogFile(options?: {
   initialSavePath?: string | null;
   initialRealTime?: boolean;
+  /** 写进 .log 文件的文本用哪套字符集解码，默认 UTF-8。 */
+  encoding?: TextEncoding;
   onStateChange?: (savePath: string | null, realTime: boolean) => void;
 }) {
   const [savePath, setSavePath] = useState<string | null>(options?.initialSavePath ?? null);
@@ -56,6 +62,10 @@ export function useLogFile(options?: {
   const pendingOverflowWarnedRef = useRef(false);
   const onStateChangeRef = useRef(options?.onStateChange);
   onStateChangeRef.current = options?.onStateChange;
+  // 读的是写入那一刻的设置，不是 this render 的快照 —— 日志可能在切换
+  // 字符集之后才从队列里落盘。
+  const encodingRef = useRef<TextEncoding>(options?.encoding ?? DEFAULT_ENCODING);
+  encodingRef.current = options?.encoding ?? DEFAULT_ENCODING;
 
   useEffect(() => {
     savePathRef.current = savePath;
@@ -110,7 +120,7 @@ export function useLogFile(options?: {
     writingRef.current = true;
     const write = (async () => {
       try {
-        const text = batch.map(formatLogEntry).join("");
+        const text = batch.map((entry) => formatLogEntry(entry, encodingRef.current)).join("");
         if (text) await invoke("append_to_file", { path, content: text });
         pendingRef.current.splice(0, batch.length);
         logCountRef.current += batch.length;
@@ -199,7 +209,7 @@ export function useLogFile(options?: {
   const dumpLogs = useCallback(async (logs: SerialLogEntry[]): Promise<boolean> => {
     const path = savePathRef.current;
     if (!path || logs.length === 0) return false;
-    const text = logs.map(formatLogEntry).join("");
+    const text = logs.map((entry) => formatLogEntry(entry, encodingRef.current)).join("");
     if (!text) return false;
     try {
       await invoke("append_to_file", { path, content: text });

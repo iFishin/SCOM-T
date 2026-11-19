@@ -3,6 +3,7 @@ use std::io::Write;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
+mod encoding;
 mod tcp;
 
 struct AppSettings {
@@ -188,6 +189,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             append_to_file,
+            encoding::encode_text,
             set_close_behavior,
             set_allow_multi_instance,
             try_claim_instance,

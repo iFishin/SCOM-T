@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Clock, Timer, X } from "lucide-react";
+import { Clock, Languages, Timer, X } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import Select from "./ui/Select";
+import { ENCODING_LABELS, TEXT_ENCODINGS, type TextEncoding } from "../utils/encoding.ts";
 import type { HotkeyConfig, ThemeSettings, GridItemLayout, MockSerialConfig, CustomEnder } from "../hooks/useSettings.ts";
 import { DEFAULT_GRID_LAYOUT } from "../hooks/useSettings.ts";
 import { t } from "../i18n.ts";
@@ -59,6 +61,10 @@ type SettingsModalProps = {
   onRxIdleFlushMsChange?: (ms: number) => void;
   onLogBatchFlushMsChange?: (ms: number) => void;
   onMaxLogsChange?: (count: number) => void;
+  receiveEncoding?: TextEncoding;
+  sendEncoding?: TextEncoding;
+  onReceiveEncodingChange?: (encoding: TextEncoding) => void;
+  onSendEncodingChange?: (encoding: TextEncoding) => void;
 };
 
 // Helpers for hotkeys are now inside HotkeysEditor
@@ -105,8 +111,64 @@ export function SettingsModal({
   onRxIdleFlushMsChange,
   onLogBatchFlushMsChange,
   onMaxLogsChange,
+  receiveEncoding = "utf-8",
+  sendEncoding = "utf-8",
+  onReceiveEncodingChange,
+  onSendEncodingChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
+  // 编码卡片放在「通用」页签末尾：这是默认打开的页签，乱码时最容易找到。
+  const encodingCard = (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4">
+      <div className="mb-2 text-sm font-semibold flex items-center gap-1.5">
+        <Languages size={14} />
+        {lang === "zh" ? "字符编码" : "Text Encoding"}
+      </div>
+      <div className="text-xs text-[var(--text-muted)] mb-3">
+        {lang === "zh"
+          ? "设备用什么编码发数据就选什么。选错不会丢字节：解不出来的字节会显示成 \\xHH。HEX 视图与日志文件始终保留原始字节。"
+          : "Pick the charset your device speaks. Nothing is lost if you pick wrong: undecodable bytes show as \\xHH, and the HEX view / log file always keep the raw bytes."}
+      </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-48 shrink-0">
+            <div className="text-xs">{lang === "zh" ? "接收编码" : "Receive"}</div>
+            <div className="text-theme-10 text-[var(--text-muted)]">
+              {lang === "zh" ? "把设备回的字节解成文本" : "Bytes from the device"}
+            </div>
+          </div>
+          <Select
+            value={receiveEncoding}
+            onChange={(e) => onReceiveEncodingChange?.(e.currentTarget.value as TextEncoding)}
+            className="w-56 text-xs"
+          >
+            {TEXT_ENCODINGS.map((id) => (
+              <option key={id} value={id}>{ENCODING_LABELS[id]}</option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-48 shrink-0">
+            <div className="text-xs">{lang === "zh" ? "发送编码" : "Send"}</div>
+            <div className="text-theme-10 text-[var(--text-muted)]">
+              {lang === "zh" ? "把指令文本编成字节" : "Text to wire bytes"}
+            </div>
+          </div>
+          <Select
+            value={sendEncoding}
+            onChange={(e) => onSendEncodingChange?.(e.currentTarget.value as TextEncoding)}
+            className="w-56 text-xs"
+          >
+            {TEXT_ENCODINGS.map((id) => (
+              <option key={id} value={id}>{ENCODING_LABELS[id]}</option>
+            ))}
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+
+
   const tabs = [
     t("settings_general", lang),
     t("settings_log", lang),
@@ -159,7 +221,10 @@ export function SettingsModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {activeTab === 0 && (
-              <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} />
+              <div className="space-y-4">
+                <GeneralSettings theme={theme} lang={lang} compactMode={compactMode} closeToTray={closeToTray} allowMultiInstance={allowMultiInstance} logRetentionDays={logRetentionDays} portFilterMode={portFilterMode} onThemeChange={onThemeChange} onLangChange={onLangChange} onCompactModeChange={onCompactModeChange} onCloseBehaviorChange={onCloseBehaviorChange} onAllowMultiInstanceChange={onAllowMultiInstanceChange} onLogRetentionDaysChange={onLogRetentionDaysChange} onPortFilterModeChange={onPortFilterModeChange} />
+                {encodingCard}
+              </div>
             )}
 
             {activeTab === 1 && (
