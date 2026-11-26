@@ -110,7 +110,9 @@ In **Settings → Command Line**, define custom terminators as hex byte sequence
 
 Use the top tabs to create multiple sessions, each with its own serial connection and logs.
 
-A new tab automatically gets its **own prompt config** (`prompts-<tab name>.yaml`). The command grid on the right belongs to the active tab only: editing commands in tab A never rewrites tab B. Re-opening a tab with the same name reuses its previous file instead of creating duplicates. To share one command list between tabs, pick the same file in the **Config** tab's file list. The active config name is shown above the command grid.
+A new tab automatically gets its **own prompt config** (`prompts-<tab name>.yaml`). The command grid on the right belongs to the active tab only: editing commands in tab A never rewrites tab B. Re-opening a tab with the same name reuses its previous file instead of creating duplicates.
+
+When several ports test the same project (a main board and its companion, say), put them in the same **command group**. Click the group chip above the grid (it reads `串口1 + 串口2` once shared) and pick the group another tab already uses: group members share one command grid and one selection/progress state, so whichever tab you switch to shows the same steps. To leave a group, choose **New group (copy current grid)** — the current content is copied into a fresh group and the two sides diverge from there. Groups never affect each other.
 
 ---
 

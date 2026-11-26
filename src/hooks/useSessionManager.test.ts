@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { nextSessionName, fillMissingConfigFiles } from "./useSessionManager";
+import { nextSessionName, fillMissingGroups } from "./useSessionManager";
 import type { SerialSession } from "./useSessionManager";
 
-function session(id: string, activeConfigFile?: string): SerialSession {
+function session(id: string, groupId?: string): SerialSession {
   return {
     id,
     name: id,
@@ -11,27 +11,27 @@ function session(id: string, activeConfigFile?: string): SerialSession {
       flowControl: "none", rts: false, dtr: false, connectionType: "serial",
       tcpHost: "", tcpPort: 23, tcpProtocol: "rfc2217",
     },
-    activeConfigFile,
+    groupId,
   };
 }
 
-describe("fillMissingConfigFiles", () => {
+describe("fillMissingGroups", () => {
   it("seeds a binding that only exists in the settings mirror", () => {
-    const result = fillMissingConfigFiles([session("a"), session("b")], { b: "prompts-b.yaml" });
+    const result = fillMissingGroups([session("a"), session("b")], { b: "prompts-b.yaml" });
     expect(result.changed).toBe(true);
-    expect(result.sessions[0].activeConfigFile).toBeUndefined();
-    expect(result.sessions[1].activeConfigFile).toBe("prompts-b.yaml");
+    expect(result.sessions[0].groupId).toBeUndefined();
+    expect(result.sessions[1].groupId).toBe("prompts-b.yaml");
   });
 
   it("never overwrites a live binding", () => {
-    const result = fillMissingConfigFiles([session("a", "prompts-live.yaml")], { a: "prompts-old.yaml" });
+    const result = fillMissingGroups([session("a", "prompts-live.yaml")], { a: "prompts-old.yaml" });
     expect(result.changed).toBe(false);
-    expect(result.sessions[0].activeConfigFile).toBe("prompts-live.yaml");
+    expect(result.sessions[0].groupId).toBe("prompts-live.yaml");
   });
 
   it("returns the original array when nothing changes", () => {
     const sessions = [session("a", "prompts-a.yaml")];
-    const result = fillMissingConfigFiles(sessions, { zzz: "prompts-z.yaml" });
+    const result = fillMissingGroups(sessions, { zzz: "prompts-z.yaml" });
     expect(result.changed).toBe(false);
     expect(result.sessions).toBe(sessions);
   });

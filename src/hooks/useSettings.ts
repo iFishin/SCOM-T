@@ -401,10 +401,13 @@ function mergeSettings(raw: Partial<AppSettings>): AppSettings {
             id: s.id,
             name: typeof s.name === "string" && s.name ? s.name : "串口",
             config: s.config && typeof s.config === "object" ? s.config : {},
-            // 每个 session 独立保存 activeConfigFile；旧版从全局字段迁移
-            activeConfigFile: typeof s.activeConfigFile === "string" && s.activeConfigFile
-              ? s.activeConfigFile
-              : (typeof raw.activeConfigFile === "string" ? raw.activeConfigFile : "prompts.yaml"),
+            // 每个 session 独立记录所属指令组；旧版字段 activeConfigFile
+            // 只在这里兜底读取，写回时统一用 groupId。
+            groupId: typeof s.groupId === "string" && s.groupId
+              ? s.groupId
+              : typeof s.activeConfigFile === "string" && s.activeConfigFile
+                ? s.activeConfigFile
+                : (typeof raw.activeConfigFile === "string" ? raw.activeConfigFile : "prompts.yaml"),
           }))
       : [],
     cloudServerUrl: typeof raw.cloudServerUrl === "string" ? raw.cloudServerUrl : "",

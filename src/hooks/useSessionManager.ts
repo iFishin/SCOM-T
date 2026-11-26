@@ -9,9 +9,16 @@ export type SerialSession = {
   id: string;
   name: string;
   config: SerialConfig;
-  /** 该标签页当前使用的指令配置文件，空/缺失时取全局默认 "prompts.yaml"。 */
-  activeConfigFile?: string;
+  /**
+   * 该标签页所属的指令组（issue #60）。同组的标签页共用一套指令与进度；
+   * 当前 1 个组 = 1 个配置文件，所以这个值同时是 yaml 文件名，空/缺失时
+   * 取全局默认 "prompts.yaml"。
+   */
+  groupId?: string;
 };
+
+/** 0.3.92 及以前把组存在这个字段上，读取时兜底，保证升级不丢绑定。 */
+type StoredSession = SerialSession & { activeConfigFile?: string };
 
 function defaultConfig(): SerialConfig {
   return {
@@ -45,21 +52,21 @@ export function nextSessionName(existingNames: string[]): string {
 }
 
 /**
- * Fill in bindings that only exist in the settings mirror (written by a version
- * that kept `activeConfigFile` outside this hook). Missing entries only — a
+ * Fill in group bindings that only exist in the settings mirror (written by a
+ * version that kept the binding outside this hook). Missing entries only — a
  * live selection is never overwritten.
  */
-export function fillMissingConfigFiles(
+export function fillMissingGroups(
   sessions: SerialSession[],
   byId: Record<string, string>,
 ): { sessions: SerialSession[]; changed: boolean } {
   let changed = false;
   const next = sessions.map((s) => {
-    if (s.activeConfigFile) return s;
-    const fileName = byId[s.id];
-    if (!fileName) return s;
+    if (s.groupId) return s;
+    const groupId = byId[s.id];
+    if (!groupId) return s;
     changed = true;
-    return { ...s, activeConfigFile: fileName };
+    return { ...s, groupId };
   });
   return { sessions: changed ? next : sessions, changed };
 }
@@ -68,17 +75,22 @@ function loadSessions(): SerialSession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as SerialSession[];
+      const parsed = JSON.parse(raw) as StoredSession[];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.slice(0, MAX_SESSIONS).map((s) => ({
-          ...s,
-          // Corrupt/hand-edited storage must not put a non-string where the
-          // config file name is expected.
-          activeConfigFile:
-            typeof s.activeConfigFile === "string" && s.activeConfigFile
-              ? s.activeConfigFile
-              : undefined,
-        }));
+        return parsed.slice(0, MAX_SESSIONS).map((s) => {
+          const { activeConfigFile, ...rest } = s;
+          return {
+            ...rest,
+            // Corrupt/hand-edited storage must not put a non-string where the
+            // group id is expected; old entries only have `activeConfigFile`.
+            groupId:
+              typeof s.groupId === "string" && s.groupId
+                ? s.groupId
+                : typeof activeConfigFile === "string" && activeConfigFile
+                  ? activeConfigFile
+                  : undefined,
+          };
+        });
       }
     }
   } catch {
@@ -112,37 +124,37 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
   }, [onSessionsChange]);
 
   /**
-   * @param activeConfigFile 新标签页绑定的指令配置文件；缺省沿用全局默认，
+   * @param groupId 新标签页所属的指令组；缺省沿用全局默认，
    *   SessionManager 新建标签页时会先派生一份独立配置再传进来。
    */
-  function createSession(activeConfigFile?: string) {
+  function createSession(groupId?: string) {
     if (sessions.length >= MAX_SESSIONS) return;
     const newSession: SerialSession = {
       id: generateId(),
       name: nextSessionName(sessions.map((s) => s.name)),
       config: defaultConfig(),
-      activeConfigFile: activeConfigFile || DEFAULT_CONFIG_FILE,
+      groupId: groupId || DEFAULT_CONFIG_FILE,
     };
     const next = [...sessions, newSession];
     persist(next);
     setActiveSessionId(newSession.id);
   }
 
-  /** Bind a tab to another prompt config file. */
-  const setSessionConfigFile = useCallback((id: string, fileName: string) => {
+  /** Bind a tab to another prompt group (its shared config file). */
+  const setSessionGroup = useCallback((id: string, groupId: string) => {
     const next = sessions.map((s) =>
-      s.id === id ? { ...s, activeConfigFile: fileName } : s
+      s.id === id ? { ...s, groupId } : s
     );
     persist(next);
   }, [sessions, persist]);
 
   /**
    * Fill in bindings that only exist in the mirrored settings (written by an
-   * older version, before this hook owned `activeConfigFile`). Only missing
-   * entries are touched, so a live selection is never overwritten.
+   * older version, before this hook owned the group). Only missing entries are
+   * touched, so a live selection is never overwritten.
    */
-  const hydrateConfigFiles = useCallback((byId: Record<string, string>) => {
-    const result = fillMissingConfigFiles(sessions, byId);
+  const hydrateGroups = useCallback((byId: Record<string, string>) => {
+    const result = fillMissingGroups(sessions, byId);
     if (result.changed) persist(result.sessions);
   }, [sessions, persist]);
 
@@ -198,8 +210,8 @@ export function useSessionManager(onSessionsChange?: (sessions: SerialSession[])
     closeSession,
     renameSession,
     updateSessionConfig,
-    setSessionConfigFile,
-    hydrateConfigFiles,
+    setSessionGroup,
+    hydrateGroups,
     setActive,
     reorderSession,
     maxSessions: MAX_SESSIONS,
