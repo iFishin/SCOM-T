@@ -7,8 +7,8 @@ import { serializeToYaml, type PromptRow } from "./yamlConfig.ts";
  *
  * `prompts.yaml` is the legacy/global default and lives at `~/SCOM-T/prompts.yaml`;
  * every other config lives in `~/SCOM-T/prompts/<name>.yaml`. Sessions bind to a
- * file by name (see `SerialSession.activeConfigFile`), so the same file can still
- * be shared by two tabs when the user picks it explicitly.
+ * file by name (see `SerialSession.groupId`), so two tabs that pick the same file
+ * end up in the same instruction group (issue #60).
  */
 export const DEFAULT_CONFIG_FILE = "prompts.yaml";
 

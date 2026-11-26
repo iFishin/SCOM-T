@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Replace, ListFilter, Slice, Save, File } from "lucide-react";
+import { Plus, Search, Globe, Check, X, Loader2, ChevronDown, ChevronRight, Trash2, Replace, ListFilter, Slice, Save, Users } from "lucide-react";
 import { BatchEditor } from "./BatchEditor.tsx";
 import { YamlEditor } from "./YamlEditor.tsx";
 import { FileSidebar } from "./config/FileSidebar.tsx";
@@ -28,6 +28,10 @@ import { PromptRowEditor } from "./PromptRowEditor.tsx";
 import { DEFAULT_RESPONSE_TIMEOUT_MS, DEFAULT_LOOP_INTERVAL_MS, parseIntervalMs } from "./promptRow.ts";
 import { runBatchLoop } from "./batchLoop.ts";
 import type { PromptRow, PromptRowStatus } from "./promptRow.ts";
+import { rowsBelongToGroup, type PromptGroupCache } from "./promptGroupCache.ts";
+import { groupDisplayName, otherMembers, type PromptGroupSummary } from "../utils/promptGroups.ts";
+import { listConfigFiles, sessionConfigFileName, writeConfigText } from "../utils/sessionConfigFile.ts";
+import { ContextMenu } from "./ui/ContextMenu.tsx";
 
 type WaitingResponse = {
   rowId: number;
@@ -68,6 +72,11 @@ function blankPromptRows(count: number): PromptRow[] {
   }));
 }
 
+/** 组的显示标签：单人组用标签页名，多人组写成「串口1 + 串口2」。 */
+function groupMemberLabel(group: PromptGroupSummary): string {
+  return group.members.map((m) => m.name).join(" + ");
+}
+
 type PromptPanelProps = {
   variant: "grid" | "panel";
   isConnected: boolean;
@@ -80,8 +89,16 @@ type PromptPanelProps = {
   onNavigateToResponseSet?: () => void;
   pendingApplyResponseSet?: string | null;
   onClearPendingApply?: () => void;
-  activeConfigFile?: string;
-  onActiveConfigFileChange?: (fileName: string) => void;
+  /** 本面板正在编辑的指令组；当前 1 个组 = 1 个配置文件，所以它也是 yaml 文件名。 */
+  groupId?: string;
+  /** 本标签页改投另一个组（加入已有组 / 新建组后切过去）。 */
+  onGroupChange?: (groupId: string) => void;
+  /** 所有组及其成员，用于「组」菜单里展示「和谁共用」。 */
+  groups?: PromptGroupSummary[];
+  /** 组状态缓存：同组标签页共用一份，切组不必重读磁盘。 */
+  groupCache?: PromptGroupCache;
+  /** 本标签页的名字，新建组时用作文件名。 */
+  sessionName?: string;
   /** Tab this panel currently edits. Used to stop cross-tab sends. */
   sessionId?: string;
   logs?: SerialLogEntry[];
@@ -104,8 +121,11 @@ export function PromptPanel({
   onNavigateToResponseSet,
   pendingApplyResponseSet,
   onClearPendingApply,
-  activeConfigFile = "prompts.yaml",
-  onActiveConfigFileChange,
+  groupId = "prompts.yaml",
+  onGroupChange,
+  groups,
+  groupCache,
+  sessionName,
   sessionId,
   logs: logsProp = [],
   logSource,
@@ -256,8 +276,10 @@ export function PromptPanel({
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [configYamlText, setConfigYamlText] = useState("");
-  const [configCurrentFile, setConfigCurrentFile] = useState(activeConfigFile);
+  const [configCurrentFile, setConfigCurrentFile] = useState(groupId);
   const [configSidebarOpen, setConfigSidebarOpen] = useState(true);
+  /** 「组」菜单的弹出位置；null 表示关闭。 */
+  const [groupMenuAt, setGroupMenuAt] = useState<{ x: number; y: number } | null>(null);
 
   // ── Import response set with placeholder resolution ──
   function importResponseSet(set: { name: string; commands: { command: string; commandRegex?: boolean; isHex?: boolean; description?: string; expectedResponses: string[]; expectedResponseRegex?: boolean[]; matchMode: "all" | "any" }[] }) {
@@ -422,16 +444,29 @@ export function PromptPanel({
       clearTimeout(yamlDebounceRef.current);
       yamlDebounceRef.current = null;
     }
+
+    // 组状态已经在内存里：直接取，别读盘。同组标签页共享同一份快照，
+    // 也避开了「写旧文件未完成就去读新文件」的竞态（issue #60）。
+    const cached = groupCache?.get(groupId);
+    if (cached) {
+      setPromptRows(cached.rows);
+      setBatchText(cached.batchText);
+      setConfigYamlText(cached.yamlText);
+      setConfigCurrentFile(groupId);
+      hydratedFileRef.current = groupId;
+      return () => { cancelled = true; };
+    }
+
     async function load() {
       try {
         const { join, homeDir } = await import("@tauri-apps/api/path");
         const { readTextFile } = await import("@tauri-apps/plugin-fs");
 
         let filePath: string;
-        if (activeConfigFile === "prompts.yaml") {
+        if (groupId === "prompts.yaml") {
           filePath = await join(await homeDir(), "SCOM-T", "prompts.yaml");
         } else {
-          filePath = await join(await homeDir(), "SCOM-T", "prompts", activeConfigFile);
+          filePath = await join(await homeDir(), "SCOM-T", "prompts", groupId);
         }
 
         const text = await readTextFile(filePath);
@@ -454,7 +489,7 @@ export function PromptPanel({
           setBatchText("");
         }
         setConfigYamlText(text);
-        setConfigCurrentFile(activeConfigFile);
+        setConfigCurrentFile(groupId);
       } catch {
         if (cancelled) return;
         // No such file yet (a fresh tab, or one whose file was removed). Start
@@ -464,15 +499,15 @@ export function PromptPanel({
         const blank = blankPromptRows(promptRowCountRef.current);
         setPromptRows(blank);
         setConfigYamlText(serializeToYaml(blank));
-        setConfigCurrentFile(activeConfigFile);
+        setConfigCurrentFile(groupId);
         setBatchText("");
       } finally {
-        if (!cancelled) hydratedFileRef.current = activeConfigFile;
+        if (!cancelled) hydratedFileRef.current = groupId;
       }
     }
     load();
     return () => { cancelled = true; };
-  }, [activeConfigFile]);
+  }, [groupId, groupCache]);
 
   // Keep promptRows length in sync with promptRowCount
   useEffect(() => {
@@ -510,41 +545,64 @@ export function PromptPanel({
   // Flush the file we are leaving before loading the new one. Declared ahead of
   // the auto-save effect so its body runs first; the pending debounce timer has
   // already been cleared by then, hence the separate dirty flag.
-  const prevConfigFileRef = useRef(activeConfigFile);
+  const prevConfigFileRef = useRef(groupId);
   useEffect(() => {
     const leaving = prevConfigFileRef.current;
-    if (leaving === activeConfigFile) return;
-    prevConfigFileRef.current = activeConfigFile;
+    if (leaving === groupId) return;
+    prevConfigFileRef.current = groupId;
     if (dirtyRef.current && hydratedFileRef.current === leaving) {
       void savePromptRows(promptRowsRef.current, leaving);
       dirtyRef.current = false;
     }
-    hydratedFileRef.current = null;
-  }, [activeConfigFile, savePromptRows]);
+    // 命中缓存的组在上面那个 effect 里已经同步标成「已载入」，别把它清掉，
+    // 否则自动保存会一直以为这个组还没读完。
+    hydratedFileRef.current = hydratedFileRef.current === groupId ? groupId : null;
+  }, [groupId, savePromptRows]);
 
+  // 切组那一帧 promptRows 还是上一个组的内容：既不能拿去保存，也不能写进
+  // 新组的缓存。用「组变了但行没变」来识别这一帧（见 rowsBelongToGroup）。
+  const savingSnapshotRef = useRef({ groupId, rows: promptRows });
   useEffect(() => {
+    const next = { groupId, rows: promptRows };
+    const belongs = rowsBelongToGroup(savingSnapshotRef.current, next);
+    savingSnapshotRef.current = next;
+    if (!belongs) return;
     if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
     promptSaveTimer.current = undefined;
     // Never write before the current file's content has been read into state.
-    if (hydratedFileRef.current !== activeConfigFile) return;
+    if (hydratedFileRef.current !== groupId) return;
     dirtyRef.current = true;
     promptSaveTimer.current = setTimeout(() => {
-      savePromptRows(promptRowsRef.current, activeConfigFile);
+      savePromptRows(promptRowsRef.current, groupId);
       dirtyRef.current = false;
     }, 800);
     return () => { if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current); };
-  }, [promptRows, activeConfigFile, savePromptRows]);
+  }, [promptRows, groupId, savePromptRows]);
+
+  // ── 组状态写回缓存 ──
+  // 同组标签页共用这一份快照，切回来直接取，不等磁盘。
+  // 切组那一帧 promptRows 还属于上一个组，写进去会串组，所以要求「行也一起
+  // 变了」才算这帧的数据属于新组。
+  const lastSnapshotRef = useRef({ groupId, rows: promptRows });
+  useEffect(() => {
+    const next = { groupId, rows: promptRows };
+    const belongs = rowsBelongToGroup(lastSnapshotRef.current, next);
+    lastSnapshotRef.current = next;
+    if (!belongs) return;
+    if (hydratedFileRef.current !== groupId) return;
+    groupCache?.set(groupId, { rows: promptRows, batchText, yamlText: configYamlText });
+  }, [promptRows, batchText, configYamlText, groupId, groupCache]);
 
   useEffect(() => {
     function flush() {
-      if (!dirtyRef.current || hydratedFileRef.current !== activeConfigFile) return;
+      if (!dirtyRef.current || hydratedFileRef.current !== groupId) return;
       if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
-      void savePromptRows(promptRowsRef.current, activeConfigFile);
+      void savePromptRows(promptRowsRef.current, groupId);
       dirtyRef.current = false;
     }
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
-  }, [activeConfigFile, savePromptRows]);
+  }, [groupId, savePromptRows]);
 
   useEffect(() => {
     return () => { if (yamlDebounceRef.current) clearTimeout(yamlDebounceRef.current); };
@@ -976,7 +1034,7 @@ export function PromptPanel({
 
   function openConfigDialog() {
     setConfigYamlText(serializeToYaml(promptRows));
-    setConfigCurrentFile(activeConfigFile);
+    setConfigCurrentFile(groupId);
     setConfigDialogOpen(true);
   }
 
@@ -1006,29 +1064,63 @@ export function PromptPanel({
       }
     } catch { /* ignore */ }
 
-    // Hand off to the activeConfigFile-driven load effect (single source of truth)
-    onActiveConfigFileChange?.(fileName);
+    // Hand off to the groupId-driven load effect (single source of truth)
+    onGroupChange?.(fileName);
   }
 
   const handleConfigFileCreate = useCallback((fileName: string) => {
-    onActiveConfigFileChange?.(fileName);
-  }, [onActiveConfigFileChange]);
+    onGroupChange?.(fileName);
+  }, [onGroupChange]);
 
   const handleConfigFileRename = useCallback((oldName: string, newName: string) => {
     if (configCurrentFile === oldName) {
-      onActiveConfigFileChange?.(newName);
+      onGroupChange?.(newName);
     }
-  }, [configCurrentFile, onActiveConfigFileChange]);
+  }, [configCurrentFile, onGroupChange]);
 
   const handleConfigFileDelete = useCallback((fileName: string) => {
     if (configCurrentFile === fileName) {
-      onActiveConfigFileChange?.("prompts.yaml");
+      onGroupChange?.("prompts.yaml");
     }
-  }, [configCurrentFile, onActiveConfigFileChange]);
+  }, [configCurrentFile, onGroupChange]);
 
   // ── Content blocks ──
 
   const enderOptions = buildEnderOptions(customEnders ?? [], lang);
+
+  // ── 指令组（#60）：同组的标签页共用一套指令和进度 ──
+  const currentGroup = groups?.find((g) => g.id === groupId);
+  const peers = currentGroup ? otherMembers(currentGroup, sessionId) : [];
+  const groupLabel = currentGroup ? groupMemberLabel(currentGroup) : groupDisplayName(groupId, lang);
+  // 会话镜像还没写进来时（刚启动的一瞬），至少把当前组列出来，别弹一个空菜单。
+  const menuGroups: PromptGroupSummary[] = groups?.length
+    ? groups
+    : [{ id: groupId, members: [{ id: sessionId ?? "", name: sessionName || groupDisplayName(groupId, lang) }] }];
+  const groupTitle = lang === "zh"
+    ? `指令组：${groupLabel}\n同组标签页共用一套指令和进度；点击可加入其它组，或从当前内容新建一个组。`
+    : `Group: ${groupLabel}\nTabs in one group share commands and progress. Click to join another group or create one from the current grid.`;
+
+  /**
+   * 从当前网格复制出一个新组再切过去 —— 也就是把本标签页从共享组里摘出来。
+   * 写文件 + 预置缓存，切过去不会闪一下空网格。
+   */
+  async function createGroupFromCurrent() {
+    try {
+      const fileName = sessionConfigFileName(sessionName || "group", await listConfigFiles());
+      const yaml = serializeToYaml(promptRows);
+      await writeConfigText(fileName, yaml);
+      groupCache?.set(fileName, { rows: promptRows, batchText, yamlText: yaml });
+      onGroupChange?.(fileName);
+      pushToast(
+        lang === "zh"
+          ? `已新建指令组「${groupDisplayName(fileName, lang)}」`
+          : `Created group "${groupDisplayName(fileName, lang)}"`,
+        "success",
+      );
+    } catch {
+      pushToast(lang === "zh" ? "新建指令组失败" : "Failed to create group", "error");
+    }
+  }
 
   const gridContent = (
     <div className="h-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
@@ -1275,16 +1367,48 @@ export function PromptPanel({
     const tabBarWithCount = (
     <div className="mb-1.5 flex items-center text-theme-11 font-semibold uppercase tracking-widest text-[var(--text-muted)]">
       {tabBar}
-      {/* Which config this tab edits — tabs created from another tab own a copy. */}
-      <span
-        className="ml-2 hidden max-w-[190px] items-center gap-1 text-theme-10 font-normal normal-case text-[var(--text-muted)] sm:flex"
-        title={lang === "zh"
-          ? `本标签页的指令配置：${activeConfigFile}\n新建标签页会自动复制一份独立配置；也可在「配置」里改成共用同一个文件。`
-          : `Prompt config for this tab: ${activeConfigFile}\nNew tabs get an independent copy; pick the same file in Config to share one.`}
+      {/* 本标签页属于哪个指令组：同组共用指令和进度（#60）。 */}
+      <button
+        type="button"
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setGroupMenuAt({ x: rect.left, y: rect.bottom + 4 });
+        }}
+        className="ml-2 hidden max-w-[230px] items-center gap-1 rounded px-1 py-0.5 text-theme-10 font-normal normal-case text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)] sm:flex"
+        title={groupTitle}
       >
-        <File size={11} className="shrink-0 opacity-70" />
-        <span className="truncate">{activeConfigFile.replace(/\.yaml$/, "")}</span>
-      </span>
+        <Users size={11} className="shrink-0 opacity-70" />
+        <span className="truncate">{groupLabel}</span>
+        {peers.length > 0 && (
+          <span className="shrink-0 rounded bg-[var(--bg-input)] px-1 text-[10px]">
+            +{peers.length}
+          </span>
+        )}
+        <ChevronDown size={10} className="shrink-0 opacity-60" />
+      </button>
+      {groupMenuAt && (
+        <ContextMenu
+          x={groupMenuAt.x}
+          y={groupMenuAt.y}
+          onClose={() => setGroupMenuAt(null)}
+          items={[
+            ...menuGroups.map((g) => ({
+              id: `group-${g.id}`,
+              label: `${g.id === groupId ? "✓ " : ""}${groupMemberLabel(g)}`,
+              disabled: g.id === groupId,
+              onClick: () => onGroupChange?.(g.id),
+            })),
+            { id: "group-sep", label: "", separator: true, onClick: () => {} },
+            {
+              id: "group-new",
+              label: lang === "zh" ? "新建组（复制当前指令）" : "New group (copy current grid)",
+              // 本来就一个人一组时没什么可摘出来的。
+              disabled: peers.length === 0,
+              onClick: () => void createGroupFromCurrent(),
+            },
+          ]}
+        />
+      )}
       <span className="w-px h-4 bg-[var(--border)] mx-2" />
         {activePromptTab === "grid" && (
           <label className="flex items-center gap-1 text-theme-10 font-normal normal-case">

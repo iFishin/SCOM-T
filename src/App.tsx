@@ -34,6 +34,9 @@ import type { SerialConfig } from "./hooks/useSerialPort.ts";
 import { SessionManager } from "./components/SessionManager.tsx";
 import type { SerialSession } from "./hooks/useSessionManager.ts";
 import type { ActiveSessionData, SessionManagerApi } from "./components/SessionManager.tsx";
+import { DEFAULT_CONFIG_FILE } from "./utils/sessionConfigFile.ts";
+import { buildPromptGroups } from "./utils/promptGroups.ts";
+import { PromptGroupCache } from "./components/promptGroupCache.ts";
 
 // Code-split heavy, on-demand UI: these only load the first time they are
 // shown, keeping react-markdown / marketplace / log-viewer code out of the
@@ -238,29 +241,38 @@ function App() {
   const sessionApiRef = useRef<SessionManagerApi | null>(null);
 
   const handleSessionsChange = useCallback((incoming: SerialSession[]) => {
-    // useSessionManager 是会话（含各自的指令配置文件）的唯一真源，这里只是镜像到
+    // useSessionManager 是会话（含各自所属的指令组）的唯一真源，这里只是镜像到
     // settings 以便重启后恢复；缺字段时保留旧值，避免旧版本数据把绑定抹掉。
     const prevById = new Map((settings.sessions ?? []).map((s) => [s.id, s]));
     const merged = incoming.map((s) => ({
       ...s,
-      activeConfigFile:
-        s.activeConfigFile ?? prevById.get(s.id)?.activeConfigFile ?? "prompts.yaml",
+      groupId: s.groupId ?? prevById.get(s.id)?.groupId ?? DEFAULT_CONFIG_FILE,
     }));
     updateSessions(merged);
   }, [settings.sessions, updateSessions]);
 
-  // Get the current session's activeConfigFile — 随 ActiveSessionData 一起下发，
-  // 单一来源，不会和 settings.sessions 出现两套值。
-  const currentSessionConfigFile = sessionData?.activeConfigFile ?? "prompts.yaml";
+  /** 组状态（网格 + 进度）在进程内共享，切换标签页不重读磁盘。 */
+  const promptGroupCache = useMemo(() => new PromptGroupCache(), []);
+  /** 标签页 → 组的分组视图，供面板里的「组」菜单展示成员。 */
+  const promptGroups = useMemo(
+    () => buildPromptGroups(settings.sessions ?? []),
+    [settings.sessions],
+  );
 
-  const handleActiveConfigFileChange = useCallback((fileName: string) => {
+  // 当前标签页所属的指令组 — 随 ActiveSessionData 一起下发，单一来源，
+  // 不会和 settings.sessions 出现两套值。当前组 ID 同时是配置文件。
+  const currentGroupId = sessionData?.groupId ?? DEFAULT_CONFIG_FILE;
+  const currentSessionName =
+    settings.sessions?.find((s) => s.id === sessionData?.sessionId)?.name ?? "";
+
+  const handleGroupChange = useCallback((groupId: string) => {
     const id = sessionData?.sessionId;
     if (!id) return;
-    sessionApiRef.current?.setConfigFile(id, fileName);
+    sessionApiRef.current?.setGroup(id, groupId);
   }, [sessionData?.sessionId]);
 
-  // One-time migration: older versions kept a tab's config-file binding only
-  // in settings.sessions (useSessionManager did not carry it). Seed those into
+  // One-time migration: older versions kept a tab's group binding only in
+  // settings.sessions (useSessionManager did not carry it). Seed those into
   // the session manager once settings finish loading, touching only tabs that
   // have no binding yet.
   const configHydratedRef = useRef(false);
@@ -269,9 +281,9 @@ function App() {
     configHydratedRef.current = true;
     const byId: Record<string, string> = {};
     for (const s of settings.sessions ?? []) {
-      if (s.activeConfigFile) byId[s.id] = s.activeConfigFile;
+      if (s.groupId) byId[s.id] = s.groupId;
     }
-    sessionApiRef.current?.hydrateConfigFiles(byId);
+    sessionApiRef.current?.hydrateGroups(byId);
   }, [loaded, settings.sessions]);
 
   // ── Log viewer ──
@@ -909,7 +921,7 @@ function App() {
             </div>
 
             <div key="prompts" id="tour-prompts" className="overflow-hidden flex flex-col">
-              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} sessionId={sessionData?.sessionId} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={handleActiveConfigFileChange} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+              <PromptPanel variant="grid" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} sessionId={sessionData?.sessionId} groupId={currentGroupId} onGroupChange={handleGroupChange} groups={promptGroups} groupCache={promptGroupCache} sessionName={currentSessionName} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
             </div>
           </GridLayout>
       </div>
@@ -1144,7 +1156,7 @@ function App() {
           onClose={() => setPage("main")}
           onApply={(id) => setPendingApplyResponseSet(id)}
           onApplyPromptConfig={(name) => {
-            handleActiveConfigFileChange(`${name}.yaml`);
+            handleGroupChange(`${name}.yaml`);
             setPage("main");
             pushToast(lang === "zh" ? `已应用指令配置: ${name}` : `Applied prompt config: ${name}`, "success");
           }}
@@ -1407,7 +1419,7 @@ function App() {
 
                 {/* Prompt panel */}
                 <div id="tour-prompts" className="min-h-0 flex-1 flex flex-col pt-2">
-                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} sessionId={sessionData?.sessionId} activeConfigFile={currentSessionConfigFile} onActiveConfigFileChange={handleActiveConfigFileChange} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
+                  <PromptPanel variant="panel" isConnected={activeIsConnected} sendData={activeSendData} customEnders={customEnders} lang={lang} promptRowCount={settings.promptRowCount} updatePromptRowCount={updatePromptRowCount} pushToast={pushToast} onNavigateToResponseSet={handleNavigateToResponseSet} pendingApplyResponseSet={pendingApplyResponseSet} onClearPendingApply={() => setPendingApplyResponseSet(null)} sessionId={sessionData?.sessionId} groupId={currentGroupId} onGroupChange={handleGroupChange} groups={promptGroups} groupCache={promptGroupCache} sessionName={currentSessionName} logSource={logSource} tcpServerBroadcast={activeTcpServerBroadcast} tcpClientCount={activeTcpClients.length} />
                 </div>
               </div>
             )}

@@ -18,8 +18,11 @@ import type { TextEncoding } from "../utils/encoding.ts";
 
 export type ActiveSessionData = {
   sessionId: string;
-  /** Prompt config file this tab edits (per-tab independence, issue #19). */
-  activeConfigFile: string;
+  /**
+   * 该标签页所属的指令组。组 = 共享的指令表；默认每页一个组（#19），
+   * 也可以多页指向同一个组（#60）。
+   */
+  groupId: string;
   config: SerialConfig;
   /**
    * Live log buffer as a subscription. Carrying the array itself here made the
@@ -105,7 +108,7 @@ function useCrashLogWriter(sessionId: string) {
 
 function SessionContent({
   sessionId,
-  activeConfigFile,
+  groupId,
   config,
   lang,
   receiveMode,
@@ -130,7 +133,7 @@ function SessionContent({
   showLogPanel = true,
 }: {
   sessionId: string;
-  activeConfigFile: string;
+  groupId: string;
   config: SerialConfig;
   lang: Lang;
   receiveMode: ReceiveMode;
@@ -191,7 +194,7 @@ function SessionContent({
   useEffect(() => {
     const data: ActiveSessionData = {
       sessionId,
-      activeConfigFile,
+      groupId,
       config,
       logSource: serial.logSource,
       isConnected: serial.isConnected,
@@ -226,7 +229,7 @@ function SessionContent({
     onDataRef.current = data;
     if (isActive) onActiveData?.(data);
   }, [
-    sessionId, activeConfigFile, config, serial.logSource, serial.isConnected, serial.isBusy, serial.statusText,
+    sessionId, groupId, config, serial.logSource, serial.isConnected, serial.isBusy, serial.statusText,
     serial.connectedPort, serial.error, serial.fileSendProgress,
     serial.logCapWarning, serial.ports, serial.tcpConnectionStatus,
     serial.tcpServerStatus, serial.tcpServerClients, serial.latencyMs,
@@ -293,9 +296,9 @@ function SessionContent({
 
 /** Imperative surface App uses to change the active tab's prompt config. */
 export type SessionManagerApi = {
-  setConfigFile: (sessionId: string, fileName: string) => void;
+  setGroup: (sessionId: string, groupId: string) => void;
   /** One-time migration of bindings that only existed in the settings mirror. */
-  hydrateConfigFiles: (byId: Record<string, string>) => void;
+  hydrateGroups: (byId: Record<string, string>) => void;
 };
 
 type SessionManagerProps = {
@@ -355,8 +358,8 @@ export function SessionManager({
     closeSession,
     renameSession,
     updateSessionConfig,
-    setSessionConfigFile,
-    hydrateConfigFiles,
+    setSessionGroup,
+    hydrateGroups,
     setActive,
     reorderSession,
     maxSessions,
@@ -365,15 +368,15 @@ export function SessionManager({
   // Expose the binding setter so App can switch the active tab's config file.
   // The handed-out object is stable; it forwards to the latest setter so a
   // re-render cannot leave App holding a stale closure or a null ref.
-  const setConfigFileRef = useRef(setSessionConfigFile);
-  setConfigFileRef.current = setSessionConfigFile;
-  const hydrateConfigFilesRef = useRef(hydrateConfigFiles);
-  hydrateConfigFilesRef.current = hydrateConfigFiles;
+  const setGroupRef = useRef(setSessionGroup);
+  setGroupRef.current = setSessionGroup;
+  const hydrateGroupsRef = useRef(hydrateGroups);
+  hydrateGroupsRef.current = hydrateGroups;
   useEffect(() => {
     if (!apiRef) return;
     const api: SessionManagerApi = {
-      setConfigFile: (id, fileName) => setConfigFileRef.current(id, fileName),
-      hydrateConfigFiles: (byId) => hydrateConfigFilesRef.current(byId),
+      setGroup: (id, groupId) => setGroupRef.current(id, groupId),
+      hydrateGroups: (byId) => hydrateGroupsRef.current(byId),
     };
     apiRef.current = api;
     return () => {
@@ -446,14 +449,14 @@ export function SessionManager({
     creatingSessionRef.current = true;
     try {
       const name = nextSessionName(sessions.map((s) => s.name));
-      const sourceFile = activeSession?.activeConfigFile ?? DEFAULT_CONFIG_FILE;
-      let configFile = DEFAULT_CONFIG_FILE;
+      const sourceFile = activeSession?.groupId ?? DEFAULT_CONFIG_FILE;
+      let groupId = DEFAULT_CONFIG_FILE;
       try {
-        configFile = await forkConfigForSession(name, sourceFile);
+        groupId = await forkConfigForSession(name, sourceFile);
       } catch {
         // Filesystem unavailable — still let the tab open on the shared default.
       }
-      createSession(configFile);
+      createSession(groupId);
     } finally {
       creatingSessionRef.current = false;
     }
@@ -525,7 +528,7 @@ export function SessionManager({
             >
               <SessionContent
                 sessionId={session.id}
-                activeConfigFile={session.activeConfigFile ?? DEFAULT_CONFIG_FILE}
+                groupId={session.groupId ?? DEFAULT_CONFIG_FILE}
                 config={session.config}
                 lang={lang}
                 receiveMode={receiveMode}
